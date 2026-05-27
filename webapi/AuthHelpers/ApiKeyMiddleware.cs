@@ -19,6 +19,13 @@ namespace webapi.Authorization
 
         public async Task InvokeAsync(HttpContext context)
         {
+            // Allow CORS preflight requests through without API key check
+            if (context.Request.Method == HttpMethods.Options)
+            {
+                await _next(context);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(context.Request.Headers[Settings.ApiKeyHeaderName]))
             {
                 context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
