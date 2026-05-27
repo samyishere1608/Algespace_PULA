@@ -1,4 +1,4 @@
-﻿using System.Data.SQLite;
+﻿using Microsoft.Data.Sqlite;
 
 namespace webapi.Models.Database
 {
@@ -13,19 +13,19 @@ namespace webapi.Models.Database
             return Environment.CurrentDirectory + "/Data/databases/" + dbName;
         }
 
-        public static SQLiteConnection GetSQLiteConnectionForExercisesDB()
+        public static SqliteConnection GetSQLiteConnectionForExercisesDB()
         {
-            return new SQLiteConnection("Data Source=" + GetDBLocation(AlgeSpaceDB));
+            return new SqliteConnection("Data Source=" + GetDBLocation(AlgeSpaceDB));
         }
 
-        public static SQLiteConnection GetSQLiteConnectionForStudiesDB()
+        public static SqliteConnection GetSQLiteConnectionForStudiesDB()
         {
-            return new SQLiteConnection("Data Source=" + GetDBLocation(StudiesDB));
+            return new SqliteConnection("Data Source=" + GetDBLocation(StudiesDB));
         }
 
-        public static SQLiteConnection GetSQLiteConnectionForStudentsDB()
+        public static SqliteConnection GetSQLiteConnectionForStudentsDB()
         {
-            return new SQLiteConnection("Data Source=" + GetDBLocation(StudentsDB));
+            return new SqliteConnection("Data Source=" + GetDBLocation(StudentsDB));
         }
     }
 }

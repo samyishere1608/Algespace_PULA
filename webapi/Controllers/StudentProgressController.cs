@@ -11,7 +11,7 @@ namespace webapi.Controllers
     {
         // ── Ensure tables exist ───────────────────────────────────────────────
 
-        private static void EnsureTables(System.Data.SQLite.SQLiteConnection conn)
+        private static void EnsureTables(Microsoft.Data.Sqlite.SqliteConnection conn)
         {
             conn.Execute(
                 $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.ProgressTable} " +
