@@ -7,6 +7,10 @@ using webapi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Railway provides PORT as an environment variable
+var port = Environment.GetEnvironmentVariable("PORT") ?? "7273";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -35,6 +39,7 @@ builder.Services.AddCors(options =>
             {
                 if (string.IsNullOrWhiteSpace(origin)) return false;
                 if (origin.ToLower().StartsWith("https://algespace.sic.saarland")) return true;
+                if (origin.ToLower().StartsWith("https://algespacepula.netlify.app")) return true;
                 return false;
             });
     });
