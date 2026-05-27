@@ -409,7 +409,7 @@ export default function StudentDashboard(): ReactElement {
                                         : PLACEHOLDER_VERSATILITY
                                 }>
                                     <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                                    <PolarAngleAxis dataKey="method" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 12 }} />
+                                    <PolarAngleAxis dataKey="method" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 11 }} />
                                     <Radar
                                         name="Exercises"
                                         dataKey="value"
@@ -418,7 +418,7 @@ export default function StudentDashboard(): ReactElement {
                                         fillOpacity={0.35}
                                     />
                                     <Tooltip
-                                        contentStyle={{ backgroundColor: "#012638", border: "1px solid rgba(33,158,188,0.3)", borderRadius: "0.5rem", fontSize: "0.85rem" }}
+                                        contentStyle={{ backgroundColor: "#012638", border: "1px solid rgba(33,158,188,0.3)", borderRadius: "0.5rem", fontSize: "0.75rem" }}
                                         labelStyle={{ color: "#fff" }}
                                         itemStyle={{ color: "#8ecae6" }}
                                     />
@@ -438,11 +438,11 @@ export default function StudentDashboard(): ReactElement {
                                         activeDot={{ r: 5 }}
                                     />
                                     <Tooltip
-                                        contentStyle={{ backgroundColor: "#012638", border: "1px solid rgba(33,158,188,0.3)", borderRadius: "0.5rem", fontSize: "0.85rem" }}
+                                        contentStyle={{ backgroundColor: "#012638", border: "1px solid rgba(33,158,188,0.3)", borderRadius: "0.5rem", fontSize: "0.75rem" }}
                                         labelStyle={{ color: "#fff" }}
                                         itemStyle={{ color: "#8ecae6" }}
                                     />
-                                    <Legend wrapperStyle={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)" }} />
+                                    <Legend wrapperStyle={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)" }} />
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
@@ -468,7 +468,7 @@ export default function StudentDashboard(): ReactElement {
                                 <span className={"leaderboard-entry__xp"}>{entry.xp} XP</span>
                             </div>
                         ))}
-                        <p style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.25)", marginTop: "0.75rem", textAlign: "center" }}>
+                        <p style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.25)", marginTop: "0.75rem", textAlign: "center" }}>
                             Leaderboard unlocks when more students join
                         </p>
                     </div>
@@ -519,6 +519,8 @@ export default function StudentDashboard(): ReactElement {
                 <ChooseBuddyModal
                     currentBuddyId={activeBuddyId}
                     currentXp={stats.currentXP}
+                    studentId={student?.id ?? "guest"}
+                    currentCoins={currentCoins}
                     onSelect={handleSelectBuddy}
                     onClose={() => setShowBuddyChooser(false)}
                 />
