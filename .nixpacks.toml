@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["dotnet-sdk_8"]
+
+[phases.install]
+cmds = ["dotnet restore webapi/webapi.csproj"]
+
+[phases.build]
+cmds = ["dotnet publish webapi/webapi.csproj -c Release -o out"]
