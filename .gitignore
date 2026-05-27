@@ -1,6 +1,8 @@
 reactapp/node_modules
 reactapp/.idea
 reactapp/.env
+reactapp/.env.local
+reactapp/.env.*.local
 reactapp/dist
 
 webapi/obj
