@@ -100,6 +100,12 @@ using (var scope = app.Services.CreateScope())
     flexService.SetEfficiencyExercises(EfficiencyExamples.GetExamples());
     flexService.SetMatchingExercises(MatchingExamples.GetExamples());
     flexService.SetFlexibilityExercises(FlexibilityExamples.GetFlexibilityExercises());
+
+    var ckService = scope.ServiceProvider.GetRequiredService<ICKExerciseService>();
+    ckService.SetEqualizationExercises(EqualizationExamples.GetExamples());
+    ckService.SetBarteringExercises(BarteringExamples.GetExamples());
+    ckService.SetSubstitutionExercises(SubstitutionExamples.GetExamples());
+    ckService.SetEliminationExercises(EliminationExamples.GetExamples());
 }
 
 app.Run();
