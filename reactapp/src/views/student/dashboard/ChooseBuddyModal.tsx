@@ -75,11 +75,13 @@ export const BUDDIES: Buddy[] = [
 interface Props {
     currentBuddyId: string;
     currentXp: number;           // student's total XP — drives unlock gates
+    studentId: number | string;
+    currentCoins: number;
     onSelect: (id: string) => void;
     onClose: () => void;
 }
 
-export default function ChooseBuddyModal({ currentBuddyId, currentXp, onSelect, onClose }: Props): ReactElement {
+export default function ChooseBuddyModal({ currentBuddyId, currentXp, studentId, currentCoins, onSelect, onClose }: Props): ReactElement {
     const [shopCharacterId, setShopCharacterId] = useState<string | null>(null);
     // equippedOutfitId per character — persisted to backend when XP system is wired
     const [equippedOutfits, setEquippedOutfits] = useState<Record<string, string>>({});
@@ -98,7 +100,9 @@ export default function ChooseBuddyModal({ currentBuddyId, currentXp, onSelect, 
         return (
             <CharacterShopModal
                 characterId={shopCharacterId}
+                studentId={studentId}
                 currentXp={currentXp}
+                currentCoins={currentCoins}
                 equippedOutfitId={equippedOutfits[shopCharacterId]}
                 onEquip={handleEquip}
                 onBuy={handleBuy}

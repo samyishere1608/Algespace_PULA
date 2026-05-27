@@ -14,7 +14,6 @@ import { isExerciseCompleted } from "@utils/utils.ts";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { Collapsible } from "@components/views/CollapsibleExerciseList.tsx";
-import { FlexibilityExerciseType } from "@/types/flexibility/enums.ts";
 import { FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
 
 export default function FlexibilityView(): ReactElement {
