@@ -1,11 +1,10 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "buildCommand": "dotnet publish webapi/webapi.csproj -c Release -o out"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "cd /app/webapi && dotnet /app/out/webapi.dll",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }
