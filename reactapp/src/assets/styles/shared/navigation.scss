@@ -1,0 +1,43 @@
+@use "../mixins" as *;
+
+.navigation {
+    @include flex-center-content(row, flex-start);
+    gap: 1rem;
+    width: 100%;
+    height: 3.5rem;
+    background-color: var(--blue-background);
+    z-index: 500;
+
+    > p,
+    svg {
+        @include title-font;
+        color: var(--light-text);
+        font-weight: 350;
+    }
+
+    > img {
+        width: auto;
+        height: 1.875rem;
+        margin-left: 2rem;
+    }
+
+    &:not(.study) {
+        > .main-route,
+        > img {
+            cursor: pointer;
+        }
+    }
+}
+
+.main-route:active:not(.study) {
+    color: var(--primary-blue);
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .main-route:hover {
+        &:not(.study) {
+            color: var(--primary-blue);
+        }
+    }
+}

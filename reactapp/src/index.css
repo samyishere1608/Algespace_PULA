@@ -1,0 +1,106 @@
+:root {
+    font-family: Inter, system-ui, sans-serif;
+    font-weight: 400;
+    --primary-blue: #219ebc;
+    --shade-primary-blue: #197a91;
+    --tint-primary-blue: #8ecae6;
+    --secondary-orange: #ff9933;
+    --shade-secondary-orange: #ff8000;
+    --grey-button: #c7c7c7;
+    --dark-blue: #034a6d;
+    --blue-background: #023047;
+    --tint-blue-background: #055076;
+    --context-menu-background: #e9e5e5;
+    --shadow: 2px 2px 2px rgba(0, 0, 0, 0.25);
+    --shadow-large: 4px 4px 4px rgba(0, 0, 0, 0.25);
+    --shadow-bottom-right: -1px -1px 4px rgba(0, 0, 0, 0.25);
+    --dark-text: #333333;
+    --light-text: #ffffff;
+    --light-text-50: #ffffff80;
+    --error-text: #ad0000;
+    --green-text: #1b842c;
+    --light-scroll: rgba(0, 0, 0, 0.1);
+    --dark-scroll: rgba(0, 0, 0, 0.25);
+    --app-heigth: 100%;
+    --app-width: 100%;
+}
+
+html,
+body {
+    font-size: 16px;
+    overflow: hidden;
+    width: 100vw;
+    width: var(--app-width); /* Fallback */
+    height: 100vh;
+    height: var(--app-heigth);
+    padding: 0;
+    margin: 0;
+}
+
+#root {
+    width: 100%;
+    height: 100%;
+}
+
+* {
+    box-sizing: border-box; /* Border and padding are included when width and height of an element are defined */
+}
+
+p {
+    color: var(--dark-text);
+    font-size: 1rem;
+    line-height: 1.5;
+    padding: 0;
+    margin: 0;
+    user-select: none; /* Text cannot be selected */
+    -webkit-user-select: none;
+}
+
+ol {
+    padding: 0 0 0 1rem;
+    margin: 0;
+}
+
+svg,
+img,
+div,
+button {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+}
+
+/* Scrollbar styling */
+html {
+    /* Firefox */
+    scrollbar-color: var(--dark-scroll) var(--light-scroll);
+    scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+    /* Chrome, Safari, Edge */
+    width: 0.75rem;
+    height: 0.75rem;
+}
+
+::-webkit-scrollbar-track {
+    background-color: var(--light-scroll);
+    border-radius: 1rem;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--dark-scroll);
+    border-radius: 1rem;
+}
+
+.full-page {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+strong {
+    font-weight: 550;
+    color: var(--tint-primary-blue);
+}

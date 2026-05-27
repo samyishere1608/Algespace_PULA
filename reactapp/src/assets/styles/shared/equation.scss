@@ -1,0 +1,125 @@
+@use "../mixins" as *;
+
+.image-equation,
+.flexibility-equation {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+
+    > p {
+        @include equation-font;
+        color: inherit;
+    }
+}
+
+.flexibility-equation {
+    padding: 0.5rem;
+}
+
+.flexibility-equation__terms {
+    gap: 0.25rem;
+
+    > p {
+        @include equation-font;
+        color: inherit;
+    }
+
+    &--left {
+        @extend .flexibility-equation__terms;
+        @include flex-center-content(row, flex-end);
+    }
+
+    &--right {
+        @extend .flexibility-equation__terms;
+        @include flex-center-content(row, flex-start);
+    }
+}
+
+.image-equation__image {
+    display: flex;
+    width: 2rem;
+    height: 2rem;
+
+    > img {
+        width: 100%;
+        object-fit: contain;
+    }
+}
+
+.image-equation__fraction,
+.flexibility-equation__fraction,
+.flexibility-equation__fraction--light-50 {
+    display: inline-block;
+    text-align: center;
+
+    > p {
+        color: inherit;
+    }
+}
+
+.flexibility-equation__fraction--light-50 {
+    > p {
+        color: var(--light-text-50);
+    }
+}
+
+.image-equation__fraction-numerator,
+.flexibility-equation__fraction-numerator {
+    @include fraction-font;
+    padding: 0.1em;
+}
+
+.image-equation__fraction-denominator {
+    @include fraction-font;
+    border-top: 1.75px solid var(--dark-text);
+}
+
+.flexibility-equation__fraction-denominator--dark {
+    @include fraction-font;
+    border-top: 1.75px solid var(--dark-text);
+}
+
+.flexibility-equation__fraction-denominator--light {
+    @include fraction-font;
+    border-top: 1.75px solid var(--light-text);
+}
+
+.flexibility-equation__fraction-denominator--light-50 {
+    @include fraction-font;
+    border-top: 1.75px solid var(--light-text-50);
+}
+
+.linear-system {
+    @include flex-center-content(column, center);
+    gap: 1rem;
+    height: fit-content;
+    color: var(--light-text);
+}
+
+.numbered-equation {
+    @include flex-center-content(row, center);
+    width: 100%;
+
+    > p {
+        padding: 0.5rem;
+        @include equation-font;
+        color: inherit;
+    }
+}
+
+.flexibility-equation--dark {
+    color: var(--dark-text);
+}
+
+.flexibility-equation--red {
+    border: 2px solid var(--error-text);
+    border-radius: 1rem;
+}
+
+.flexibility-equation--green {
+    border: 2px solid var(--green-text);
+    border-radius: 1rem;
+}
+
+.flexibility-equation--light {
+    color: var(--light-text);
+}

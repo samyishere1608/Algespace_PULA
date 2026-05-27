@@ -1,0 +1,209 @@
+@use "../mixins" as *;
+
+.equalization-application {
+    @include flex-center-content(column, flex-start);
+    gap: 1rem;
+}
+
+.substitution-application,
+.substitution-result {
+    @include flex-center-content(row, center);
+    gap: 1rem;
+    width: 100%;
+}
+
+.substitution-application__system {
+    @include flex-center-content(column, flex-start);
+    gap: 2rem;
+}
+
+.substitution-application__numbers {
+    @include flex-center-content(column, flex-start);
+    gap: 2rem;
+
+    > p {
+        padding: 0.5rem;
+        @include equation-font;
+        color: var(--light-text);
+    }
+}
+
+.draggable-equalization-equation,
+.droppable-equalization-equation,
+.draggable-substitution-equation {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+    color: var(--light-text);
+
+    > p {
+        @include equation-font;
+        color: var(--light-text);
+    }
+}
+
+.draggable-equalization-equation__container,
+.draggable-substitution-equation__container {
+    @include flex-center-content(row, center);
+    width: 100%;
+
+    > p {
+        padding: 0.5rem;
+        @include equation-font;
+        color: var(--light-text);
+    }
+}
+
+.draggable-substitution-equation__container {
+    > p {
+        margin-right: 1rem;
+    }
+}
+
+.droppable-equalization-equation {
+    padding: 0.25rem;
+
+    &--valid {
+        @extend .droppable-equalization-equation;
+        border: 2px solid var(--green-text);
+        border-radius: 1rem;
+    }
+
+    &--invalid {
+        @extend .droppable-equalization-equation;
+        border: 2px solid var(--error-text);
+        border-radius: 1rem;
+    }
+}
+
+.draggable-expression__container {
+    @include flex-center(row);
+
+    &--left {
+        @extend .draggable-expression__container;
+        justify-content: right;
+    }
+
+    &--right {
+        @extend .draggable-expression__container;
+        justify-content: left;
+    }
+}
+
+.draggable-expression__grid {
+    display: grid;
+    grid-template-rows: 1fr;
+    grid-template-columns: 1fr;
+    align-items: center;
+    width: fit-content;
+}
+
+.draggable-expression__grid-item {
+    grid-row: 1 / -1;
+    grid-column: 1 / -1;
+}
+
+.draggable-expression__grid-item {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+    grid-row: 1 / -1;
+    grid-column: 1 / -1;
+
+    > p {
+        @include equation-font;
+        color: var(--light-text);
+    }
+}
+
+.draggable-expression__drag {
+    padding: 0.5rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    background-color: var(--dark-blue);
+    border-radius: 1rem;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+}
+
+.draggable-equalization-item {
+    border: 2px solid var(--shade-primary-blue);
+    min-width: 2.75rem;
+}
+
+.droppable-equalization-equation {
+    margin: 1rem 0;
+}
+
+.droppable-expression__dropzone {
+    display: flex;
+    align-items: center;
+    min-width: 8rem;
+    min-height: 4rem;
+    padding: 0.5rem;
+    border-radius: 1rem;
+    box-shadow: inset var(--shadow-large),
+    inset var(--shadow-bottom-right);
+    border: 1px solid;
+
+    &--empty {
+        @extend .droppable-expression__dropzone;
+        border-color: var(--error-text);
+    }
+
+    &--full {
+        @extend .droppable-expression__dropzone;
+        border-color: var(--blue-background);
+    }
+}
+
+.droppable-expression {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+    width: 100%;
+
+    > p {
+        @include equation-font;
+        color: var(--light-text);
+    }
+}
+
+.droppable-substitution-expression {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+
+    > p {
+        @include equation-font;
+        color: var(--light-text);
+    }
+}
+
+.droppable-substitution__dropzone {
+    @include flex-center-content(row, center);
+    padding: 0.5rem;
+    min-width: 2.5rem;
+    border-radius: 1rem;
+    box-shadow: var(--shadow);
+
+    > p {
+        @include equation-font;
+        color: var(--light-text);
+    }
+}
+
+.substitution-result {
+    color: var(--light-text);
+}
+
+.parenthesis-image {
+    height: 3.25rem;
+    width: auto;
+}
+
+.parenthesis-text {
+    font-weight: lighter !important;
+}
+
+.substitution-result-equation {
+    @include flex-center-content(row, center);
+    flex-wrap: wrap;
+    gap: 1rem;
+}

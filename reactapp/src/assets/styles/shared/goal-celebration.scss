@@ -1,0 +1,176 @@
+@use "../mixins" as *;
+
+// ── Backdrop ──────────────────────────────────────────────────────────────────
+.goal-celebration__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+
+    &--visible {
+        opacity: 1;
+    }
+}
+
+// ── Card ──────────────────────────────────────────────────────────────────────
+.goal-celebration__card {
+    position: relative;
+    background: linear-gradient(145deg, #1a1a3e 0%, #023047 100%);
+    border: 2px solid rgba(33, 158, 188, 0.5);
+    border-radius: 1.5rem;
+    padding: 2.5rem 2rem 2rem;
+    width: min(90vw, 420px);
+    text-align: center;
+    overflow: hidden;
+    transform: scale(0.8) translateY(30px);
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.35s ease;
+    box-shadow: 0 0 60px rgba(33, 158, 188, 0.3), 0 20px 60px rgba(0, 0, 0, 0.5);
+
+    &--visible {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+// ── Trophy ────────────────────────────────────────────────────────────────────
+.goal-celebration__trophy {
+    font-size: 3.5rem;
+    margin-bottom: 0.5rem;
+    animation: goal-bounce 0.8s ease 0.3s both;
+}
+
+@keyframes goal-bounce {
+    0%   { transform: scale(0);   opacity: 0; }
+    60%  { transform: scale(1.2); opacity: 1; }
+    80%  { transform: scale(0.9); }
+    100% { transform: scale(1);   }
+}
+
+// ── Title ─────────────────────────────────────────────────────────────────────
+.goal-celebration__title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 1.25rem;
+    letter-spacing: 0.03em;
+}
+
+// ── Goal list ─────────────────────────────────────────────────────────────────
+.goal-celebration__goals {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.goal-celebration__goal-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 0.75rem;
+    padding: 0.55rem 0.85rem;
+    text-align: left;
+}
+
+.goal-celebration__goal-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.goal-celebration__goal-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #e0f4ff;
+}
+
+// ── XP badge ─────────────────────────────────────────────────────────────────
+.goal-celebration__xp-badge {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    background: linear-gradient(135deg, #219ebc, #0077b6);
+    border-radius: 1rem;
+    padding: 0.6rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 20px rgba(33, 158, 188, 0.4);
+}
+
+.goal-celebration__xp-earned {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 0.02em;
+}
+
+.goal-celebration__xp-total {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.75);
+    margin-top: 0.1rem;
+}
+
+// ── Continue button ───────────────────────────────────────────────────────────
+.goal-celebration__continue-btn {
+    display: block;
+    width: 100%;
+    padding: 0.8rem;
+    background: linear-gradient(135deg, #219ebc, #0077b6);
+    border: none;
+    border-radius: 0.75rem;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(33, 158, 188, 0.5);
+    }
+
+    &:active {
+        transform: translateY(0);
+    }
+}
+
+// ── Confetti dots ─────────────────────────────────────────────────────────────
+.goal-celebration__confetti {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.goal-celebration__dot {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: goal-confetti-fall 2s ease-out both;
+
+    @for $i from 1 through 16 {
+        &:nth-child(#{$i}) {
+            left: #{($i * 6.25%)}; // spread across width
+            animation-delay: #{($i * 0.07)}s;
+            animation-duration: #{1.5 + ($i * 0.1)}s;
+        }
+    }
+
+    &--1 { background: #ffd166; }
+    &--2 { background: #06d6a0; }
+    &--3 { background: #ef476f; }
+    &--4 { background: #219ebc; }
+}
+
+@keyframes goal-confetti-fall {
+    0%   { top: -10px; opacity: 1; transform: rotate(0deg) scale(1); }
+    100% { top: 110%;  opacity: 0; transform: rotate(360deg) scale(0.5); }
+}

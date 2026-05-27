@@ -1,0 +1,42 @@
+@use "../mixins" as *;
+
+.bartering__inventory {
+    @include flex-center(column);
+}
+
+.bartering__warning {
+    font-size: 1.25rem;
+    line-height: 1.5;
+    font-weight: 400;
+    margin-bottom: 3rem;
+    color: var(--light-text);
+}
+
+.inventory__container {
+    position: relative;
+    @include flex-center(column);
+}
+
+.inventory__sign {
+    position: absolute;
+    top: -2.25rem;
+    @include flex-center-content(row, center);
+    width: 9.5rem;
+    height: 3.5rem;
+    background-image: url("@images/substitution/inventorySign.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+
+    > p {
+        font-size: 1.25rem;
+        line-height: 1.5;
+        color: var(--light-text);
+    }
+}
+
+.inventory-boxes-container {
+    padding: 1.5rem;
+    background-image: url("@images/substitution/inventory.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+}

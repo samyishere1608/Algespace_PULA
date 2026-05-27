@@ -1,0 +1,33 @@
+@use "../mixins" as *;
+
+.link {
+    @include title-font;
+    text-decoration: none;
+    transition: transform 0.2s ease-in-out;
+    cursor: pointer;
+
+    &:active {
+        color: var(--primary-blue);
+        text-decoration: underline;
+    }
+}
+
+@media only screen and (max-width: 1023px) {
+    .link {
+        color: var(--light-text);
+    }
+}
+
+@media only screen and (min-width: 1024px) {
+    .link {
+        color: var(--blue-background);
+    }
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .link:hover {
+        color: var(--primary-blue);
+        text-decoration: underline;
+    }
+}

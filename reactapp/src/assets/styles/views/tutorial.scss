@@ -1,0 +1,113 @@
+@use "../mixins" as *;
+
+@mixin instruction-style {
+    @include text-font;
+    @include text-block;
+    color: var(--light-text);
+    max-width: 70%;
+}
+
+.tutorial {
+    width: 100%;
+    height: 100%;
+    @include flex-center-content(column, center);
+    gap: 3rem;
+    background-color: #012334;
+
+    > p {
+        @include instruction-style;
+
+        &.tutorial__title {
+            @include header-font;
+        }
+    }
+}
+
+.tutorial__instructions {
+    @include flex-center-content(column, center);
+    gap: 1rem;
+
+    > p {
+        @include instruction-style;
+    }
+}
+
+.equalization-instruction {
+    padding-bottom: 5rem;
+}
+
+.bartering-instruction {
+    padding-top: 5rem;
+}
+
+.substitution-selection-instruction {
+    padding-top: 20rem;
+}
+
+@media only screen and (min-width: 1501px) {
+    .tutorial {
+        background-size: auto 90%;
+    }
+
+    .substitution-substitution-instruction {
+        padding-top: 28rem;
+    }
+}
+
+@media only screen and (max-width: 1500px) {
+    .tutorial {
+        background-size: contain;
+    }
+
+    .substitution-substitution-instruction {
+        padding-top: 26rem;
+    }
+}
+
+.tutorial__buttons {
+    @include flex-center-content(row, center);
+    gap: 3rem;
+}
+
+.elimination-instruction-left {
+    align-items: start !important;
+
+    > .tutorial__instructions,
+    > .tutorial__buttons {
+        width: 45% !important;
+    }
+
+    > .tutorial__instructions > p,
+    > p {
+        max-width: 100%;
+    }
+
+    &--small {
+        @extend .elimination-instruction-left;
+
+        .tutorial__instructions > p,
+        > p {
+            max-width: 80%;
+        }
+    }
+}
+
+@media only screen and (min-width: 1501px) {
+    .elimination-instruction-left {
+        padding-left: 8rem;
+    }
+
+    .elimination-instruction-left--small {
+        padding-left: 4rem;
+    }
+}
+
+@media only screen and (max-width: 1500px) {
+    .elimination-instruction-left {
+        padding-left: 4rem;
+    }
+
+    .elimination-instruction-left--small {
+        padding-left: 2rem;
+    }
+}

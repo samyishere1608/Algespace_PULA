@@ -1,0 +1,84 @@
+@use "../mixins" as *;
+
+.actions {
+    @include flex-center-content(column, flex-start);
+    gap: 0.5rem;
+    width: 100%;
+    height: 8rem;
+
+    > p {
+        width: 100%;
+    }
+}
+
+.action__buttons {
+    @include flex-center-content(row, center);
+    gap: 3rem;
+    width: 100%;
+}
+
+.action__equations-plus-buttons {
+    @include flex-center-content(row, space-between);
+    padding: 0 1rem;
+    gap: 1rem;
+    width: 100%;
+}
+
+.action__equations {
+    @include flex-end-content(column, center);
+    gap: 1rem;
+}
+
+.action__equation {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+
+    > p {
+        @include text-font;
+        color: var(--dark-text);
+    }
+}
+
+.action__equation-solution {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+
+    > p {
+        @include title-font;
+        color: var(--dark-text);
+    }
+}
+
+.action__equation-operator {
+    @include title-font;
+    font-weight: 600;
+    color: var(--secondary-orange);
+    margin-right: 0.25rem;
+}
+
+.action__equation-substitution-buttons {
+    flex-grow: 1;
+    @include flex-end-content(column, center);
+    gap: 0.5rem;
+    max-width: 9rem;
+}
+
+.action__equation-substitution-buttons-lower {
+    @include flex-center-content(row, space-between);
+}
+
+.action__equation-addition-buttons {
+    flex-grow: 1;
+    @include flex-end-content(column, center);
+    gap: 0.5rem;
+    max-width: 9rem;
+}
+
+.action__system-equation {
+    @include flex-center-content(row, center);
+    gap: 1rem;
+
+    > p {
+        @include title-font;
+    }
+}

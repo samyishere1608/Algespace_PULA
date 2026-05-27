@@ -1,0 +1,82 @@
+@use "../mixins" as *;
+
+.scale-container {
+    // Required for setting a ref
+    @include flex-center-content(column, flex-end);
+    margin: auto auto 0;
+}
+
+.balance-scale {
+    width: 33.5rem;
+    height: auto;
+    @include background-image-props(bottom);
+
+    &--balanced {
+        @extend .balance-scale;
+        min-height: 11.5rem;
+    }
+
+    &--imbalanced {
+        @extend .balance-scale;
+        min-height: 14rem;
+    }
+}
+
+.balance-scale__plates {
+    @include flex-end-content(row, space-between);
+    padding-right: 1rem;
+    padding-left: 1rem;
+}
+
+.digital-scale__equation,
+.balance-scale__equation {
+    height: 2rem;
+    width: 100%;
+    margin-bottom: 2rem;
+    color: var(--dark-text);
+}
+
+.digital-scale {
+    @include flex-center-content(column, flex-end);
+    width: 17.5rem;
+    min-height: 8.5rem;
+    height: auto;
+    margin: auto auto 0;
+    background: url("@images/equalization/simpleScale.png") bottom no-repeat;
+    background-size: contain;
+}
+
+.scale__dropzone {
+    @include flex-end-content(row, space-evenly);
+    flex-wrap: wrap-reverse;
+    gap: 0.5rem;
+    width: 13.5rem;
+    height: auto; // Actual height depends on contents
+    min-height: 6rem !important; // Coloured background on hover
+}
+
+.scale__dropzone-error {
+    display: flex;
+    flex-direction: column;
+
+    > p {
+        width: 13.5rem;
+        color: var(--error-text);
+    }
+}
+
+.scale-highlighted-area-left,
+.scale-highlighted-area-right {
+    position: absolute;
+    bottom: 15.5rem;
+    border: 0.25rem solid;
+    border-radius: 0.25rem;
+}
+
+.scale-highlighted-area-left {
+    border-color: var(--primary-blue);
+}
+
+.scale-highlighted-area-right {
+    border-color: var(--secondary-orange);
+}

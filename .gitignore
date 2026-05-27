@@ -1,0 +1,12 @@
+reactapp/node_modules
+reactapp/.idea
+reactapp/.env
+reactapp/dist
+
+webapi/obj
+webapi/bin
+webapi/appsettings.json
+
+.vs
+/.idea/
+webapi/webapi.sln

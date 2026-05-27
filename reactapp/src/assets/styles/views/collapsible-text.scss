@@ -1,0 +1,22 @@
+@use "../mixins" as *;
+
+.collapsible-text {
+    @include flex-center-content(column, flex-start);
+    gap: 1rem;
+}
+
+.collapsible-text__contents {
+    @include flex-start-content(column, flex-start);
+    gap: 0.5rem;
+
+    > b {
+        font-size: 1.125rem;
+        line-height: 1.5;
+        color: var(--shade-primary-blue);
+    }
+
+    > p {
+        color: var(--blue-background);
+        @include text-block;
+    }
+}

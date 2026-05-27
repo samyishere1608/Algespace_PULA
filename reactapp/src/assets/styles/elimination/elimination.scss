@@ -1,0 +1,72 @@
+@use "../mixins" as *;
+@use "notebook";
+@use "actions";
+
+.elimination {
+    position: relative;
+    flex-grow: 1;
+    @include flex-center(column);
+    background: url("@images/elimination/beach.png") top no-repeat;
+    background-size: cover;
+}
+
+.elimination__contents {
+    flex-grow: 1;
+    width: 100%;
+    @include flex-center-content(row, flex-start);
+}
+
+.elimination__post-it-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin-left: 2rem;
+}
+
+@media only screen and (max-width: 1023px) {
+    .elimination__post-it-container {
+        margin-left: 1rem;
+    }
+}
+
+.elimination__switches {
+    @include flex-start-content(column, center);
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.elimination__post-it {
+    @include flex-center-content(column, center);
+    gap: 1.25rem;
+    margin-top: auto;
+    margin-bottom: auto;
+    width: 20.25rem;
+    height: 23rem;
+    padding: 1rem;
+    background: url("@images/elimination/postit.png") top no-repeat;
+    background-size: contain;
+}
+
+.elimination__post-it-title {
+    @include title-font;
+    text-decoration: underline;
+}
+
+.elimination__footer {
+    @include flex-end-content(row, space-between);
+    width: 100%;
+    margin-bottom: 1rem;
+    padding: 0 2rem;
+}
+
+@media only screen and (max-width: 1023px) {
+    .elimination__footer {
+        margin-bottom: 0.5rem;
+        padding: 0 1rem;
+    }
+}
+
+.elimination__button-group {
+    @include flex-center-content(row, center);
+    gap: 1rem;
+}

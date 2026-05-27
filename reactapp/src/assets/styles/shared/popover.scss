@@ -1,0 +1,146 @@
+@use "../mixins" as *;
+
+.hint-popover,
+.flexibility-popover {
+    @include flex-end(column);
+    max-width: 60rem;
+}
+
+.popover-arrow {
+    bottom: 2px !important;
+}
+
+.hint-popover__container {
+    @include flex-center-content(column, center);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: white;
+    box-shadow: var(--shadow);
+
+    > p {
+        width: 100%;
+    }
+}
+
+.hint-popover__button {
+    position: relative;
+    top: 1rem;
+    left: 0.5rem;
+    opacity: 90%;
+}
+
+.context-menu-popover__container {
+    @include flex-center-content(row, center);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: var(--context-menu-background);
+    box-shadow: var(--shadow);
+}
+
+.context-menu-popover__item {
+    @include flex-center-content(row, center);
+    gap: 0.5rem;
+    border: none;
+    transition: transform 0.2s ease-in-out;
+    cursor: pointer;
+
+    > p,
+    svg {
+        color: var(--primary-blue);
+    }
+
+    &:active {
+        > p,
+        > svg {
+            color: var(--shade-primary-blue);
+            text-decoration: underline;
+        }
+    }
+
+    &:nth-of-type(1) {
+        padding-right: 1rem;
+        border-right: 0.5px solid var(--light-scroll);
+    }
+
+    &:nth-of-type(2) {
+        padding-left: 1rem;
+        border-left: 0.5px solid var(--light-scroll);
+    }
+
+    &:only-child {
+        padding: 0;
+        border: none;
+    }
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .context-menu-popover__item:hover {
+        > p,
+        > svg {
+            color: var(--shade-primary-blue);
+            text-decoration: underline;
+        }
+    }
+}
+
+.flexibility-hint-button {
+    position: absolute;
+    bottom: 2rem;
+    display: none !important;   // hint button hidden per product decision
+}
+
+.agent-popover,
+.flexibility-popover {
+    position: absolute;
+    bottom: 2rem;
+    z-index: 999;
+}
+
+.agent-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.2); // translucent dark overlay
+    z-index: 998;
+    pointer-events: none;
+}
+
+@media only screen and (max-width: 1200px) {
+    .flexibility-hint-button {
+        right: 2rem;
+    }
+}
+
+@media only screen and (min-width: 1201px) {
+    .flexibility-hint-button {
+        right: 11rem;
+    }
+}
+
+.flexibility-popover {
+    position: absolute;
+    bottom: 2rem;
+}
+
+.flexibility-popover__container {
+    @include flex-center-content(column, center);
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-radius: 1rem;
+    background-color: white;
+    box-shadow: 0 4px 20px rgba(2, 48, 71, 0.15);
+    border: 1.5px solid rgba(33, 158, 188, 0.18);
+
+    > p {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+.flexibility-popover__choice-buttons {
+    @include flex-center-content(row, center);
+    gap: 4rem;
+}

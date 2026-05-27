@@ -1,0 +1,190 @@
+@use "../mixins" as *;
+
+.button {
+    @include text-font;
+    @include flex-center-content(row, center);
+    gap: 0.5rem;
+    white-space: nowrap;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0.5rem;
+    transition: transform 0.2s ease-in-out;
+    border: 2px solid;
+    border-radius: 1rem;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+
+    &:disabled {
+        color: white;
+        background-color: var(--grey-button);
+        border-color: var(--grey-button);
+        cursor: initial;
+    }
+
+    &:active:not([disabled]) {
+        transform: scale(1.1);
+    }
+}
+
+.primary-button {
+    color: white;
+    background-color: var(--primary-blue);
+    border-color: var(--primary-blue);
+
+    &:active:not([disabled]) {
+        background-color: var(--shade-primary-blue);
+        border-color: var(--shade-primary-blue);
+    }
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .primary-button:hover:not([disabled]),
+    .primary-button:active:not([disabled]) {
+        background-color: var(--shade-primary-blue); /* Two shades darker than primary blue */
+        border-color: var(--shade-primary-blue);
+    }
+}
+
+.help-button {
+    z-index: 400;
+}
+
+.notebook-button {
+    color: white;
+    background-color: var(--secondary-orange);
+    border-color: var(--secondary-orange);
+
+    &:active:not([disabled]) {
+        background-color: var(--shade-secondary-orange);
+        border-color: var(--shade-secondary-orange);
+    }
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .notebook-button:hover:not([disabled]),
+    .notebook-button:active:not([disabled]) {
+        background-color: var(--shade-secondary-orange);
+        border-color: var(--shade-secondary-orange);
+    }
+}
+
+.transparent-button {
+    color: white;
+    background-color: transparent;
+    border-color: white;
+
+    &:active:not([disabled]) {
+        color: var(--shade-primary-blue);
+        border-color: var(--shade-primary-blue);
+    }
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .transparent-button:hover:not([disabled]),
+    .transparent-button:active:not([disabled]) {
+        color: var(--shade-primary-blue);
+        border-color: var(--shade-primary-blue);
+    }
+}
+
+.dark-button {
+    color: white;
+    background-color: var(--dark-blue);
+    border-color: var(--dark-blue);
+
+    &:active:not([disabled]) {
+        background-color: var(--shade-primary-blue);
+        border-color: var(--shade-primary-blue);
+    }
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .dark-button:hover:not([disabled]),
+    .dark-button:active:not([disabled]) {
+        background-color: var(--shade-primary-blue);
+        border-color: var(--shade-primary-blue);
+    }
+}
+
+.span-button {
+    font-size: 1rem;
+    @include flex-center-content(row, center);
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    transition: transform 0.2s ease-in-out;
+    border: 2px solid var(--primary-blue);
+    border-radius: 1.75rem;
+    box-shadow: var(--shadow);
+}
+
+.text-button {
+    @include text-font;
+    @include flex-center-content(row, center);
+    gap: 0.5rem;
+    background: none !important;
+    border: none;
+    padding: 0 !important;
+    transition: transform 0.2s ease-in-out;
+    cursor: pointer;
+
+    &:active {
+        transform: scale(1.1);
+        text-decoration: underline;
+    }
+
+    &--white {
+        @extend .text-button;
+        color: var(--light-text);
+
+        &:active {
+            color: var(--primary-blue);
+        }
+    }
+
+    &--blue {
+        @extend .text-button;
+        color: var(--primary-blue);
+
+        &:active {
+            color: var(--blue-background);
+        }
+    }
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .text-button--white:hover {
+        color: var(--primary-blue);
+        text-decoration: underline;
+    }
+
+    .text-button--blue:hover {
+        color: var(--blue-background);
+        text-decoration: underline;
+    }
+}
+
+.green-button {
+    color: white;
+    background-color: mediumseagreen;
+    border-color: mediumseagreen;
+
+    &:active:not([disabled]) {
+        background-color: seagreen;
+        border-color: seagreen;
+    }
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .green-button:hover:not([disabled]),
+    .green-button:active:not([disabled]) {
+        background-color: seagreen; /* Two shades darker than primary blue */
+        border-color: seagreen;
+    }
+}

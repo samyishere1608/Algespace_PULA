@@ -1,0 +1,15 @@
+{
+    "error-message": "Ein unerwarteter Fehler ist aufgetreten, es tut uns sehr leid.",
+    "try-again": "Bitte versuche es zu einem späteren Zeitpunkt wieder. Sollte der Fehler erneut auftreten, kannst du uns gerne kontaktieren.",
+    "error-message-home": "$t(error-message) $t(try-again)",
+    "error-message-load": "$t(error-message) Die Daten konnten nicht geladen werden. $t(try-again)",
+    "error-message-no-exercise-id": "$t(error-message) Es scheint, dass keine Identifikationsnummer für die Übung angegeben wurde. $t(try-again)",
+    "error-message-exercise-data-missing": "$t(error-message) Es scheint, dass notwendige Daten fehlen. $t(try-again)",
+    "error-message-no-study-id": "$t(error-message) Es scheint, dass keine Identifikationsnummer für die Studie angegeben wurde. $t(try-again)",
+    "error-message-login": "Die Anmeldung ist fehlgeschlagen aufgrund eines ungültigen Benutzernamens oder Passworts.",
+    "error-message-invalid-study": "Die zugeordnete Studie existiert nicht bzw. nicht mehr.",
+    "error-message-expired-study": "Entweder ist die zugeordnete Studie nicht mehr aktuell oder du hast bereits and dieser teilgenommen.",
+    "error-message-404": "Es sieht so aus, als hättest du eine URL eingegeben, die nicht existiert.",
+    "error-message-return": "Bitte versuche es zu einem späteren Zeitpunkt wieder. Sollte der Fehler erneut auftreten, kannst du uns gerne kontaktieren.",
+    "error-message-study-error": "$t(error-message) Bitte überspringe diese Aufgabe und fahre stattdessen mit der nachfolgenden Aufgabe fort. Bitte merke dir auch, welche Aktion genau den Fehler ausgelöst hat und teile dies der Studienleitung am Ende der Studie mit, damit wir die Software entsprechend verbessern können."
+}

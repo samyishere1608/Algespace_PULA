@@ -1,0 +1,37 @@
+@use "../mixins" as *;
+
+.exercise-overlay__background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    z-index: 700;
+}
+
+.exercise-overlay__container {
+    display: inline-block;
+    max-width: 30rem;
+    margin: auto;
+    padding: 1rem;
+    border-radius: 1rem;
+    background-color: white;
+}
+
+.exercise-overlay__contents {
+    @include flex-center-content(column, center);
+    gap: 1rem;
+
+    > p {
+        width: 100%;
+        color: var(--dark-text);
+    }
+}
+
+.exercise-overlay__buttons {
+    @include flex-center-content(row, center);
+    gap: 4rem;
+}

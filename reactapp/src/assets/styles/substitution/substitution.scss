@@ -1,0 +1,53 @@
+@use "../mixins" as *;
+@use "equations";
+
+.substitution {
+    position: relative;
+    flex-grow: 1;
+    @include flex-center-content(column, center);
+    background:
+        url("@images/substitution/sky.png") top no-repeat,
+        url("@images/substitution/grass.png") bottom no-repeat;
+    background-size:
+        100% 40%,
+        100% 60%;
+}
+
+.substitution__contents {
+    @include flex-center-content(column, flex-start);
+    gap: 1rem;
+    box-sizing: border-box;
+    width: 55rem;
+    height: 38rem;
+    padding: 3.5rem 3.75rem 3rem 3.75rem;
+    background: url("@images/substitution/board.png") top no-repeat;
+    background-size: contain;
+
+    > p {
+        width: 100%;
+    }
+}
+
+.substitution__feedback > p {
+    color: var(--error-text);
+}
+
+.substitution__footer {
+    position: absolute;
+    bottom: 1rem;
+    width: 100%;
+    padding: 0 2rem;
+
+    &.space {
+        @include flex-end-content(row, space-between);
+    }
+
+    &.end {
+        @include flex-end-content(row, flex-end);
+    }
+}
+
+.substitution__solution {
+    @include flex-center-content(row, center);
+    gap: 3rem;
+}

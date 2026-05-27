@@ -1,0 +1,70 @@
+@use "../mixins" as *;
+
+.language-switch {
+    @include flex-center-content(row, center);
+    gap: 0.5rem;
+}
+
+.language-switch__image {
+    width: auto;
+    height: 1.25rem;
+}
+
+select {
+    // Reset default styling
+    border: 0;
+    outline: 0;
+    background: none;
+    box-shadow: none;
+    appearance: none;
+}
+
+.language-switch__select {
+    position: relative;
+    font: inherit;
+    cursor: pointer;
+
+    > select {
+        @include title-font;
+        padding-right: 1.5rem;
+    }
+
+    > option {
+        @include text-font;
+    }
+
+    &:active {
+        color: var(--primary-blue);
+        text-decoration: underline;
+    }
+
+    > svg {
+        position: absolute;
+        padding-right: 0.25rem;
+        pointer-events: none;
+        background-color: transparent;
+        top: 50%;
+        right: 0;
+        transform: translateY(-50%);
+    }
+}
+
+@media only screen and (max-width: 1023px) {
+    .language-switch__select {
+        color: var(--light-text);
+    }
+}
+
+@media only screen and (min-width: 1024px) {
+    .language-switch__select {
+        color: var(--blue-background);
+    }
+}
+
+@media (hover: hover) {
+    /* For desktops only */
+    .language-switch__select:hover {
+        color: var(--primary-blue);
+        text-decoration: underline;
+    }
+}

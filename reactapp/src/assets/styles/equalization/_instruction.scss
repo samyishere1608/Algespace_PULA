@@ -1,0 +1,73 @@
+@use "../mixins" as *;
+
+.instruction-board {
+    // Fixed position
+    position: absolute;
+    z-index: 400;
+    top: 1.5rem;
+    right: 2rem;
+    width: 26.5rem;
+    height: auto;
+}
+
+@media only screen and (max-width: 1023px) {
+    .instruction-board {
+        right: 1rem;
+    }
+}
+
+.instruction-board__container {
+    position: relative; // Treat contents relative to move the location of the clamp
+    @include flex-center(column);
+}
+
+.instruction-board__background {
+    @include flex-center(column);
+    gap: 1rem;
+    padding: 1rem;
+    border: 0.25rem solid #acacac; // Grey boarder
+    border-radius: 0.5rem;
+    background-color: white;
+}
+
+.instruction-board__clamp {
+    position: absolute;
+    top: -1.25rem;
+    @include flex-end-content(row, center);
+    width: 6.5rem;
+    height: 2.25rem;
+    background: url("@images/equalization/clampSmall.png") bottom no-repeat;
+    background-size: contain;
+
+    > p {
+        @include title-font;
+    }
+}
+
+.instruction-board__contents {
+    @include flex-center-content(row, space-evenly);
+    width: 100%;
+}
+
+.instruction-board__contents-input {
+    width: 5rem;
+    min-height: 2rem;
+    border: 1px solid;
+    border-radius: 0.25rem;
+    border-color: var(--light-scroll);
+
+    &:focus {
+        outline-color: var(--primary-blue);
+    }
+
+    &.error {
+        border-color: var(--error-text);
+        outline-color: var(--error-text);
+    }
+}
+
+.instruction-board__contents-feedback {
+    width: 100%;
+    font-weight: 450; /* Semi-bold */
+    color: var(--error-text);
+}

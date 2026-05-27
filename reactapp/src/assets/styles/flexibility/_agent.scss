@@ -1,0 +1,42 @@
+@use "../mixins" as *;
+
+.agent-image__container {
+    position: absolute;
+    bottom: 0;
+    @include flex-center-content(column, flex-end);
+    height: 12rem;
+    width: 8.75rem;
+    z-index: 999;
+
+    > img {
+        object-fit: contain;
+    }
+
+    &--large {
+        @extend .agent-image__container;
+
+        > img {
+            width: 8.75rem;
+        }
+    }
+
+    &--normal {
+        @extend .agent-image__container;
+
+        > img {
+            width: 8rem;
+        }
+    }
+}
+
+@media only screen and (max-width: 1200px) {
+    .agent-image__container {
+        left: 1rem;
+    }
+}
+
+@media only screen and (min-width: 1201px) {
+    .agent-image__container {
+        left: 10rem;
+    }
+}

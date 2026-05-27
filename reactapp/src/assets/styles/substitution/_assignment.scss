@@ -1,0 +1,32 @@
+@use "../mixins" as *;
+
+.assignment {
+    position: relative;
+    @include flex-center(column);
+}
+
+.assignment__background {
+    @include flex-center-content(column, center);
+    gap: 0.5rem;
+    width: 20rem;
+    height: 9rem;
+    padding: 1.5rem;
+    background-image: url("@images/substitution/assignmentBody.png");
+    background-size: auto 100%;
+    background-repeat: no-repeat;
+}
+
+.assignment__sign {
+    position: absolute;
+    top: -1.5rem;
+    @include flex-center-content(row, center);
+    width: 9.5rem;
+    height: 3.25rem;
+    background-image: url("@images/substitution/assignmentSign.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+
+    > p {
+        @include title-font;
+    }
+}

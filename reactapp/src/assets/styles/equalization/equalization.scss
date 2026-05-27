@@ -1,0 +1,117 @@
+@use "../mixins" as *;
+@use "instruction";
+@use "scale";
+@use "system-image";
+
+.equalization {
+    position: relative; // Treat contents as relative to this div
+    flex-grow: 1; // Necessary to obtain 100% height including the navigation
+    background:
+        url("@images/equalization/table.png") bottom repeat-x,
+        url("@images/equalization/supermarket.png") top no-repeat; /* Table ratio: 7.5:1 */
+    background-size:
+        auto 9rem,
+        cover; // Height of table should be 9rem
+}
+
+.equalization__overlay {
+    position: fixed;
+    z-index: 300;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.equalization__table {
+    position: absolute;
+    bottom: 0;
+    @include flex-end-content(row, space-between);
+    width: 100%;
+    margin-bottom: 6.5rem;
+}
+
+.equalization__shelf {
+    display: flex;
+    flex-direction: column;
+}
+
+.equalization__weights {
+    @include flex-end(row);
+    gap: 1rem;
+    margin-left: 2rem;
+}
+
+.equalization__weight {
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    display: grid;
+    align-items: end;
+    justify-items: end;
+}
+
+.equalization__fruits-background {
+    width: 17.5rem;
+    height: 11.75rem;
+    background:
+        url("@images/equalization/display.png") bottom left no-repeat,
+        url("@images/equalization/shelf.png") top left no-repeat;
+    background-size:
+        17.5rem auto,
+        16rem auto;
+}
+
+.equalization__fruits-boxes {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    padding-top: 1.625rem;
+    padding-bottom: 2.75rem;
+    padding-left: 0.25rem;
+}
+
+.equalization__fruits-box {
+    width: 50%;
+    height: 100%;
+    @include background-image-props(left bottom);
+}
+
+.equalization__footer {
+    position: absolute;
+    bottom: 1rem;
+    @include flex-end-content(row, space-between);
+    width: 100%;
+    padding: 0 2rem;
+}
+
+@media only screen and (max-width: 1023px) {
+    .equalization__footer {
+        padding: 0 1rem;
+    }
+}
+
+.equalization__button-group {
+    @include flex-center-content(row, center);
+    gap: 1rem;
+}
+
+.equalization__feedback {
+    display: flex;
+    min-height: 2.5rem;
+    width: 100%;
+
+    > p {
+        display: inline-block;
+        width: 100%;
+        text-align: center;
+        font-size: 1.125rem; // 20px
+        line-height: 1.5;
+        font-weight: 450; // Semi-bold
+        color: var(--light-text);
+        margin: auto 1rem; // Centering inside div (parent has no margin to enforce aligning contents on bottom)
+    }
+}

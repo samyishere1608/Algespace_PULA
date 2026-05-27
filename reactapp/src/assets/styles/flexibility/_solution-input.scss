@@ -1,0 +1,35 @@
+@use "../mixins" as *;
+
+.flexibility-solution-input {
+    @include flex-center-content(row, center);
+    gap: 1rem;
+
+    > p {
+        color: var(--light-text);
+    }
+}
+
+.flexibility-solution-input__input {
+    width: 5.5rem;
+    min-height: 2rem;
+    border: 1px solid;
+    border-radius: 0.25rem;
+    border-color: var(--light-scroll);
+
+    &:focus {
+        outline-color: var(--primary-blue);
+    }
+
+    &.error {
+        border: 2px solid;
+        border-color: var(--error-text);
+        outline-color: var(--error-text);
+    }
+
+    &:disabled {
+        background-color: white !important;
+        color: var(--dark-text);
+        border: 2px solid;
+        border-color: var(--error-text);
+    }
+}

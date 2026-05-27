@@ -1,0 +1,137 @@
+@use "../mixins" as *;
+
+.comparison__grid {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr auto;
+    grid-template-rows: auto auto auto auto;
+    padding: 1rem 0;
+    width: 100%;
+}
+
+@media only screen and (max-width: 950px) {
+    .comparison__grid {
+        overflow-x: auto;
+    }
+}
+
+.comparison__column1 {
+    grid-column: 1;
+}
+
+.comparison__column2 {
+    grid-column: 2;
+}
+
+.comparison__column3 {
+    grid-column: 3;
+}
+
+@media only screen and (min-width: 1024px) {
+    .comparison__column2,
+    .comparison__column3 {
+        padding: 0 2rem;
+    }
+}
+
+@media only screen and (max-width: 1023px) {
+    .comparison__column2,
+    .comparison__column3 {
+        padding: 0 1rem;
+    }
+}
+
+.comparison__column4 {
+    grid-column: 4;
+}
+
+.comparison__column1-2 {
+    grid-column: 1 / span 2;
+}
+
+.comparison__column3-4 {
+    grid-column: 3 / span 2;
+}
+
+.comparison__row2 {
+    grid-row: 2;
+}
+
+.comparison__row3 {
+    grid-row: 3;
+}
+
+.comparison__row4 {
+    grid-row: 4;
+    padding-top: 1rem;
+}
+
+.comparison__row1 {
+    grid-row: 1;
+    padding-bottom: 1rem;
+
+    > p {
+        text-align: center;
+        font-size: 1.125rem;
+        color: var(--primary-blue);
+        font-weight: 550;
+
+        &.method {
+            text-transform: capitalize;
+        }
+    }
+}
+
+.comparison__row3 {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 0.5px dashed var(--light-text-50);
+}
+
+.comparison__column2,
+.comparison__column3 {
+    @include flex-center-content(column, flex-start);
+}
+
+.comparison__column1,
+.comparison__column4 {
+    > p {
+        padding-top: 0.5rem;
+        @include text-font;
+        color: var(--light-text);
+    }
+}
+
+.comparison__column2 {
+    border-right: 1px solid var(--light-text-50);
+}
+
+.comparison__column3 {
+    border-left: 1px solid var(--light-text-50);
+}
+
+.equation__grid {
+    display: grid;
+    grid-template-columns: 2rem auto;
+}
+
+.equation__column1 {
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+}
+
+.equation__column2 {
+    grid-column: 2;
+}
+
+.equation__row1 {
+    grid-row: 1;
+}
+
+.equation__row2 {
+    grid-row: 2;
+}
+
+.equation__row3 {
+    grid-row: 3;
+}

@@ -1,0 +1,35 @@
+@use "../mixins" as *;
+
+.flexibility-view__container {
+    display: flex;
+    flex-grow: 1;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+@media only screen and (max-width: 1200px) {
+    .flexibility-view__container {
+        padding: 0 2rem;
+    }
+}
+
+@media only screen and (min-width: 1201px) {
+    .flexibility-view__container {
+        padding: 0 10rem;
+    }
+}
+
+.flexibility-view__contents {
+    @include flex-center-content(column, flex-start);
+    gap: 1rem;
+    width: 100%;
+    height: 100%;
+    min-height: fit-content;
+
+    > p {
+        color: var(--light-text);
+        width: 100%;
+    }
+}

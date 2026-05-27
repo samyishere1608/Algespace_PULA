@@ -1,0 +1,89 @@
+@use "../mixins" as *;
+
+.switch-container {
+    @include flex-center-content(row, center);
+    gap: 0.75rem;
+
+    > p {
+        @include title-font;
+    }
+}
+
+.switch {
+    position: relative;
+    width: 4.5rem;
+}
+
+.switch__checkbox {
+    display: none;
+}
+
+.switch__label {
+    display: block;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: 1rem;
+}
+
+.switch__label-text {
+    display: block;
+    width: 200%;
+    margin-left: -100%;
+    transition: margin 0.3s ease-in 0s;
+
+    &:before,
+    &:after {
+        float: left;
+        width: 50%;
+        height: 2rem;
+        line-height: 2rem;
+        font-size: 1rem;
+        box-sizing: border-box;
+    }
+
+    &:before {
+        content: attr(data-on);
+        padding-left: 0.75rem;
+        background-color: var(--primary-blue);
+        color: var(--light-text);
+    }
+
+    &:after {
+        content: attr(data-off);
+        padding-right: 0.75rem;
+        background-color: var(--dark-scroll);
+        color: var(--light-text);
+        text-align: right;
+    }
+}
+
+.switch-disabled {
+    cursor: auto;
+
+    &:after {
+        background-color: var(--grey-button) !important;
+        cursor: auto;
+    }
+}
+
+.switch__label-switch {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 2.5rem;
+    border-radius: 1rem;
+    width: 1.5rem;
+    margin: 0.25rem;
+    background: white;
+    transition: all 0.3s ease-in 0s;
+}
+
+.switch__checkbox:checked + .switch__label {
+    .switch__label-text {
+        margin-left: 0;
+    }
+
+    .switch__label-switch {
+        right: 0;
+    }
+}

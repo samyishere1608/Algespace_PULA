@@ -1,0 +1,37 @@
+@use "../mixins" as *;
+
+.system-transformation__buttons {
+    @include flex-center-content(row, center);
+    gap: 1rem;
+}
+
+.system-transformation__systems,
+.transformed-system,
+.system-transformation__transformable-system,
+.transformed-system {
+    @include flex-center-content(row, center);
+    flex-wrap: wrap;
+    row-gap: 2rem;
+    column-gap: 1rem;
+}
+
+.system-transformation__options {
+    @include flex-center-content(row, flex-start);
+    gap: 1rem;
+    width: 100%;
+    margin-left: 1.25rem;
+}
+
+.system-transformation__transformable-system {
+    @include flex-center-content(row, center);
+    gap: 2rem;
+}
+
+.system-transformation__transformable-system {
+    gap: 1.5rem;
+
+    > img {
+        width: 1.75rem;
+        height: auto;
+    }
+}

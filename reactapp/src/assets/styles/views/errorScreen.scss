@@ -1,0 +1,25 @@
+@use "../mixins" as *;
+
+.error-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 700;
+    @include flex-center-content(column, center);
+    gap: 2rem;
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(180deg, var(--blue-background) 0%, var(--tint-blue-background) 100%);
+
+    > svg {
+        font-size: 4rem;
+        line-height: 1.5;
+        color: var(--light-text);
+    }
+
+    > p {
+        max-width: 90%;
+        text-align: center;
+        color: var(--light-text);
+    }
+}

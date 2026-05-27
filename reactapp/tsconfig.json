@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": [ "ES2020", "DOM", "DOM.Iterable" ],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "types": ["vite/client"],
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "checkJs": false,
+
+    /* Linting */
+    "strict": true,
+    "noImplicitAny":  true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Handling JSON */
+    "experimentalDecorators": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [ "./src/*" ],
+      "@components/*": [ "./src/components/*" ],
+      "@views/*": [ "./src/views/*" ],
+      "@routes/*": [ "./src/routes/*" ],
+      "@hooks/*": [ "./src/hooks/*" ],
+      "@utils/*": [ "./src/utils/*" ],
+      "@styles/*": [ "./src/assets/styles/*" ],
+      "@images/*": [ "./src/assets/images/*" ],
+      "@translations/*": [ "./src/assets/translations/*" ]
+    }
+  },
+  "include": [ "src" ],
+  "references": [ { "path": "./tsconfig.node.json" } ]
+}

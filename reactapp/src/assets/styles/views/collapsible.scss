@@ -1,0 +1,170 @@
+@use "../mixins" as *;
+
+.collapsible {
+    @include flex-center-content(column, center);
+    width: 100%;
+}
+
+.collapsible__header {
+    @include flex-center-content(row, space-between);
+    width: 100%;
+    padding: 0.5rem;
+    border-bottom: 2px solid var(--primary-blue);
+
+    &--view {
+        @extend .collapsible__header;
+        border-bottom: 2px solid var(--primary-blue);
+    }
+
+    &--study {
+        @extend .collapsible__header;
+        border-bottom: 2px solid var(--light-text);
+    }
+
+    &:active:has(.collapsible__button:hover) {
+        border-bottom: 2px solid var(--tint-primary-blue);
+    }
+}
+
+.collapsible__button {
+    @include flex-center-content(row, flex-start);
+    gap: 1rem;
+    width: 100%;
+    cursor: pointer;
+
+    > p {
+        width: 100%;
+    }
+
+    &--view {
+        @extend .collapsible__button;
+
+        > p,
+        > svg {
+            @include title-font;
+            color: var(--primary-blue);
+        }
+    }
+
+    &--study {
+        @extend .collapsible__button;
+
+        > p,
+        > svg {
+            @include title-font;
+            color: var(--light-text);
+        }
+    }
+
+    &:active {
+        > p,
+        > svg {
+            color: var(--tint-primary-blue);
+        }
+    }
+}
+
+@media (hover: hover) {
+    .collapsible__header:has(.collapsible__button:hover) {
+        // Only change border colour if hover on child with class collapsible__button
+        border-bottom: 2px solid var(--tint-primary-blue);
+    }
+
+    .collapsible__button:hover {
+        > p,
+        > svg {
+            color: var(--tint-primary-blue);
+        }
+    }
+}
+
+.collapsible__contents {
+    width: 100%;
+    padding: 1rem;
+}
+
+.exercise-list {
+    @include flex-center-content(column, center);
+    gap: 1rem;
+    width: 100%;
+}
+
+.exercise-list__item {
+    @include flex-center-content(row, space-between);
+    width: 100%;
+    padding: 0.5rem;
+    min-height: 2.75rem;
+    border-radius: 1rem;
+    cursor: pointer;
+
+    &--todo {
+        @extend .exercise-list__item;
+        background-color: var(--primary-blue);
+        border: 2px solid var(--primary-blue);
+    }
+
+    &--todo:active {
+        background-color: var(--shade-primary-blue);
+        border-color: var(--shade-primary-blue);
+    }
+
+    &--completed {
+        @extend .exercise-list__item;
+        background-color: mediumseagreen;
+        border: 2px solid mediumseagreen;
+    }
+
+    &--completed:active {
+        background-color: seagreen;
+        border-color: seagreen;
+    }
+
+    > p {
+        margin-left: 0.5rem;
+        color: var(--light-text);
+    }
+
+    > svg {
+        margin-right: 0.5rem;
+        color: var(--light-text);
+    }
+}
+
+@media (hover: hover) {
+    .exercise-list__item--todo:hover {
+        background-color: var(--shade-primary-blue);
+        border-color: var(--shade-primary-blue);
+    }
+
+    .exercise-list__item--completed:hover {
+        background-color: seagreen;
+        border-color: seagreen;
+    }
+}
+
+.exercise-font {
+    font-size: 1.125rem; // 18px
+    line-height: 1;
+    font-weight: 500;
+}
+
+.exercise-list__levels {
+    @include flex-center-content(row, center);
+    gap: 0.5rem;
+    min-width: 7rem;
+
+    > svg {
+        color: var(--light-text);
+    }
+}
+
+.exercise-list__status {
+    min-width: 7rem;
+    text-align: center;
+}
+
+.exercise-list__load-error {
+    width: 100%;
+    text-align: center;
+    color: var(--primary-blue);
+}

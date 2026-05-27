@@ -1,0 +1,75 @@
+@mixin flex-center($direction) {
+    display: flex;
+    flex-direction: $direction;
+    align-items: center;
+}
+
+@mixin flex-start($direction) {
+    display: flex;
+    flex-direction: $direction;
+    align-items: flex-start;
+}
+
+@mixin flex-end($direction) {
+    display: flex;
+    flex-direction: $direction;
+    align-items: flex-end;
+}
+
+@mixin flex-center-content($direction, $justify) {
+    @include flex-center($direction);
+    justify-content: $justify;
+}
+
+@mixin flex-start-content($direction, $justify) {
+    @include flex-start($direction);
+    justify-content: $justify;
+}
+
+@mixin flex-end-content($direction, $justify) {
+    @include flex-end($direction);
+    justify-content: $justify;
+}
+
+@mixin background-image-props($positions) {
+    background-repeat: no-repeat;
+    background-position: $positions;
+    background-size: contain;
+}
+
+@mixin text-font {
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+@mixin table-fraction-font {
+    font-size: 1rem;
+    line-height: 1.25;
+}
+
+@mixin title-font {
+    font-size: 1.25rem; // 20px
+    line-height: 1.5; // 1.875rem
+}
+
+@mixin equation-font {
+    font-size: 1.25rem;
+    line-height: 1.5;
+}
+
+@mixin fraction-font {
+    font-size: 1.25rem;
+    line-height: 1.5;
+}
+
+@mixin header-font {
+    font-size: 2rem; // 32px
+    line-height: 1.5;
+}
+
+@mixin text-block {
+    hyphens: auto;
+    text-align: justify;
+    -moz-text-align-last: left;
+    text-align-last: left;
+}

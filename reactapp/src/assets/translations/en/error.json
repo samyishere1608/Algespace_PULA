@@ -1,0 +1,15 @@
+{
+    "error-message": "An unexpected error has occurred, we are very sorry.",
+    "try-again": "Please try again at a later time. If the error occurs again, please feel free to contact us.",
+    "error-message-home": "$t(error-message) $t(try-again)",
+    "error-message-load": "$t(error-message) The data could not be loaded. $t(try-again)",
+    "error-message-no-exercise-id": "$t(error-message) It seems that no identification number for the exercise was provided. $t(try-again)",
+    "error-message-exercise-data-missing": "$t(error-message) It seems that required data is missing. $t(try-again)",
+    "error-message-no-study-id": "$t(error-message) It seems that no identification number for the study was provided. $t(try-again)",
+    "error-message-login": "Login failed due to invalid username or password.",
+    "error-message-invalid-study": "The assigned study does not exist or no longer exists.",
+    "error-message-expired-study": "Either the assigned study is no longer current or you have already taken part in it.",
+    "error-message-404": "It looks like you have entered an URL that does not exist.",
+    "error-message-return": "Please try again at a later time. If the error occurs again, you are welcome to contact us.",
+    "error-message-study-error": "Please skip this exercise and continue with the following task instead. Please also make a note of the exact action that triggered the error and report this to the study management at the end of the study so that we can improve the software accordingly."
+}

@@ -1,0 +1,53 @@
+@use "../mixins" as *;
+
+.retail-boxes {
+    @include flex-center-content(row, center);
+    gap: 0.5rem;
+
+    &--merchant {
+        @extend .retail-boxes;
+        padding-left: 3rem;
+        margin-bottom: 2rem;
+    }
+}
+
+.retail-box {
+    display: grid; // Grid for stacking images and amount */
+    grid-template-rows: 4fr 1fr 0.5fr;
+    grid-template-columns: 4fr 1fr 0.25fr;
+    align-items: center;
+    width: 4rem;
+    height: 4rem;
+    background: url("@images/substitution/box.png") center no-repeat;
+    background-size: contain;
+}
+
+.retail-box__item {
+    @include flex-center-content(column, center); // Flexbox required to center item
+    grid-row: 1 / span 3;
+    grid-column: 1 / span 3;
+}
+
+.retail-box__item-invalid {
+    z-index: 200;
+    font-size: 2rem;
+    line-height: 1.5;
+}
+
+.retail-box__amount {
+    @include flex-center-content(row, center);
+    grid-row: 2;
+    grid-column: 2;
+
+    > p {
+        color: white;
+        position: absolute;
+    }
+}
+
+.retail-box__greyscale-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    filter: grayscale(50%);
+}

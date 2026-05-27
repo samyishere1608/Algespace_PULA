@@ -1,0 +1,141 @@
+@use "../mixins" as *;
+
+.about {
+    @include flex-center(column);
+    gap: 2rem;
+    width: 100%;
+    height: 100%;
+    padding: 1rem 0;
+    background-color: white;
+    background-image: url("@images/home/exercises.png");
+    background-position: top;
+    background-repeat: no-repeat;
+}
+
+@media only screen and (min-width: 1024px) {
+    .about {
+        background-size: 100% auto;
+    }
+}
+
+@media only screen and (max-width: 1023px) {
+    .about {
+        background-size: 100% 60%;
+    }
+}
+
+.about__header {
+    @include flex-center-content(row, space-between);
+    width: 100%;
+    padding: 0 2rem 1rem;
+
+    > div {
+        flex: 1;
+        display: flex;
+    }
+}
+
+.about__header-title {
+    @include flex-center-content(row, center);
+    gap: 1rem;
+
+    > img {
+        height: 2.375rem;
+        width: auto;
+        margin-top: 0.5rem;
+    }
+
+    > p {
+        @include header-font;
+        color: white;
+    }
+}
+
+.about__contents-container {
+    @include flex-center(column);
+    flex-grow: 1;
+    padding: 0 2rem;
+    overflow-y: scroll;
+}
+
+.about__contents {
+    @include flex-center-content(column, flex-start);
+    gap: 2rem;
+
+    > p {
+        @include text-block;
+        @include text-font;
+        color: white;
+    }
+}
+
+.about__section-container {
+    @include flex-center(column);
+    padding: 1rem;
+    border: 1px solid lightgray;
+    border-radius: 1rem;
+    background-color: white;
+    box-shadow: var(--shadow);
+}
+
+.about__section {
+    @include flex-center-content(column, flex-start);
+    gap: 1rem;
+
+    > b {
+        font-size: 1.5rem;
+        line-height: 1.5;
+        color: var(--blue-background);
+        text-decoration: underline;
+    }
+}
+
+.about__usage {
+    @include flex-start-content(column, flex-start);
+    gap: 0.5rem;
+
+    > p {
+        color: var(--blue-background);
+        @include text-block;
+    }
+}
+
+@media only screen and (max-width: 1023px) {
+    .about__team {
+        @include flex-start-content(column, center);
+        gap: 2rem;
+    }
+}
+
+@media only screen and (min-width: 1024px) {
+    .about__contents > p,
+    .about__section-container {
+        margin: 0 2rem;
+    }
+
+    .about__team {
+        @include flex-start-content(row, center);
+        gap: 2rem;
+    }
+
+    .about__team-member {
+        width: 50%;
+        padding: 0 2rem;
+    }
+}
+
+.about__team-member {
+    @include flex-start-content(column, flex-start);
+    gap: 0.5rem;
+
+    > b {
+        font-size: 1.125rem;
+        line-height: 1.5;
+        color: var(--shade-primary-blue);
+    }
+
+    > p {
+        color: var(--blue-background);
+        @include text-block;
+    }
+}

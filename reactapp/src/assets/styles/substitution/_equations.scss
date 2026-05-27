@@ -1,0 +1,125 @@
+@use "../mixins" as *;
+
+.substitution-equation {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+    padding: 0.5rem;
+
+    &.wrap-substituted {
+        flex-wrap: wrap;
+    }
+
+    &.popover-top {
+        margin-top: 2rem;
+    }
+}
+
+.substitution-equation__operator {
+    @include title-font;
+    margin-left: 0.125rem;
+    margin-right: 0.125rem;
+}
+
+.substitution-equation__dropzone {
+    @include flex-center-content(row, center);
+    flex-wrap: wrap;
+    row-gap: 1rem;
+    column-gap: 0.25rem;
+    min-width: 5rem;
+    max-width: 27.5rem;
+    min-height: 3.5rem;
+    max-height: 9rem;
+    padding: 0.5rem;
+    background-color: #f1e6c4;
+    border-radius: 1rem;
+    box-shadow:
+        inset var(--shadow-large),
+        inset var(--shadow-bottom-right);
+}
+
+.dropzone-empty {
+    opacity: 66%;
+}
+
+.equation-item {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+}
+
+.equation-item__contents {
+    @include flex-center-content(row, center);
+    gap: 0.25rem;
+
+    > p {
+        @include title-font;
+    }
+}
+
+.equation-item__image-container {
+    display: flex;
+    width: 2rem;
+    height: 2rem;
+
+    > img {
+        width: 100%;
+        object-fit: contain;
+    }
+}
+
+.equation-item__grid {
+    display: grid;
+    grid-template-rows: 1fr;
+    grid-template-columns: 1fr;
+    align-items: center;
+}
+
+.equation-item__grid-item {
+    grid-row: 1 / -1;
+    grid-column: 1 / -1;
+}
+
+@mixin button-body {
+    padding: 0.5rem;
+    background-color: #f7eac2;
+    border: 2px solid #f7eac2;
+    border-radius: 1rem;
+    box-shadow: var(--shadow-large);
+    cursor: pointer;
+}
+
+.draggable-item__container--substitution {
+    @include button-body;
+}
+
+.equation-item__button-body {
+    @include button-body;
+}
+
+.substituted-item-popover__container {
+    @include flex-end-content(row, center);
+    gap: 0.5rem;
+    opacity: 66%;
+
+    &.reverse {
+        flex-direction: row-reverse;
+    }
+}
+
+.substituted-popover-item__arrow {
+    width: 1rem;
+    height: auto;
+
+    &.reverse {
+        transform: scaleX(-1);
+    }
+}
+
+.substituted-item-popover__item {
+    @include flex-center-content(row, center);
+    gap: 0.125rem;
+
+    > img {
+        width: 2rem;
+        height: auto;
+    }
+}
