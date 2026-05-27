@@ -84,7 +84,6 @@ else
 {
     app.UseCors("ProductionPolicy");
     app.UseMiddleware<ApiKeyMiddleware>();
-    app.UseHttpsRedirection();
 }
 
 app.UseMiddleware<JwtMiddleware>(); // Middlewares are only required for conducting studies
