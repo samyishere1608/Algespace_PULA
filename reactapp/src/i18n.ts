@@ -11,6 +11,15 @@ import general from "@translations/de/general.json";
 import study from "@translations/de/study.json";
 import substitution from "@translations/de/substitution.json";
 import variables from "@translations/de/variables.json";
+import aboutJA from "@translations/ja/about.json";
+import eliminationJA from "@translations/ja/elimination.json";
+import equalizationJA from "@translations/ja/equalization.json";
+import errorJA from "@translations/ja/error.json";
+import flexibilityJA from "@translations/ja/flexibility.json";
+import generalJA from "@translations/ja/general.json";
+import studyJA from "@translations/ja/study.json";
+import substitutionJA from "@translations/ja/substitution.json";
+import variablesJA from "@translations/ja/variables.json";
 import aboutEN from "@translations/en/about.json";
 import eliminationEN from "@translations/en/elimination.json";
 import equalizationEN from "@translations/en/equalization.json";
@@ -23,7 +32,8 @@ import variablesEN from "@translations/en/variables.json";
 
 export enum Language {
     DE = "de",
-    EN = "en"
+    EN = "en",
+    JA = "ja"
 }
 
 export enum LanguageExtension {
@@ -61,6 +71,17 @@ i18n.use(Backend)
             skipOnVariables: false
         },
         resources: {
+            ja: {
+                general: generalJA,
+                elimination: eliminationJA,
+                error: errorJA,
+                equalization: equalizationJA,
+                substitution: substitutionJA,
+                variables: variablesJA,
+                study: studyJA,
+                about: aboutJA,
+                flexibility: flexibilityJA
+            },
             en: {
                 general: generalEN,
                 elimination: eliminationEN,

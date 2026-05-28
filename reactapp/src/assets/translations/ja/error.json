@@ -1,0 +1,15 @@
+{
+    "error-message": "",
+    "try-again": "",
+    "error-message-home": "$t(error-message) $t(try-again)",
+    "error-message-load": "$t(error-message) $t(try-again)",
+    "error-message-no-exercise-id": "$t(error-message) $t(try-again)",
+    "error-message-exercise-data-missing": "$t(error-message) $t(try-again)",
+    "error-message-no-study-id": "$t(error-message) $t(try-again)",
+    "error-message-login": "",
+    "error-message-invalid-study": "",
+    "error-message-expired-study": "",
+    "error-message-404": "",
+    "error-message-return": "",
+    "error-message-study-error": ""
+}
