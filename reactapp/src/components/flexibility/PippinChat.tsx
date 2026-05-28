@@ -1,5 +1,6 @@
 import { ReactElement, useEffect, useRef, useState } from "react";
 import axios from "axios";
+import axiosInstance from "@/types/shared/axiosInstance.ts";
 import pippinImg from "@images/Character/Pipin_de.png";
 import { getEquippedOutfitId, getActiveBuddyId } from "@utils/wardrobeUtils.ts";
 import { resolveOutfitSrc, CHARACTER_CATALOGUE } from "@views/student/dashboard/CharacterShopModal.tsx";
@@ -95,8 +96,8 @@ export function PippinChat({ exerciseContext, buddyImageSrc }: Props): ReactElem
         setShowQuickActions(false);
 
         try {
-            const { data } = await axios.post<{ reply: string }>(
-                "http://localhost:7273/chat/flexibility",
+            const { data } = await axiosInstance.post<{ reply: string }>(
+                "/chat/flexibility",
                 {
                     exerciseContext,
                     userMessage: trimmed,
