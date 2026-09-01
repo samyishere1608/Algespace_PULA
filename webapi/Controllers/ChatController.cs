@@ -31,7 +31,7 @@ namespace webapi.Controllers
         [HttpPost("flexibility")]
         public async Task<ActionResult<FlexibilityChatResponse>> Chat([FromBody] FlexibilityChatRequest request)
         {
-            var apiKey = _configuration["Gemini:ApiKey"];
+            var apiKey = _configuration["OpenAI:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
                 return StatusCode(503, "AI chat is not configured.");
 
@@ -40,60 +40,47 @@ namespace webapi.Controllers
                 ? request.History.Skip(request.History.Count - 4).ToList()
                 : request.History;
 
-            var contents = new List<object>();
+            var messages = new List<object>
+            {
+                new { role = "system", content = BuildSystemPrompt(request.BuddyName, request.Language) }
+            };
 
-            // Add conversation history
+            // Add conversation history (Gemini's "model" maps to OpenAI's "assistant")
             foreach (var msg in trimmedHistory)
             {
-                contents.Add(new
+                messages.Add(new
                 {
-                    role = msg.Role,  // "user" or "model"
-                    parts = new[] { new { text = msg.Text } }
+                    role = msg.Role == "model" ? "assistant" : "user",
+                    content = msg.Text
                 });
             }
 
             // Add the new student message (with exercise context prepended once)
             var userText = $"[Context: {request.ExerciseContext}]\n\nStudent: {request.UserMessage}";
-            contents.Add(new
-            {
-                role = "user",
-                parts = new[] { new { text = userText } }
-            });
+            messages.Add(new { role = "user", content = userText });
 
             var payload = new
             {
-                // systemInstruction keeps the system prompt out of the main token budget
-                systemInstruction = new
-                {
-                    parts = new[] { new { text = BuildSystemPrompt(request.BuddyName, request.Language) } }
-                },
-                contents,
-                generationConfig = new
-                {
-                    temperature = 0.4,
-                    maxOutputTokens = 200,  // short hints only
-                    topP = 0.9
-                }
+                model = "gpt-4o-mini",
+                messages,
+                temperature = 0.4,
+                max_tokens = 200  // short hints only
             };
 
             var json = JsonSerializer.Serialize(payload);
             var httpClient = _httpClientFactory.CreateClient();
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={apiKey}";
-
-            var httpRequest = new HttpRequestMessage(HttpMethod.Post, url)
-            {
-                Content = new StringContent(json, Encoding.UTF8, "application/json")
-            };
-            httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
             HttpResponseMessage response;
             try
             {
-                response = await httpClient.SendAsync(httpRequest);
+                response = await httpClient.PostAsync(
+                    "https://api.openai.com/v1/chat/completions",
+                    new StringContent(json, Encoding.UTF8, "application/json"));
             }
             catch (Exception ex)
             {
-                return StatusCode(502, $"Failed to reach Gemini API: {ex.Message}");
+                return StatusCode(502, $"Failed to reach OpenAI API: {ex.Message}");
             }
 
             if (!response.IsSuccessStatusCode)
@@ -102,7 +89,7 @@ namespace webapi.Controllers
                     return StatusCode(429, "Pippin is a little overwhelmed right now! Please wait a few seconds and try again.");
 
                 var error = await response.Content.ReadAsStringAsync();
-                return StatusCode(502, $"Gemini error: {error}");
+                return StatusCode(502, $"OpenAI error: {error}");
             }
 
             var responseBody = await response.Content.ReadAsStringAsync();
@@ -111,15 +98,14 @@ namespace webapi.Controllers
             {
                 using var doc = JsonDocument.Parse(responseBody);
                 reply = doc.RootElement
-                    .GetProperty("candidates")[0]
+                    .GetProperty("choices")[0]
+                    .GetProperty("message")
                     .GetProperty("content")
-                    .GetProperty("parts")[0]
-                    .GetProperty("text")
                     .GetString() ?? "I'm not sure how to answer that. Try rephrasing!";
             }
             catch
             {
-                return StatusCode(502, "Unexpected response format from Gemini.");
+                return StatusCode(502, "Unexpected response format from OpenAI.");
             }
 
             return Ok(new FlexibilityChatResponse { Reply = reply });

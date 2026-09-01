@@ -60,7 +60,7 @@ builder.Services.AddRateLimiter(options =>
 });
 
 builder.Services.Configure<AuthSettings>(builder.Configuration.GetSection("AuthSettings"));
-builder.Services.AddHttpClient();  // for ChatController → Gemini API
+builder.Services.AddHttpClient();  // for ChatController + reflection → OpenAI API
 
 builder.Services.AddScoped<ICKExerciseService, CKExerciseService>();
 builder.Services.AddScoped<IFlexibilityExerciseService, FlexibilityExerciseService>();
