@@ -128,7 +128,7 @@ export function CoinPot({ coins }: { coins: number }): ReactElement {
                 )}
             </svg>
 
-            <div className="coin-pot__count">{t("coinpot-coins", { count: coins.toLocaleString() })}</div>
+            <div className="coin-pot__count">{t("coinpot-coins", { count: coins })}</div>
 
             <div className="coin-pot__bar-track">
                 <div className="coin-pot__bar-fill" style={{ width: `${fillPct}%` }} />

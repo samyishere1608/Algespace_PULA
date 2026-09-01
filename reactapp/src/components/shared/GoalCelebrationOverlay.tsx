@@ -18,7 +18,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
     independence: "🦾",
 };
 
-export function GoalCelebrationOverlay({ completedGoals, xpEarned, newTotalXP, onContinue }: Props): ReactElement {
+export function GoalCelebrationOverlay({ completedGoals, xpEarned: _xpEarned, newTotalXP: _newTotalXP, onContinue }: Props): ReactElement {
     const [visible, setVisible] = useState(false);
 
     // Trigger entry animation and play sound on mount

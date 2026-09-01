@@ -52,7 +52,6 @@ import {
     addAccuracyEntry,
     incrementWeaknessExerciseCount,
     getWeaknessTargetType,
-    addSessionMethod,
     ExerciseCompletionData,
 } from "@utils/goalUtils.ts";
 import { addResolveXP, addInsightXP, addChoiceXP } from "@utils/agencyUtils.ts";
@@ -190,17 +189,6 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                 addAccuracyEntry(student.id, data.totalErrors, data.totalHints);
             }
 
-            // Track method used for Method Explorer goal
-            if (student) {
-                const methodMap: Record<string, string> = {
-                    "Suitability": "decision",  // not a solving method
-                    "Efficiency": "decision",   // not a solving method
-                };
-                // The actual method is determined by the exercise component
-                // We track via the exercise type — but for method-explorer we need actual methods.
-                // This is handled via addSessionMethod called from individual exercise components.
-            }
-
             // Check which active goals are satisfied
             const completed = checkCompletedGoals(activeGoalIds, data, student?.id);
 
@@ -235,7 +223,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
 
                 // ── Agency XP for goal completion ─────────────────────
                 let agencyEarned = 0;
-                completed.forEach((goal) => {
+                completed.forEach(() => {
                     // Follow-through on any goal earns the same Resolve — the distinction
                     // between self-picked and AI-suggested is made at goal-setting time.
                     addResolveXP(student.id, 5, "goal-completed");
