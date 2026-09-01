@@ -60,5 +60,10 @@
   "login-name": "Benutzername",
   "login-password": "Passwort",
   "construction": "Dieser Inhalt befindet sich momentan noch in Bearbeitung.",
-  "flexibility-study": "Studie zum Flexibilitätstraining"
+  "flexibility-study": "Studie zum Flexibilitätstraining",
+
+  "home-dashboard": "Dashboard",
+  "home-continue-tutorial": "Tutorial fortsetzen",
+  "home-logout": "Abmelden",
+  "home-login": "Anmelden"
 }

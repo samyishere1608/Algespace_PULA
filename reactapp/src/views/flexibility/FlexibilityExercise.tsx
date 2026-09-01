@@ -40,10 +40,23 @@ import {
     getExerciseHintCount,
     resetExerciseHintCount,
     incrementPippinFreeCount,
+    incrementSuitabilityExerciseCount,
+    incrementEfficiencyExerciseCount,
+    incrementMatchingExerciseCount,
+    incrementSoloExerciseCount,
+    incrementSoloExerciseCountToday,
+    incrementPippinExerciseCountToday,
+    addExerciseTimeToday,
+    incrementConsecutiveSoloCount,
+    resetConsecutiveSoloCount,
+    addAccuracyEntry,
+    incrementWeaknessExerciseCount,
+    getWeaknessTargetType,
+    addSessionMethod,
     ExerciseCompletionData,
 } from "@utils/goalUtils.ts";
-import { addCoins } from "@utils/wardrobeUtils.ts";
-import { CoinCelebrationOverlay } from "@components/shared/CoinCelebrationOverlay.tsx";
+import { addResolveXP, addInsightXP, addChoiceXP } from "@utils/agencyUtils.ts";
+import { showAgencyToast, AgencyXpToast } from "@components/shared/AgencyXpToast.tsx";
 import { PippinLockContext } from "@/contexts/PippinLockContext.tsx";
 import { SolveChoiceScreen } from "@components/flexibility/SolveChoiceScreen.tsx";
 
@@ -60,10 +73,8 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
         goals: StudyGoal[];
         xpEarned: number;
         newTotalXP: number;
-        coinsEarned: number;
         navigateTo: string;
     } | null>(null);
-    const [showCoinScreen, setShowCoinScreen] = useState(false);
 
     const { student } = useAuth();
 
@@ -76,6 +87,17 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
     // Refs so buildHandleEnd closures always read the latest values
     const solveChoiceRef = useRef<"solo" | "pippin">("pippin");
     const pippinUnlockedRef = useRef(false);
+    const exerciseStartTime = useRef<number>(performance.now());
+
+    // Prevent Choice XP farming — persist per exercise ID in localStorage
+    function hasAwardedChoiceXp(exId: number): boolean {
+        const key = `choice_xp_awarded_${student?.id ?? "guest"}_${exId}`;
+        return localStorage.getItem(key) === "1";
+    }
+    function markChoiceXpAwarded(exId: number): void {
+        const key = `choice_xp_awarded_${student?.id ?? "guest"}_${exId}`;
+        localStorage.setItem(key, "1");
+    }
 
     // Active goal IDs stored in localStorage by the dashboard, scoped per student
     const goalKey = `active_goal_ids_${student?.id ?? "guest"}`;
@@ -93,11 +115,13 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
     /** Called by each exercise component when the student finishes. */
     function buildHandleEnd(navigateTo: string, exerciseTypeName: string): () => void {
         return function () {
+            const wasSoloMode = solveChoiceRef.current === "solo" && !pippinUnlockedRef.current;
             const data: ExerciseCompletionData = {
                 exerciseType: exerciseTypeName,
                 totalErrors: getExerciseErrorCount(),
                 totalHints: getExerciseHintCount(),
                 pippinMessages: getPippinExerciseCount(),
+                isSolo: wasSoloMode,
             };
 
             // Reset counters for the next exercise
@@ -107,7 +131,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
 
             // Always log exercise completion for stats (non-blocking)
             if (student) {
-                void logExerciseCompletion(student.id, exerciseTypeName);
+                void logExerciseCompletion(student.id, exerciseTypeName, data.totalErrors, data.totalHints);
             }
 
             // Increment pippin-free-day counter if Pippin wasn't used this exercise
@@ -115,26 +139,118 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                 incrementPippinFreeCount(student.id);
             }
 
+            // Increment suitability exercise counter for Master Suitability goal
+            if (exerciseTypeName === "Suitability" && student) {
+                incrementSuitabilityExerciseCount(student.id);
+            }
+            // Increment efficiency exercise counter for Master Efficiency goal
+            if (exerciseTypeName === "Efficiency" && student) {
+                incrementEfficiencyExerciseCount(student.id);
+            }
+            // Increment matching exercise counter for Master Matching goal
+            if (exerciseTypeName === "Matching" && student) {
+                incrementMatchingExerciseCount(student.id);
+            }
+
+            // Increment solo exercise counter for Independence Champion & Go Solo Once
+            const isSolo = solveChoiceRef.current === "solo" && !pippinUnlockedRef.current;
+            if (isSolo && student) {
+                incrementSoloExerciseCount(student.id);
+            }
+
+            // Increment weakness counter for Face Your Weakness goal
+            if (student) {
+                const weaknessTarget = getWeaknessTargetType(student.id);
+                if (weaknessTarget && exerciseTypeName === weaknessTarget) {
+                    incrementWeaknessExerciseCount(student.id, exerciseTypeName);
+                }
+            }
+
+            // Track solo vs pippin exercise completion for session summary
+            if (student) {
+                const isSolo = solveChoiceRef.current === "solo" && !pippinUnlockedRef.current;
+                if (isSolo) {
+                    incrementSoloExerciseCountToday(student.id);
+                } else {
+                    incrementPippinExerciseCountToday(student.id);
+                }
+
+                // Track exercise time
+                const elapsed = (performance.now() - exerciseStartTime.current) / 1000;
+                addExerciseTimeToday(student.id, elapsed);
+
+                // Track consecutive solo for Perfect Solo Session
+                if (wasSoloMode) {
+                    incrementConsecutiveSoloCount(student.id);
+                } else {
+                    resetConsecutiveSoloCount(student.id);
+                }
+
+                // Track accuracy for Sharp Shooter + dashboard KPI
+                addAccuracyEntry(student.id, data.totalErrors, data.totalHints);
+            }
+
+            // Track method used for Method Explorer goal
+            if (student) {
+                const methodMap: Record<string, string> = {
+                    "Suitability": "decision",  // not a solving method
+                    "Efficiency": "decision",   // not a solving method
+                };
+                // The actual method is determined by the exercise component
+                // We track via the exercise type — but for method-explorer we need actual methods.
+                // This is handled via addSessionMethod called from individual exercise components.
+            }
+
             // Check which active goals are satisfied
             const completed = checkCompletedGoals(activeGoalIds, data, student?.id);
 
             if (completed.length > 0 && student) {
-                const totalXp = completed.reduce((sum, g) => sum + g.xpReward, 0);
-                const coinMultiplier =
-                    solveChoiceRef.current === "solo" && !pippinUnlockedRef.current ? 2 : 1;
-                const totalCoins = completed.reduce((sum, g) => sum + g.coinReward, 0) * coinMultiplier;
+                // ── Coin system removed — kept as comment for future use ──
+                // const coinMultiplier = solveChoiceRef.current === "solo" && !pippinUnlockedRef.current ? 2 : 1;
+                // const totalCoins = completed.reduce((sum, g) => sum + g.coinReward, 0) * coinMultiplier;
+                // addCoins(student.id, totalCoins);
 
-                // Award coins immediately (localStorage — doesn't affect XP/rank)
-                addCoins(student.id, totalCoins);
+                // ── Anchor 3.1: Solo vs AI follow-through ───────────────
+                const wasSolo = solveChoiceRef.current === "solo";
+                const wasPippin = solveChoiceRef.current === "pippin";
+                const didUnlockPippin = pippinUnlockedRef.current;
+                const usedNoHints = data.totalHints === 0 && data.pippinMessages === 0;
 
-                // Log all to backend in parallel, use total from last call
+                if (wasSolo && !didUnlockPippin) {
+                    // Scenario 1: Chose solo + never unlocked AI → full Resolve (followed through)
+                    addResolveXP(student.id, 5, "solo-followed-through");
+                    showAgencyToast("resolve", 5);
+                } else if (wasSolo && didUnlockPippin && data.totalErrors >= 3) {
+                    // Scenario 2: Chose solo + unlocked AI after genuinely trying → Insight (chose what's right in the moment)
+                    addInsightXP(student.id, 3, "genuine-try-then-ai");
+                    showAgencyToast("insight", 3);
+                } else if (wasSolo && didUnlockPippin) {
+                    // Scenario 3: Chose solo + unlocked AI immediately → tiny Insight, no Resolve (commitment wasn't true)
+                    addInsightXP(student.id, 1, "solo-quick-surrender");
+                } else if (wasPippin && usedNoHints) {
+                    // Scenario 4: Chose Pippin + used zero hints → Insight (self-restraint)
+                    addInsightXP(student.id, 3, "pippin-unused-help");
+                    showAgencyToast("insight", 3);
+                }
+
+                // ── Agency XP for goal completion ─────────────────────
+                let agencyEarned = 0;
+                completed.forEach((goal) => {
+                    // Follow-through on any goal earns the same Resolve — the distinction
+                    // between self-picked and AI-suggested is made at goal-setting time.
+                    addResolveXP(student.id, 5, "goal-completed");
+                    agencyEarned += 5;
+                });
+                if (agencyEarned > 0) {
+                    showAgencyToast("resolve", agencyEarned);
+                }
+
+                // Log all to backend, then show celebration
                 Promise.all(completed.map((g) => logGoalCompletion(student.id, g, data)))
-                    .then((totals) => {
-                        const newTotal = totals[totals.length - 1] ?? 0;
-                        setCelebrationData({ goals: completed, xpEarned: totalXp, newTotalXP: newTotal, coinsEarned: totalCoins, navigateTo });
+                    .then(() => {
+                        setCelebrationData({ goals: completed, xpEarned: 0, newTotalXP: 0, navigateTo });
                     })
                     .catch(() => {
-                        // If logging fails, still navigate
                         window.location.href = navigateTo;
                     });
             } else {
@@ -158,6 +274,13 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                             <SolveChoiceScreen onChoose={(mode) => {
                                 solveChoiceRef.current = mode;
                                 setSolveChoice(mode);
+                                exerciseStartTime.current = performance.now();  // start timer
+                                // Anchor 3.1: Award Choice XP once per exercise (persisted)
+                                if (student && !hasAwardedChoiceXp(id)) {
+                                    markChoiceXpAwarded(id);
+                                    addChoiceXP(student.id, 3, mode === "solo" ? "picked-solo" : "picked-pippin");
+                                    showAgencyToast("choice", 3);
+                                }
                             }} />
                         ) : (
                             <PippinLockContext.Provider value={{
@@ -181,7 +304,8 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
             </div>
             {!isStudyExample && exitOverlay[0] &&
                 <ExitExerciseOverlay returnToHome={exitOverlay[1]} routeToReturn={Paths.FlexibilityPath} closeOverlay={() => setExitOverlay([false, false])} />}
-            {celebrationData && !showCoinScreen && (
+            <AgencyXpToast />
+            {celebrationData && (
                 <GoalCelebrationOverlay
                     completedGoals={celebrationData.goals}
                     xpEarned={celebrationData.xpEarned}
@@ -191,16 +315,6 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                         const completedIds = new Set(celebrationData.goals.map((g) => g.id));
                         const remaining = activeGoalIds.filter((id) => !completedIds.has(id));
                         localStorage.setItem(goalKey, JSON.stringify(remaining));
-                        // Show coin screen next
-                        setShowCoinScreen(true);
-                    }}
-                />
-            )}
-            {celebrationData && showCoinScreen && (
-                <CoinCelebrationOverlay
-                    completedGoals={celebrationData.goals}
-                    coinsEarned={celebrationData.coinsEarned}
-                    onContinue={() => {
                         window.location.href = celebrationData.navigateTo;
                     }}
                 />

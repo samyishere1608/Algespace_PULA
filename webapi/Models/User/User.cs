@@ -34,6 +34,7 @@ namespace webapi.Models.User
     public enum Language
     {
         de,
-        en
+        en,
+        ja
     }
 }

@@ -3,12 +3,15 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import useAxios from "axios-hooks";
 import { ReactElement, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Paths } from "@routes/paths.ts";
+import { TranslationNamespaces } from "@/i18n.ts";
 import Logo from "@images/home/logo640.png";
 import "@styles/views/login.scss";
 
 export default function StudentRegisterView(): ReactElement {
     const navigate = useNavigate();
+    const { t } = useTranslation(TranslationNamespaces.Student);
 
     const [username, setUsername] = useState<string>("");
     const [password, setPassword] = useState<string>("");
@@ -26,32 +29,32 @@ export default function StudentRegisterView(): ReactElement {
         <div className={"login__background"}>
             <button className={"text-button--white login__return-button"} onClick={() => navigate(Paths.HomePath)}>
                 <FontAwesomeIcon icon={faArrowLeft} />
-                Back to Home
+                {t("student-register-back")}
             </button>
             <div className={"login__container"}>
                 <img src={Logo} alt={"AlgeSpace logo"} />
                 <form className={"login__form"} onSubmit={(e) => e.preventDefault()}>
-                    <p>Create Account</p>
+                    <p>{t("student-register-title")}</p>
                     <div className={"input__container"}>
-                        <label>Username</label>
+                        <label>{t("student-register-username")}</label>
                         <input
                             autoFocus
                             className={"input__box"}
                             type={"text"}
                             value={username}
-                            placeholder={"3–20 characters"}
+                            placeholder={t("student-register-username-placeholder")}
                             maxLength={20}
                             onChange={(e) => { setError(""); setUsername(e.target.value); }}
                         />
                     </div>
                     <div className={"input__container"}>
-                        <label>Password</label>
+                        <label>{t("student-register-password")}</label>
                         <div className={"input__password-box"}>
                             <input
                                 className={"input__box"}
                                 type={showPassword ? "text" : "password"}
                                 value={password}
-                                placeholder={"At least 6 characters"}
+                                placeholder={t("student-register-password-placeholder")}
                                 maxLength={50}
                                 onChange={(e) => { setError(""); setPassword(e.target.value); }}
                             />
@@ -63,13 +66,13 @@ export default function StudentRegisterView(): ReactElement {
                         </div>
                     </div>
                     <div className={"input__container"}>
-                        <label>Confirm Password</label>
+                        <label>{t("student-register-confirm")}</label>
                         <div className={"input__password-box"}>
                             <input
                                 className={"input__box"}
                                 type={showConfirm ? "text" : "password"}
                                 value={confirmPassword}
-                                placeholder={"Repeat password"}
+                                placeholder={t("student-register-confirm-placeholder")}
                                 maxLength={50}
                                 onChange={(e) => { setError(""); setConfirmPassword(e.target.value); }}
                             />
@@ -87,15 +90,15 @@ export default function StudentRegisterView(): ReactElement {
                     disabled={username === "" || password === "" || confirmPassword === "" || loading}
                     onClick={handleRegister}
                 >
-                    {loading ? "Creating account..." : "Register"}
+                    {loading ? t("student-register-loading") : t("student-register-submit")}
                 </button>
                 <p style={{ fontSize: "0.875rem" }}>
-                    Already have an account?{" "}
+                    {t("student-register-have-account")}{" "}
                     <span
                         style={{ color: "var(--primary-blue)", cursor: "pointer", textDecoration: "underline" }}
                         onClick={() => navigate(Paths.StudentLoginPath)}
                     >
-                        Login
+                        {t("student-register-login-link")}
                     </span>
                 </p>
             </div>
@@ -104,15 +107,15 @@ export default function StudentRegisterView(): ReactElement {
 
     async function handleRegister(): Promise<void> {
         if (username.length < 3) {
-            setError("Username must be at least 3 characters.");
+            setError(t("student-register-error-username-short"));
             return;
         }
         if (password.length < 6) {
-            setError("Password must be at least 6 characters.");
+            setError(t("student-register-error-password-short"));
             return;
         }
         if (password !== confirmPassword) {
-            setError("Passwords do not match.");
+            setError(t("student-register-error-passwords-mismatch"));
             return;
         }
 
@@ -122,9 +125,9 @@ export default function StudentRegisterView(): ReactElement {
         } catch (err: unknown) {
             const status = (err as { response?: { status?: number } })?.response?.status;
             if (status === 409) {
-                setError("Username is already taken. Please choose another.");
+                setError(t("student-register-error-username-taken"));
             } else {
-                setError("Registration failed. Please try again.");
+                setError(t("student-register-error-generic"));
             }
         }
     }

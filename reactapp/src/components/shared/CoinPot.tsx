@@ -1,4 +1,6 @@
 import { ReactElement } from "react";
+import { useTranslation } from "react-i18next";
+import { TranslationNamespaces } from "../../i18n.ts";
 import "@styles/shared/coin-pot.scss";
 
 const MAX_COINS = 500;
@@ -8,6 +10,7 @@ function getFillPercent(coins: number): number {
 }
 
 export function CoinPot({ coins }: { coins: number }): ReactElement {
+    const { t } = useTranslation(TranslationNamespaces.Student);
     const fill = getFillPercent(coins);
     const fillPct = Math.round(fill * 100);
 
@@ -16,7 +19,7 @@ export function CoinPot({ coins }: { coins: number }): ReactElement {
 
     return (
         <div className="coin-pot">
-            <div className="coin-pot__title">🪙 Coin Wallet</div>
+            <div className="coin-pot__title">{t("coinpot-title")}</div>
 
             <svg className="coin-pot__svg" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg">
                 <defs>
@@ -125,13 +128,13 @@ export function CoinPot({ coins }: { coins: number }): ReactElement {
                 )}
             </svg>
 
-            <div className="coin-pot__count">{coins.toLocaleString()} coins</div>
+            <div className="coin-pot__count">{t("coinpot-coins", { count: coins.toLocaleString() })}</div>
 
             <div className="coin-pot__bar-track">
                 <div className="coin-pot__bar-fill" style={{ width: `${fillPct}%` }} />
             </div>
             <div className="coin-pot__bar-label">
-                {fill >= 1 ? "Full! 🎉" : `${coins} / ${MAX_COINS} to fill`}
+                {fill >= 1 ? t("coinpot-full") : t("coinpot-to-fill", { current: coins, max: MAX_COINS })}
             </div>
         </div>
     );

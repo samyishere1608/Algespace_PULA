@@ -15,6 +15,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
     decision: "🎯",
     ai: "🤖",
     engagement: "⭐",
+    independence: "🦾",
 };
 
 export function GoalCelebrationOverlay({ completedGoals, xpEarned, newTotalXP, onContinue }: Props): ReactElement {
@@ -59,10 +60,14 @@ export function GoalCelebrationOverlay({ completedGoals, xpEarned, newTotalXP, o
                     ))}
                 </div>
 
-                {/* XP badge */}
+                {/* Goals completed count */}
                 <div className={"goal-celebration__xp-badge"}>
-                    <span className={"goal-celebration__xp-earned"}>+{xpEarned} XP</span>
-                    <span className={"goal-celebration__xp-total"}>Total: {newTotalXP} XP</span>
+                    <span className={"goal-celebration__xp-earned"}>
+                        {completedGoals.length === 1
+                            ? "Goal Achieved! 🎉"
+                            : `${completedGoals.length} Goals Achieved! 🎉`}
+                    </span>
+                    <span className={"goal-celebration__xp-total"}>Keep it up — you're growing!</span>
                 </div>
 
                 <button className={"goal-celebration__continue-btn"} onClick={handleContinue}>

@@ -86,7 +86,7 @@ function SubstitutedTerm({ index, initialTerm, substitutionParams, colour }: {
     return (
         <React.Fragment>
             {operator}
-            {substitutionParams.variable !== undefined && <FlexibilityCoefficient coefficient={initialTerm.coefficient} displayOne={false} colour={colour} />}
+            {substitutionParams.variable !== undefined && !substitutionParams.keepCoefficient && <FlexibilityCoefficient coefficient={initialTerm.coefficient} displayOne={false} colour={colour} />}
             <ParenthesisLeft containsFraction={containsFraction} colour={colour} />
             {substitutionTerms}
             <ParenthesisRight containsFraction={containsFraction} colour={colour} />

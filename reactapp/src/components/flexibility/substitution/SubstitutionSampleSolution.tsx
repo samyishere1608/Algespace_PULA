@@ -186,7 +186,9 @@ function computeSampleSubstitutionParametersForTip(system: [FlexibilityEquationP
         isLeft,
         index,
         variable,
-        replaceAll: true
+        replaceAll: true,
+        keepCoefficient: true
+        // sourceCoefficient not needed since replaceAll=true (no coefficient multiplication)
     } as SubstitutionResultParameters;
 }
 

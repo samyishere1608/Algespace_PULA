@@ -1,6 +1,8 @@
 import { ReactElement, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import axiosInstance from "@/types/shared/axiosInstance.ts";
+import { useTranslation } from "react-i18next";
+import { TranslationNamespaces } from "@/i18n.ts";
 import pippinImg from "@images/Character/Pipin_de.png";
 import { getEquippedOutfitId, getActiveBuddyId } from "@utils/wardrobeUtils.ts";
 import { resolveOutfitSrc, CHARACTER_CATALOGUE } from "@views/student/dashboard/CharacterShopModal.tsx";
@@ -24,11 +26,11 @@ interface Props {
     buddyImageSrc?: string;
 }
 
-const QUICK_ACTIONS = ["💡 Give me a hint", "📖 Show an example"];
 const COOLDOWN_SECONDS = 5; // minimum gap between requests to stay under 15 RPM
 
 export function PippinChat({ exerciseContext, buddyImageSrc }: Props): ReactElement {
     const { student } = useAuth();
+    const { i18n, t } = useTranslation(TranslationNamespaces.Student);
     const [isOpen, setIsOpen] = useState(false);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
@@ -44,10 +46,11 @@ export function PippinChat({ exerciseContext, buddyImageSrc }: Props): ReactElem
     const activeBuddyId = getActiveBuddyId(studentId);
     const activeBuddy = BUDDIES.find((b) => b.id === activeBuddyId) ?? BUDDIES[0];
     const buddyName = activeBuddy.name;
+    const quickActions = [t("pippin-hint"), t("pippin-example")];
 
     const [messages, setMessages] = useState<ChatMessage[]>([{
         role: "pippin",
-        text: `Hey! I'm ${buddyName} 👋 I'm here to help if you get stuck. What would you like to know?`
+        text: t("pippin-greeting", { buddy: buddyName })
     }]);
     const equippedId = getEquippedOutfitId(studentId, activeBuddyId);
     const catalogEntry = CHARACTER_CATALOGUE.find((c) => c.id === activeBuddyId);
@@ -102,7 +105,8 @@ export function PippinChat({ exerciseContext, buddyImageSrc }: Props): ReactElem
                     exerciseContext,
                     userMessage: trimmed,
                     history: buildApiHistory(),
-                    buddyName
+                    buddyName,
+                    language: i18n.language
                 }
             );
             setMessages((prev) => [...prev, { role: "pippin", text: data.reply }]);
@@ -175,7 +179,7 @@ export function PippinChat({ exerciseContext, buddyImageSrc }: Props): ReactElem
                     {/* Quick-action buttons (shown only before first send) */}
                     {showQuickActions && (
                         <div className="pippin-chat__quick-actions">
-                            {QUICK_ACTIONS.map((label) => (
+                            {quickActions.map((label) => (
                                 <button key={label} disabled={isBusy} onClick={() => void sendMessage(label)}>
                                     {label}
                                 </button>
@@ -187,7 +191,7 @@ export function PippinChat({ exerciseContext, buddyImageSrc }: Props): ReactElem
                     <div className="pippin-chat__input-row">
                         <input
                             type="text"
-                            placeholder={cooldown > 0 ? `Please wait ${cooldown}s…` : `Ask ${buddyName} a question…`}
+                            placeholder={cooldown > 0 ? t("pippin-wait", { seconds: cooldown }) : t("pippin-placeholder", { buddy: buddyName })}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
@@ -207,31 +211,31 @@ export function PippinChat({ exerciseContext, buddyImageSrc }: Props): ReactElem
                 <>
                     {showLockWarning && (
                         <div className="pippin-chat__lock-warning">
-                            <p>⚠️ Using <strong>{buddyName}</strong> will remove your <strong>2× coin bonus</strong> for this exercise.</p>
+                            <p dangerouslySetInnerHTML={{ __html: t("pippin-bonus-warning", { buddy: `<strong>${buddyName}</strong>` }) }} />
                             <div className="pippin-chat__lock-warning-buttons">
-                                <button onClick={() => setShowLockWarning(false)}>Stay solo 🏆</button>
+                                <button onClick={() => setShowLockWarning(false)}>{t("pippin-stay-solo")}</button>
                                 <button onClick={() => {
                                     onUnlock();
                                     setShowLockWarning(false);
                                     setIsOpen(true);
-                                }}>Unlock {buddyName}</button>
+                                }}>{t("pippin-unlock", { buddy: buddyName })}</button>
                             </div>
                         </div>
                     )}
                     <button className="pippin-chat__toggle pippin-chat__toggle--locked"
                             onClick={() => setShowLockWarning((v) => !v)}>
                         <img src={avatarSrc} alt={buddyName} />
-                        🔒 Locked
+                        {t("pippin-locked")}
                     </button>
                 </>
             ) : (
                 <>
                     {pippinUnlocked && (
-                        <div className="pippin-chat__bonus-lost">⚠️ Solo bonus removed</div>
+                        <div className="pippin-chat__bonus-lost">{t("pippin-solo-bonus-removed")}</div>
                     )}
                     <button className="pippin-chat__toggle" onClick={() => setIsOpen((o) => !o)}>
                         <img src={avatarSrc} alt={buddyName} />
-                        Ask {buddyName}
+                        {t("pippin-ask", { buddy: buddyName })}
                     </button>
                 </>
             )}

@@ -155,8 +155,11 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
                     agentType={agentType}
                     loadNextStep={(equation: FlexibilityEquation): void => {
                         setNextTrackingPhase(FlexibilityExercisePhase.FirstSolution);
-                        const containsFirstVariable: boolean = isolatedVariables[0] !== IsolatedIn.First && isolatedVariables[0] !== IsolatedIn.FirstMultiple;
-                        setMethodApplicationResult([equation, containsFirstVariable]);
+                        // For equalization: both equations isolate the same variable.
+                        // If they isolate y → resulting equation has x (first var) → containsFirst = true
+                        // If they isolate x → resulting equation has y (second var) → containsFirst = false
+                        const firstIsolatesY = isolatedVariables[0] === IsolatedIn.Second || isolatedVariables[0] === IsolatedIn.SecondMultiple;
+                        setMethodApplicationResult([equation, firstIsolatesY]);
                         setExerciseState(MatchingExerciseState.FirstSolution);
                     }}
                     trackAction={(action: string) => trackActionInPhase(action, FlexibilityExerciseActionPhase.EqualizationActions)}

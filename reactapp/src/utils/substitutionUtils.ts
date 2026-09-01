@@ -24,12 +24,12 @@ export function computeSubstitutionResult(system: [FlexibilityEquationProps, Fle
     }
     const equation = substitutionParams.isFirstEquation ? system[0] : system[1];
     if (substitutionParams.isLeft) {
-        return new FlexibilityEquationProps(computeSubstitutionTerms(equation.leftTerms, substitutionParams.substitutionItems, substitutionParams.index, substitutionParams.replaceAll), [...equation.rightTerms]);
+        return new FlexibilityEquationProps(computeSubstitutionTerms(equation.leftTerms, substitutionParams.substitutionItems, substitutionParams.index, substitutionParams.replaceAll, substitutionParams.sourceCoefficient), [...equation.rightTerms]);
     }
-    return new FlexibilityEquationProps([...equation.leftTerms], computeSubstitutionTerms(equation.rightTerms, substitutionParams.substitutionItems, substitutionParams.index, substitutionParams.replaceAll));
+    return new FlexibilityEquationProps([...equation.leftTerms], computeSubstitutionTerms(equation.rightTerms, substitutionParams.substitutionItems, substitutionParams.index, substitutionParams.replaceAll, substitutionParams.sourceCoefficient));
 }
 
-export function computeSubstitutionTerms(terms: FlexibilityTermProps[], substitutionTerms: FlexibilityTermProps[], substitutionIndex: number, replaceAll: boolean): FlexibilityTermProps[] {
+export function computeSubstitutionTerms(terms: FlexibilityTermProps[], substitutionTerms: FlexibilityTermProps[], substitutionIndex: number, replaceAll: boolean, sourceCoefficient?: Fraction): FlexibilityTermProps[] {
     const newTerms: FlexibilityTermProps[] = [];
     terms.forEach((term: FlexibilityTermProps, index: number): void => {
         if (index !== substitutionIndex) {
@@ -39,8 +39,15 @@ export function computeSubstitutionTerms(terms: FlexibilityTermProps[], substitu
                 newTerms.push(substitutionTerm);
             });
         } else {
+            // When sourceCoefficient is provided, the substitution items represent the value
+            // of (sourceCoefficient × variable). The target term has coefficient term.coefficient.
+            // The correct multiplier is term.coefficient / sourceCoefficient.
+            // Without sourceCoefficient (legacy), multiplier is term.coefficient (sourceCoefficient = 1).
+            const multiplier: Fraction = sourceCoefficient
+                ? math.divide(term.coefficient, sourceCoefficient) as Fraction
+                : term.coefficient;
             substitutionTerms.forEach((substitutionTerm: FlexibilityTermProps) => {
-                newTerms.push(new FlexibilityTermProps(math.multiply(term.coefficient, substitutionTerm.coefficient) as Fraction, substitutionTerm.variable));
+                newTerms.push(new FlexibilityTermProps(math.multiply(multiplier, substitutionTerm.coefficient) as Fraction, substitutionTerm.variable));
             });
         }
     });

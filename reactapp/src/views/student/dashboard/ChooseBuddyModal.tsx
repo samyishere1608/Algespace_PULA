@@ -1,7 +1,10 @@
 import { faCheck, faLock, faPalette, faTimes } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { ReactElement, useState } from "react";
+import { CSSProperties, ReactElement, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { TranslationNamespaces } from "@/i18n.ts";
 import CharacterShopModal, { CHARACTER_CATALOGUE } from "./CharacterShopModal.tsx";
+import { AgencyWallet, AgencyWallets, WALLET_META, getAgencyLevel, getWalletXp } from "@utils/wardrobeUtils.ts";
 
 // ─── Customization types — populate when real assets are ready ────────────────
 
@@ -12,7 +15,7 @@ export interface BuddyAccessory {
     label: string;
     slot: "hat" | "outfit" | "accessory" | "background";
     assetPath: string;   // relative import path to the PNG/SVG — empty until assets exist
-    unlockXp: number;    // XP required to unlock this item
+    unlockLevel: number; // agency wallet level required to unlock this item
 }
 
 /** The full customization state saved per student. */
@@ -26,62 +29,63 @@ export interface Buddy {
     name: string;
     emoji: string;               // placeholder — swap for <img src={assetPath}> when art arrives
     color: string;               // avatar circle colour
-    unlockXp: number;            // total student XP needed to unlock this buddy
-    unlockHint: string;          // human-readable hint shown in the modal
+    /** Agency wallet that unlocks this buddy. */
+    unlockWallet: AgencyWallet;
+    /** Wallet level required to unlock this buddy. */
+    unlockLevel: number;
     description: string;         // flavour text
     // Future: accessories: BuddyAccessory[];  — add items when assets are ready
 }
 
-// ── Buddy roster — unlockXp thresholds set; swap emoji for real images later ──
+// ── Buddy roster — wallet-themed unlocks (same levels as the Growth Tree) ─────
 export const BUDDIES: Buddy[] = [
     {
         id: "pippin",
         name: "Pippin",
         emoji: "🦊",
         color: "#e07b39",
-        unlockXp: 0,
-        unlockHint: "",
+        unlockWallet: "choice",
+        unlockLevel: 0,
         description: "Your cheerful starting companion. Always ready to help!",
     },
     {
         id: "chimi",
         name: "Chimi",
         emoji: "🐾",
-        color: "#f06292",
-        unlockXp: 1000,
-        unlockHint: "Reach 1 000 XP",
-        description: "A playful and energetic companion. Unlocks at 1 000 XP.",
+        color: "#3a86ff",
+        unlockWallet: "choice",
+        unlockLevel: 3,
+        description: "A playful, decisive companion. Unlocks at Choice level 3.",
     },
     {
         id: "masterzen",
         name: "Master Zen",
         emoji: "🧘",
         color: "#6a5acd",
-        unlockXp: 1500,
-        unlockHint: "Reach 1 500 XP",
-        description: "Ancient wisdom meets modern math. Unlocks at 1 500 XP.",
+        unlockWallet: "insight",
+        unlockLevel: 3,
+        description: "Ancient wisdom meets modern math. Unlocks at Insight level 3.",
     },
     {
         id: "lumi",
         name: "Lumi",
         emoji: "🌸",
         color: "#c2185b",
-        unlockXp: 3000,
-        unlockHint: "Reach 3 000 XP",
-        description: "A rare companion for the truly dedicated. Unlocks at 3 000 XP.",
+        unlockWallet: "resolve",
+        unlockLevel: 3,
+        description: "A rare companion for the truly dedicated. Unlocks at Resolve level 3.",
     },
 ];
 
 interface Props {
     currentBuddyId: string;
-    currentXp: number;           // student's total XP — drives unlock gates
-    studentId: number | string;
-    currentCoins: number;
+    wallets: AgencyWallets;      // agency XP — drives wallet-level unlock gates
     onSelect: (id: string) => void;
     onClose: () => void;
 }
 
-export default function ChooseBuddyModal({ currentBuddyId, currentXp, studentId, currentCoins, onSelect, onClose }: Props): ReactElement {
+export default function ChooseBuddyModal({ currentBuddyId, wallets, onSelect, onClose }: Props): ReactElement {
+    const { t } = useTranslation(TranslationNamespaces.Student);
     const [shopCharacterId, setShopCharacterId] = useState<string | null>(null);
     // equippedOutfitId per character — persisted to backend when XP system is wired
     const [equippedOutfits, setEquippedOutfits] = useState<Record<string, string>>({});
@@ -90,22 +94,13 @@ export default function ChooseBuddyModal({ currentBuddyId, currentXp, studentId,
         setEquippedOutfits((prev) => ({ ...prev, [characterId]: itemId }));
     }
 
-    function handleBuy(characterId: string, itemId: string, _cost: number): void {
-        // TODO: deduct XP via API, mark item as owned in backend
-        // For now, auto-equip on buy as placeholder
-        handleEquip(characterId, itemId);
-    }
-
     if (shopCharacterId) {
         return (
             <CharacterShopModal
                 characterId={shopCharacterId}
-                studentId={studentId}
-                currentXp={currentXp}
-                currentCoins={currentCoins}
+                wallets={wallets}
                 equippedOutfitId={equippedOutfits[shopCharacterId]}
                 onEquip={handleEquip}
-                onBuy={handleBuy}
                 onClose={() => setShopCharacterId(null)}
             />
         );
@@ -115,23 +110,27 @@ export default function ChooseBuddyModal({ currentBuddyId, currentXp, studentId,
         <div className={"dash-modal-backdrop"} onClick={onClose}>
             <div className={"dash-modal"} onClick={(e) => e.stopPropagation()}>
                 <div className={"dash-modal__header"}>
-                    <h3>Choose Buddy</h3>
+                    <h3>{t("buddy-title")}</h3>
                     <button className={"dash-modal__close"} onClick={onClose}>
                         <FontAwesomeIcon icon={faTimes} />
                     </button>
                 </div>
-                <p className={"dash-modal__subtitle"}>Your buddy guides you through exercises. Earn XP to unlock new companions!</p>
+                <p className={"dash-modal__subtitle"}>{t("buddy-subtitle")}</p>
 
                 <div className={"buddy-chooser"}>
                     {BUDDIES.map((buddy) => {
-                        const isUnlocked = currentXp >= buddy.unlockXp;
+                        const walletXp = getWalletXp(wallets, buddy.unlockWallet);
+                        const walletLevel = getAgencyLevel(walletXp);
+                        const isUnlocked = buddy.unlockLevel === 0 || walletLevel >= buddy.unlockLevel;
                         const isCurrent = currentBuddyId === buddy.id;
-                        const xpProgress = buddy.unlockXp === 0 ? 100 : Math.min(100, (currentXp / buddy.unlockXp) * 100);
+                        const xpProgress = buddy.unlockLevel === 0 ? 100 : Math.min(100, (walletLevel / buddy.unlockLevel) * 100);
+                        const walletMeta = WALLET_META[buddy.unlockWallet];
 
                         return (
                             <div
                                 key={buddy.id}
                                 className={`buddy-chooser__item${!isUnlocked ? " buddy-chooser__item--locked" : ""}${isCurrent ? " buddy-chooser__item--current" : ""}`}
+                                style={{ "--wallet": walletMeta.color, "--buddy": buddy.color } as CSSProperties}
                                 onClick={() => isUnlocked && onSelect(buddy.id)}
                             >
                                 <div
@@ -152,23 +151,23 @@ export default function ChooseBuddyModal({ currentBuddyId, currentXp, studentId,
                                 </div>
 
                                 <span className={"buddy-chooser__name"}>{buddy.name}</span>
-                                <span className={"buddy-chooser__desc"}>{buddy.description}</span>
+                                <span className={"buddy-chooser__desc"}>{t(`buddy-desc-${buddy.id}`, buddy.description)}</span>
 
                                 {isUnlocked ? (
                                     <>
                                         <span className={"buddy-chooser__unlocked"}>
-                                            <FontAwesomeIcon icon={faCheck} /> {isCurrent ? "Active" : "Unlocked"}
+                                            <FontAwesomeIcon icon={faCheck} /> {isCurrent ? t("buddy-active") : t("buddy-unlocked")}
                                         </span>
                                         <div className={"buddy-chooser__card-actions"}>
                                             <button
                                                 className={"buddy-chooser__select-btn"}
                                                 onClick={(e) => { e.stopPropagation(); onSelect(buddy.id); }}
                                             >
-                                                {isCurrent ? "Selected" : "Select"}
+                                                {isCurrent ? t("buddy-selected") : t("buddy-select")}
                                             </button>
                                             <button
                                                 className={"buddy-chooser__shop-btn"}
-                                                title={"Open outfit shop"}
+                                                title={t("buddy-shop-title")}
                                                 onClick={(e) => { e.stopPropagation(); setShopCharacterId(buddy.id); }}
                                             >
                                                 <FontAwesomeIcon icon={faPalette} />
@@ -180,11 +179,11 @@ export default function ChooseBuddyModal({ currentBuddyId, currentXp, studentId,
                                         <div className={"buddy-chooser__unlock-bar-track"}>
                                             <div
                                                 className={"buddy-chooser__unlock-bar-fill"}
-                                                style={{ width: `${xpProgress}%` }}
+                                                style={{ width: `${xpProgress}%`, background: walletMeta.color }}
                                             />
                                         </div>
-                                        <span className={"buddy-chooser__unlock-label"}>
-                                            {currentXp.toLocaleString()} / {buddy.unlockXp.toLocaleString()} XP
+                                        <span className={"buddy-chooser__unlock-label"} style={{ color: walletMeta.color }}>
+                                            {t(walletMeta.labelKey)} Lv {walletLevel} / {buddy.unlockLevel}
                                         </span>
                                     </div>
                                 )}

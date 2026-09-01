@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AlgeSpace Growth Tree — Demo</title>
+<style>
+  :root {
+    --bg: #04202f;
+    --panel: #0a2f45;
+    --gold: #ffd166;
+    --insight: #06d6a0;
+    --resolve: #ef476f;
+    --text: #eaf6ff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at 50% 0%, #0a3d5c 0%, #04202f 60%);
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+    color: var(--text);
+    padding: 24px;
+  }
+
+  .demo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    align-items: center;
+    justify-content: center;
+    max-width: 980px;
+  }
+
+  .tree-card {
+    background: linear-gradient(180deg, #0b3450 0%, #06283b 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 20px 28px 16px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  }
+
+  .tree-card h1 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+  }
+
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    font-size: 0.72rem;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot--choice { background: var(--gold); }
+  .dot--insight { background: var(--insight); }
+  .dot--resolve { background: var(--resolve); }
+
+  svg { display: block; margin: 0 auto; }
+
+  .controls {
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    background: var(--panel);
+    border-radius: 20px;
+    padding: 24px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  }
+
+  .control h3 {
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .control h3 .val { font-variant-numeric: tabular-nums; }
+  .control--choice h3 .val { color: var(--gold); }
+  .control--insight h3 .val { color: var(--insight); }
+  .control--resolve h3 .val { color: var(--resolve); }
+
+  input[type="range"] {
+    width: 100%;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+  }
+  .control--choice input { background: linear-gradient(90deg, #8a6d1f, var(--gold)); }
+  .control--insight input { background: linear-gradient(90deg, #075c47, var(--insight)); }
+  .control--resolve input { background: linear-gradient(90deg, #7d2340, var(--resolve)); }
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid rgba(0,0,0,0.3);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+
+  .presets { display: flex; gap: 8px; flex-wrap: wrap; }
+  .presets button {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 8px 6px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .presets button:hover { background: rgba(255,255,255,0.14); }
+  .presets button:active { transform: scale(0.96); }
+
+  .note { font-size: 0.68rem; color: rgba(255,255,255,0.5); text-align: center; line-height: 1.5; }
+
+  /* ── Animations ──────────────────────────────────────────── */
+  .sway {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+    animation: sway 5s ease-in-out infinite;
+  }
+  @keyframes sway {
+    0%, 100% { transform: rotate(-1.4deg); }
+    50%      { transform: rotate(1.4deg); }
+  }
+  .breathe {
+    transform-box: fill-box;
+    transform-origin: center center;
+    animation: breathe 3.6s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.035); }
+  }
+  .fruit { transform-box: fill-box; transform-origin: center center; animation: pop 0.5s cubic-bezier(0.34,1.56,0.64,1) backwards; }
+  @keyframes pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .branch { stroke-dasharray: 120; stroke-dashoffset: 120; animation: draw 0.7s ease-out forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .root { stroke-dasharray: 90; stroke-dashoffset: 90; animation: draw 0.9s ease-out forwards; }
+  .leaf-cluster { transform-box: fill-box; transform-origin: center center; animation: leafin 0.6s ease-out backwards; }
+  @keyframes leafin { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .sparkle { animation: twinkle 2.6s ease-in-out infinite; }
+  @keyframes twinkle { 0%,100% { opacity: 0.25; } 50% { opacity: 0.9; } }
+</style>
+</head>
+<body>
+  <div class="demo">
+    <div class="tree-card">
+      <h1>🌳 My Growth Tree</h1>
+      <div class="legend">
+        <span><i class="dot dot--choice"></i>Choice → Roots</span>
+        <span><i class="dot dot--insight"></i>Insight → Branches</span>
+        <span><i class="dot dot--resolve"></i>Resolve → Fruits</span>
+      </div>
+      <svg id="tree" viewBox="0 0 300 400" width="340" height="454"></svg>
+    </div>
+
+    <div class="controls">
+      <div class="control control--choice">
+        <h3>🟡 Choice XP <span class="val" id="choiceVal">0</span></h3>
+        <input type="range" id="choice" min="0" max="500" step="5" value="0" />
+      </div>
+      <div class="control control--insight">
+        <h3>🟣 Insight XP <span class="val" id="insightVal">0</span></h3>
+        <input type="range" id="insight" min="0" max="500" step="5" value="0" />
+      </div>
+      <div class="control control--resolve">
+        <h3>🔵 Resolve XP <span class="val" id="resolveVal">0</span></h3>
+        <input type="range" id="resolve" min="0" max="500" step="5" value="0" />
+      </div>
+      <div class="presets">
+        <button data-p="0,0,0">🌰 Seed</button>
+        <button data-p="250,20,20">Roots-heavy</button>
+        <button data-p="20,250,20">Branches-heavy</button>
+        <button data-p="20,20,250">Fruit-heavy</button>
+        <button data-p="200,200,200">Balanced</button>
+        <button data-p="500,500,500">Full tree</button>
+      </div>
+      <p class="note">Drag sliders to see how each XP type grows a different part of the tree.</p>
+    </div>
+  </div>
+
+<script>
+  const svg = document.getElementById("tree");
+  const NS = "http://www.w3.org/2000/svg";
+  const GROUND_Y = 350;
+
+  let defs = null;
+  function getDefs() {
+    if (defs) return defs;
+    defs = el("defs", {});
+
+    const mkRadial = (id, stops) => {
+      const g = el("radialGradient", { id, cx: "40%", cy: "35%", r: "70%" });
+      stops.forEach(([off, col]) => g.appendChild(el("stop", { offset: off, "stop-color": col })));
+      return g;
+    };
+    const mkLinear = (id, stops, x1="0%", y1="0%", x2="100%", y2="100%") => {
+      const g = el("linearGradient", { id, x1, y1, x2, y2 });
+      stops.forEach(([off, col]) => g.appendChild(el("stop", { offset: off, "stop-color": col })));
+      return g;
+    };
+
+    defs.appendChild(mkLinear("trunkGrad", [["0%","#8d6e63"],["55%","#6d4c41"],["100%","#4e342e"]]));
+    defs.appendChild(mkRadial("leafDark",  [["0%","#4caf50"],["100%","#1b5e20"]]));
+    defs.appendChild(mkRadial("leafMid",   [["0%","#66bb6a"],["100%","#2e7d32"]]));
+    defs.appendChild(mkRadial("leafLight", [["0%","#a5d6a7"],["100%","#43a047"]]));
+    defs.appendChild(mkRadial("apple1",    [["0%","#ff8fa3"],["55%","#ef476f"],["100%","#b31e44"]]));
+    defs.appendChild(mkRadial("apple2",    [["0%","#ff6b81"],["55%","#e6395a"],["100%","#8f1538"]]));
+    defs.appendChild(mkRadial("appleGold", [["0%","#ffe08a"],["55%","#ffc233"],["100%","#c98a12"]]));
+    return defs;
+  }
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  // ── Recursive branch drawing ────────────────────────────────
+  function growBranches(group, x, y, angle, len, width, depth, maxDepth, delay) {
+    const rad = angle * Math.PI / 180;
+    const x2 = x + Math.sin(rad) * len;
+    const y2 = y - Math.cos(rad) * len;
+    const line = el("line", {
+      x1: x, y1: y, x2, y2,
+      stroke: "url(#trunkGrad)", "stroke-width": width, "stroke-linecap": "round",
+      class: "branch"
+    });
+    line.style.animationDelay = `${delay}ms`;
+    group.appendChild(line);
+
+    if (depth < maxDepth) {
+      const spread = 18 + depth * 4;
+      growBranches(group, x2, y2, angle - spread, len * 0.72, width * 0.62, depth + 1, maxDepth, delay + 140);
+      growBranches(group, x2, y2, angle + spread, len * 0.72, width * 0.62, depth + 1, maxDepth, delay + 200);
+      if (depth < maxDepth - 1) {
+        growBranches(group, x2, y2, angle, len * 0.66, width * 0.5, depth + 2, maxDepth, delay + 120);
+      }
+    }
+    return { x: x2, y: y2, depth };
+  }
+
+  // ── Recursive root drawing ──────────────────────────────────
+  function growRoots(group, x, y, side, len, width, depth, maxDepth, delay) {
+    const spread = (side < 0 ? -1 : 1) * (20 + depth * 9);
+    const x2 = x + spread;
+    const y2 = y + len * 0.55 + depth * 4;
+    const path = el("path", {
+      d: `M ${x} ${y} Q ${x + spread * 0.4} ${y + len * 0.3} ${x2} ${y2}`,
+      stroke: "#5d4037", "stroke-width": width, fill: "none", "stroke-linecap": "round",
+      class: "root"
+    });
+    path.style.animationDelay = `${delay}ms`;
+    group.appendChild(path);
+    if (depth < maxDepth) {
+      growRoots(group, x2, y2, side, len * 0.6, width * 0.6, depth + 1, maxDepth, delay + 160);
+      if (depth === 0) growRoots(group, x2, y2, side * 0.6, len * 0.5, width * 0.55, depth + 1, maxDepth, delay + 220);
+    }
+  }
+
+  // ── Leaf cluster at a branch tip ────────────────────────────
+  function leafCluster(group, x, y, r, shade, delay) {
+    const g = el("g", { class: "leaf-cluster" });
+    g.style.animationDelay = `${delay}ms`;
+    g.appendChild(el("circle", { cx: x, cy: y, r: r, fill: shade }));
+    g.appendChild(el("circle", { cx: x - r*0.55, cy: y + r*0.2, r: r*0.7, fill: shade }));
+    g.appendChild(el("circle", { cx: x + r*0.55, cy: y + r*0.2, r: r*0.7, fill: shade }));
+    g.appendChild(el("circle", { cx: x, cy: y - r*0.45, r: r*0.6, fill: "url(#leafLight)", opacity: 0.55 }));
+    group.appendChild(g);
+  }
+
+  // ── Apple with stem + leaf ──────────────────────────────────
+  function apple(group, x, y, variant, delay) {
+    const g = el("g", { class: "fruit" });
+    g.style.animationDelay = `${delay}ms`;
+    const fill = variant === 2 ? "url(#appleGold)" : variant === 1 ? "url(#apple2)" : "url(#apple1)";
+    g.appendChild(el("circle", { cx: x, cy: y, r: 8.5, fill }));
+    g.appendChild(el("ellipse", { cx: x - 2.8, cy: y - 3, rx: 2.6, ry: 1.7, fill: "#ffffff", opacity: 0.7 }));
+    g.appendChild(el("path", { d: `M ${x} ${y-8} Q ${x+2} ${y-13} ${x+1} ${y-15}`, stroke: "#4e342e", "stroke-width": 2, fill: "none", "stroke-linecap": "round" }));
+    g.appendChild(el("ellipse", { cx: x + 4, cy: y - 13, rx: 4, ry: 2, fill: "#43a047", transform: `rotate(-25 ${x+4} ${y-13})` }));
+    group.appendChild(g);
+  }
+
+  function render(choice, insight, resolve) {
+    svg.innerHTML = "";
+    svg.appendChild(getDefs());
+    const total = choice + insight + resolve;
+
+    const trunkTop = GROUND_Y - Math.min(170, 34 + total / 4.5);
+    const baseW = 26, topW = 11;
+
+    // ── Ground shadow ─────────────────────────
+    svg.appendChild(el("ellipse", { cx: 150, cy: GROUND_Y + 18, rx: 120, ry: 22, fill: "#071a0d", opacity: 0.7 }));
+    svg.appendChild(el("ellipse", { cx: 150, cy: GROUND_Y + 12, rx: 108, ry: 16, fill: "#0a2b15" }));
+    svg.appendChild(el("ellipse", { cx: 150, cy: GROUND_Y + 6,  rx: 96,  ry: 11, fill: "#124a20" }));
+
+    // ── Roots (Choice) ────────────────────────
+    const rootGroup = el("g", {});
+    if (total > 0) {
+      const nRoots = Math.min(6, 1 + Math.floor(choice / 70));
+      for (let i = 0; i < nRoots; i++) {
+        const side = i % 2 === 0 ? -1 : 1;
+        growRoots(rootGroup, 150, GROUND_Y - 2, side, 34 - i * 2, 4.5 - i * 0.4, 0, 2, i * 100);
+      }
+    }
+    svg.appendChild(rootGroup);
+
+    // ── Trunk (total) ────────────────────────
+    if (total > 0) {
+      const trunk = el("path", {
+        d: `M ${150 - baseW/2} ${GROUND_Y} C ${150 - baseW/2} ${trunkTop + 60}, ${150 - topW/2 - 2} ${trunkTop + 18}, ${150 - topW/2} ${trunkTop} L ${150 + topW/2} ${trunkTop} C ${150 + topW/2 + 2} ${trunkTop + 18}, ${150 + baseW/2} ${trunkTop + 60}, ${150 + baseW/2} ${GROUND_Y} Z`,
+        fill: "url(#trunkGrad)"
+      });
+      svg.appendChild(trunk);
+      // bark texture
+      svg.appendChild(el("path", { d: `M ${150 - baseW/4} ${GROUND_Y} Q ${150 - 4} ${trunkTop + 40} ${150 - 3} ${trunkTop + 6}`, stroke: "#4e342e", "stroke-width": 1.6, fill: "none", opacity: 0.5 }));
+      svg.appendChild(el("path", { d: `M ${150 + baseW/5} ${GROUND_Y} Q ${150 + 6} ${trunkTop + 44} ${150 + 4} ${trunkTop + 8}`, stroke: "#4e342e", "stroke-width": 1.2, fill: "none", opacity: 0.4 }));
+      // branch knot
+      if (total > 200) svg.appendChild(el("ellipse", { cx: 150 + 3, cy: trunkTop + 52, rx: 3, ry: 5, fill: "#3e2723", opacity: 0.55 }));
+    }
+
+    // ── Branches (Insight) ───────────────────
+    const branchGroup = el("g", {});
+    const tips = [];
+    if (total > 0) {
+      const nMain = Math.min(4, 1 + Math.floor(insight / 130));
+      const angles = [-32, 32, -58, 58];
+      for (let i = 0; i < nMain; i++) {
+        const t = growBranches(branchGroup, 150, trunkTop + 8, angles[i], 52 - i * 3, 7 - i * 1.2, 0, 2, i * 130);
+        tips.push({ x: t.x, y: t.y });
+      }
+      if (insight > 250) {
+        const t = growBranches(branchGroup, 150, trunkTop + 4, 0, 58, 6, 0, 2, 200);
+        tips.push({ x: t.x, y: t.y });
+      }
+    }
+    svg.appendChild(branchGroup);
+
+    // ── Canopy (Insight) ─────────────────────
+    const canopy = el("g", { class: "breathe" });
+    const canopyR = 26 + Math.min(22, insight / 14);
+    const shades = ["url(#leafDark)", "url(#leafMid)", "url(#leafDark)", "url(#leafMid)"];
+    tips.forEach((tip, i) => {
+      leafCluster(canopy, tip.x, tip.y, canopyR, shades[i % shades.length], 250 + i * 140);
+    });
+    // central crown on trunk top
+    if (total > 0) {
+      leafCluster(canopy, 150, trunkTop - 6, canopyR * 0.95, "url(#leafMid)", 280);
+    }
+    svg.appendChild(canopy);
+
+    // ── Fruits (Resolve) ─────────────────────
+    const fruitSpots = [
+      [110, 150], [190, 150], [88, 176], [212, 176], [140, 134],
+      [160, 134], [78, 152], [222, 152], [124, 176], [176, 176],
+      [150, 116], [104, 126], [196, 126],
+    ];
+    const fruitGroup = el("g", {});
+    const nFruit = Math.min(fruitSpots.length, Math.floor(resolve / 22));
+    for (let i = 0; i < nFruit; i++) {
+      apple(fruitGroup, fruitSpots[i][0], fruitSpots[i][1], i % 3, i * 100);
+    }
+    svg.appendChild(fruitGroup);
+
+    // ── Sparkles ─────────────────────────────
+    const sparkleGroup = el("g", {});
+    if (total > 300) {
+      const spots = [[60,140],[240,140],[80,200],[220,200],[150,90]];
+      spots.forEach((s, i) => {
+        const c = el("circle", { cx: s[0], cy: s[1], r: 2.2, fill: i % 2 ? "#ffe08a" : "#a5d6a7", class: "sparkle", opacity: 0.7 });
+        c.style.animationDelay = `${i * 400}ms`;
+        sparkleGroup.appendChild(c);
+      });
+    }
+    svg.appendChild(sparkleGroup);
+
+    // ── Wrap in sway ─────────────────────────
+    const children = Array.from(svg.children).filter(c => c !== getDefs());
+    children.forEach(c => svg.removeChild(c));
+    const swayGroup = el("g", { class: "sway" });
+    children.forEach(c => swayGroup.appendChild(c));
+    svg.appendChild(swayGroup);
+  }
+
+  const sliders = ["choice", "insight", "resolve"];
+  function read() {
+    return {
+      choice: +document.getElementById("choice").value,
+      insight: +document.getElementById("insight").value,
+      resolve: +document.getElementById("resolve").value,
+    };
+  }
+  function update() {
+    const v = read();
+    document.getElementById("choiceVal").textContent = v.choice;
+    document.getElementById("insightVal").textContent = v.insight;
+    document.getElementById("resolveVal").textContent = v.resolve;
+    render(v.choice, v.insight, v.resolve);
+  }
+
+  sliders.forEach(id => document.getElementById(id).addEventListener("input", update));
+
+  document.querySelectorAll(".presets button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const [c, i, r] = btn.dataset.p.split(",").map(Number);
+      document.getElementById("choice").value = c;
+      document.getElementById("insight").value = i;
+      document.getElementById("resolve").value = r;
+      update();
+    });
+  });
+
+  update();
+</script>
+</body>
+</html>

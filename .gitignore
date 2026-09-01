@@ -12,3 +12,10 @@ webapi/appsettings.json
 .vs
 /.idea/
 webapi/webapi.sln
+
+# Local design/UX skill assets — not part of the shipped app
+.github/skills/
+
+# Local planning/proposal docs
+AGENCY_ANCHORS_PROPOSAL.md
+DECISION_ANCHORS_PROPOSAL.md

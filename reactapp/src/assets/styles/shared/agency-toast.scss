@@ -1,0 +1,59 @@
+/* Agency XP toast — shared component styles.
+   Imported directly by AgencyXpToast.tsx so it works in every view. */
+
+.agency-toast {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 1.1rem;
+    background: rgba(1, 22, 37, 0.94);
+    border: 1.5px solid var(--toast-color, #ffd166);
+    border-radius: 0.6rem;
+    box-shadow:
+        0 0 10px var(--toast-color, #ffd166),
+        0 0 25px var(--toast-color, #ffd166),
+        0 0 50px var(--toast-color, #ffd166);
+    animation: toastAppear 0.45s cubic-bezier(0.16, 1, 0.3, 1), toastPulse 0.55s 0.5s ease, toastDisappear 0.35s 1.5s ease forwards;
+    pointer-events: none;
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+    letter-spacing: 0.02em;
+
+    &__icon {
+        font-size: 1.15rem;
+        filter: drop-shadow(0 0 5px var(--toast-color, #ffd166));
+    }
+
+    &__text {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #fff;
+        white-space: nowrap;
+        text-shadow: 0 0 10px var(--toast-color, #ffd166);
+
+        strong {
+            font-weight: 800;
+            color: var(--toast-color, #ffd166);
+            text-shadow: 0 0 12px var(--toast-color, #ffd166);
+        }
+    }
+}
+
+@keyframes toastAppear {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); filter: blur(3px); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); }
+}
+
+@keyframes toastPulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.04); }
+}
+
+@keyframes toastDisappear {
+    from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    to { opacity: 0; transform: translate(-50%, -50%) scale(0.9) translateY(-8px); filter: blur(2px); }
+}

@@ -6,6 +6,7 @@ import { SubstitutionResultParameters } from "@/types/flexibility/substitutionPa
 import { Variable } from "@/types/flexibility/variable.ts";
 import { FlexibilityEquation } from "@/types/math/linearEquation.ts";
 import { FlexibilityTerm } from "@/types/math/term.ts";
+import { Fraction } from "mathjs";
 import { DraggableSubstitutionEquation } from "@components/flexibility/substitution/DraggableSubstitutionEquation.tsx";
 import { DroppableSubstitutionEquation } from "@components/flexibility/substitution/DroppableSubstitutionEquation.tsx";
 import { coefficientIsOne } from "@utils/utils.ts";
@@ -115,6 +116,24 @@ export function SubstitutionApplication({ system, firstVariable, isolatedVariabl
 
         trackDrop(trackAction, trackError, dragAction, over.data.current.valid, over.data.current.target === FlexibilityDragTarget.Left, over.data.current.index, over.data.current.variable);
 
+        // Detect if the source equation isolates a variable with coefficient ≠ ±1 (e.g. 2y = expr, not y = expr)
+        // When true, the coefficient of the target term should NOT multiply into the substitution directly.
+        // Instead we multiply by (targetCoefficient / sourceCoefficient).
+        let keepCoefficient = false;
+        let sourceCoefficient: Fraction | undefined = undefined;
+        if (over.data.current.variable !== undefined) {
+            // The source equation is the one being dragged FROM (the opposite of isFirstEquation)
+            const sourceEq = isFirstEquation ? system[1] : system[0];
+            const fullSourceTerms = [...sourceEq.leftTerms, ...sourceEq.rightTerms];
+            const varTerm = fullSourceTerms.find(
+                (t: FlexibilityTerm) => t.variable !== null && t.variable === over.data.current.variable
+            );
+            if (varTerm && !coefficientIsOne(varTerm.coefficient)) {
+                keepCoefficient = true;
+                sourceCoefficient = varTerm.coefficient;
+            }
+        }
+
         const substitutionInfo: SubstitutionResultParameters = {
             isValid: over.data.current.valid,
             substitutionItems: substitutionItems,
@@ -123,7 +142,9 @@ export function SubstitutionApplication({ system, firstVariable, isolatedVariabl
             index: over.data.current.index,
             variable: over.data.current.variable,
             replaceAll: over.data.current.isUnion && isTip,
-            error: over.data.current.error
+            error: over.data.current.error,
+            keepCoefficient: keepCoefficient,
+            sourceCoefficient: sourceCoefficient
         } as SubstitutionResultParameters;
 
         if (!over.data.current.valid) {
@@ -159,9 +180,9 @@ export function SubstitutionApplication({ system, firstVariable, isolatedVariabl
                 case FlexibilityDragSource.FirstLeft: {
                     lengthFits = system[0].rightTerms.length === 1;
                     if (isFirstVariable) {
-                        isValid = lengthFits && isolatedVariables[0] === IsolatedIn.First;
+                        isValid = lengthFits && (isolatedVariables[0] === IsolatedIn.First || isolatedVariables[0] === IsolatedIn.FirstMultiple);
                     } else {
-                        isValid = lengthFits && isolatedVariables[0] === IsolatedIn.Second;
+                        isValid = lengthFits && (isolatedVariables[0] === IsolatedIn.Second || isolatedVariables[0] === IsolatedIn.SecondMultiple);
                     }
                     isIsolated = isolatedVariables[0] !== IsolatedIn.None;
                     break;
@@ -169,9 +190,9 @@ export function SubstitutionApplication({ system, firstVariable, isolatedVariabl
                 case FlexibilityDragSource.FirstRight: {
                     lengthFits = system[0].leftTerms.length === 1;
                     if (isFirstVariable) {
-                        isValid = lengthFits && isolatedVariables[0] === IsolatedIn.First;
+                        isValid = lengthFits && (isolatedVariables[0] === IsolatedIn.First || isolatedVariables[0] === IsolatedIn.FirstMultiple);
                     } else {
-                        isValid = lengthFits && isolatedVariables[0] === IsolatedIn.Second;
+                        isValid = lengthFits && (isolatedVariables[0] === IsolatedIn.Second || isolatedVariables[0] === IsolatedIn.SecondMultiple);
                     }
                     isIsolated = isolatedVariables[0] !== IsolatedIn.None;
                     break;
@@ -179,9 +200,9 @@ export function SubstitutionApplication({ system, firstVariable, isolatedVariabl
                 case FlexibilityDragSource.SecondLeft: {
                     lengthFits = system[1].rightTerms.length === 1;
                     if (isFirstVariable) {
-                        isValid = lengthFits && isolatedVariables[1] === IsolatedIn.First;
+                        isValid = lengthFits && (isolatedVariables[1] === IsolatedIn.First || isolatedVariables[1] === IsolatedIn.FirstMultiple);
                     } else {
-                        isValid = lengthFits && isolatedVariables[1] === IsolatedIn.Second;
+                        isValid = lengthFits && (isolatedVariables[1] === IsolatedIn.Second || isolatedVariables[1] === IsolatedIn.SecondMultiple);
                     }
                     isIsolated = isolatedVariables[1] !== IsolatedIn.None;
                     break;
@@ -189,9 +210,9 @@ export function SubstitutionApplication({ system, firstVariable, isolatedVariabl
                 case FlexibilityDragSource.SecondRight: {
                     lengthFits = system[1].leftTerms.length === 1;
                     if (isFirstVariable) {
-                        isValid = lengthFits && isolatedVariables[1] === IsolatedIn.First;
+                        isValid = lengthFits && (isolatedVariables[1] === IsolatedIn.First || isolatedVariables[1] === IsolatedIn.FirstMultiple);
                     } else {
-                        isValid = lengthFits && isolatedVariables[1] === IsolatedIn.Second;
+                        isValid = lengthFits && (isolatedVariables[1] === IsolatedIn.Second || isolatedVariables[1] === IsolatedIn.SecondMultiple);
                     }
                     isIsolated = isolatedVariables[1] !== IsolatedIn.None;
                     break;

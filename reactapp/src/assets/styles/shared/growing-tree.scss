@@ -107,6 +107,7 @@
     }
 
     &__next {
+        margin-top: 0.9rem;
         font-size: 0.68rem;
         color: rgba(255, 255, 255, 0.38);
         text-align: center;
@@ -120,5 +121,56 @@
             color: #ffeb3b;
             font-weight: 600;
         }
+    }
+
+    &__hint {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #ffd166;
+        line-height: 1.45;
+        text-align: center;
+        padding: 0.6rem 0.9rem;
+        background: rgba(255, 209, 102, 0.08);
+        border: 1px solid rgba(255, 209, 102, 0.28);
+        border-radius: 0.75rem;
+    }
+
+    &__legend {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        width: 100%;
+        padding: 0.9rem 1rem;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0.9rem;
+    }
+
+    &__legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.75);
+
+        strong {
+            margin-left: auto;
+            font-weight: 800;
+            font-size: 1.05rem;
+            color: #fff;
+        }
+    }
+
+    &__legend-dot {
+        width: 0.8rem;
+        height: 0.8rem;
+        border-radius: 50%;
+        flex-shrink: 0;
+        box-shadow: 0 0 10px currentColor;
+
+        &--roots    { background: #ffd166; color: #ffd166; }
+        &--branches { background: #06d6a0; color: #06d6a0; }
+        &--fruits   { background: #ef476f; color: #ef476f; }
     }
 }

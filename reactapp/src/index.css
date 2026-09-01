@@ -46,6 +46,25 @@ body {
     box-sizing: border-box; /* Border and padding are included when width and height of an element are defined */
 }
 
+/* Visible keyboard focus — accessibility (WCAG 2.4.7) */
+:focus-visible {
+    outline: 3px solid var(--primary-blue);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 p {
     color: var(--dark-text);
     font-size: 1rem;

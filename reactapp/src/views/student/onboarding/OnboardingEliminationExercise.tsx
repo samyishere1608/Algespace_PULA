@@ -2,6 +2,8 @@ import useAxios from "axios-hooks";
 import { plainToClass } from "class-transformer";
 import { ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { TranslationNamespaces } from "@/i18n.ts";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { EliminationExercise as EliminationExerciseProps } from "@/types/elimination/eliminationExercise.ts";
 import { ErrorTranslations } from "@/types/shared/errorTranslations.ts";
@@ -29,6 +31,7 @@ export default function OnboardingEliminationExercise(): ReactElement {
 function Exercise({ exerciseId }: { exerciseId: number }): ReactElement {
     const navigate = useNavigate();
     const { student } = useAuth();
+    const { t } = useTranslation(TranslationNamespaces.Student);
 
     const [{ data, loading, error }] = useAxios(getPathToExercise(Paths.EliminationGamePath, exerciseId));
 
@@ -42,8 +45,8 @@ function Exercise({ exerciseId }: { exerciseId: number }): ReactElement {
 
     const overlay = (
         <OnboardingProgressOverlay
-            message="You did it! You've completed all three tutorials. Welcome to AlgeSpace!"
-            buttonText="Go to Dashboard"
+            message={t("onboarding-elimination-message")}
+            buttonText={t("onboarding-elimination-cta")}
             onContinue={() => {
                 if (student) setOnboardingStep(student.id, "complete");
                 navigate(Paths.StudentDashboardPath);

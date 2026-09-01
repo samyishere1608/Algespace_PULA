@@ -5,14 +5,17 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import useAxios from "axios-hooks";
 import { ReactElement, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Paths } from "@routes/paths.ts";
-import { getOnboardingStep, setOnboardingStep } from "@utils/storageUtils.ts";
+import { TranslationNamespaces } from "@/i18n.ts";
+import { getOnboardingStep, setOnboardingStep, syncProgressFromBackend } from "@utils/storageUtils.ts";
 import Logo from "@images/home/logo640.png";
 import "@styles/views/login.scss";
 
 export default function StudentLoginView(): ReactElement {
     const navigate = useNavigate();
     const { loginStudent } = useAuth();
+    const { t } = useTranslation(TranslationNamespaces.Student);
 
     const [username, setUsername] = useState<string>("");
     const [password, setPassword] = useState<string>("");
@@ -28,33 +31,33 @@ export default function StudentLoginView(): ReactElement {
         <div className={"login__background"}>
             <button className={"text-button--white login__return-button"} onClick={() => navigate(Paths.HomePath)}>
                 <FontAwesomeIcon icon={faArrowLeft} />
-                Back to Home
+                {t("student-login-back")}
             </button>
             <div className={"login__container"}>
                 <img src={Logo} alt={"AlgeSpace logo"} />
                 <form className={"login__form"} onSubmit={(e) => e.preventDefault()}>
-                    <p>Student Login</p>
+                    <p>{t("student-login-title")}</p>
                     <div className={"input__container"}>
-                        <label>Username</label>
+                        <label>{t("student-login-username")}</label>
                         <input
                             autoFocus
                             className={"input__box"}
                             type={"text"}
                             value={username}
-                            placeholder={"Username"}
+                            placeholder={t("student-login-username-placeholder")}
                             maxLength={20}
                             onChange={(e) => { setError(""); setUsername(e.target.value); }}
                             onKeyDown={handleKeyDown}
                         />
                     </div>
                     <div className={"input__container"}>
-                        <label>Password</label>
+                        <label>{t("student-login-password")}</label>
                         <div className={"input__password-box"}>
                             <input
                                 className={"input__box"}
                                 type={showPassword ? "text" : "password"}
                                 value={password}
-                                placeholder={"Password"}
+                                placeholder={t("student-login-password-placeholder")}
                                 maxLength={50}
                                 onChange={(e) => { setError(""); setPassword(e.target.value); }}
                                 onKeyDown={handleKeyDown}
@@ -73,15 +76,15 @@ export default function StudentLoginView(): ReactElement {
                     disabled={username === "" || password === "" || loading}
                     onClick={handleLogin}
                 >
-                    {loading ? "Logging in..." : "Login"}
+                    {loading ? t("student-login-loading") : t("student-login-submit")}
                 </button>
                 <p style={{ fontSize: "0.875rem" }}>
-                    Don't have an account?{" "}
+                    {t("student-login-no-account")}{" "}
                     <span
                         style={{ color: "var(--primary-blue)", cursor: "pointer", textDecoration: "underline" }}
                         onClick={() => navigate(Paths.StudentRegisterPath)}
                     >
-                        Register
+                        {t("student-login-register-link")}
                     </span>
                 </p>
             </div>
@@ -100,6 +103,9 @@ export default function StudentLoginView(): ReactElement {
             const student = response.data as IStudent;
             loginStudent(student);
 
+            // Restore cross-device progress from the backend before reading onboarding
+            await syncProgressFromBackend(student.id);
+
             const step = getOnboardingStep(student.id);
 
             if (step === "complete") {
@@ -115,7 +121,7 @@ export default function StudentLoginView(): ReactElement {
             // Navigate to resume page which will redirect to the right tutorial
             navigate(Paths.OnboardingResumePath);
         } catch {
-            setError("Username or password is incorrect.");
+            setError(t("student-login-error-credentials"));
         }
     }
 }

@@ -60,5 +60,10 @@
   "login-name": "Username",
   "login-password": "Password",
   "construction": "This content is currently still under construction.",
-  "flexibility-study": "Study for Flexibility Training"
+  "flexibility-study": "Study for Flexibility Training",
+
+  "home-dashboard": "Dashboard",
+  "home-continue-tutorial": "Continue Tutorial",
+  "home-logout": "Logout",
+  "home-login": "Login"
 }

@@ -14,10 +14,19 @@ namespace webapi.Controllers
         private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
 
         // Kept short to minimise token usage on free tier
-        private static string BuildSystemPrompt(string buddyName) =>
-            $"You are {buddyName}, a friendly AI tutor in AlgeSpace helping high-school students solve systems of linear equations. " +
-            "Rules: NEVER give the full answer — only short hints (2-3 sentences) for the next step. " +
-            "Be warm and encouraging. Ignore off-topic questions politely.";
+        private static string BuildSystemPrompt(string buddyName, string language)
+        {
+            var langInstruction = language switch
+            {
+                "de" => "IMPORTANT: You must respond ONLY in German (Deutsch). Never switch to another language.",
+                "ja" => "IMPORTANT: You must respond ONLY in Japanese (日本語). Never switch to another language.",
+                _    => "Respond in English."
+            };
+            return $"You are {buddyName}, a friendly AI tutor in AlgeSpace helping high-school students solve systems of linear equations. " +
+                   "Rules: NEVER give the full answer — only short hints (2-3 sentences) for the next step. " +
+                   "Be warm and encouraging. Ignore off-topic questions politely. " +
+                   langInstruction;
+        }
 
         [HttpPost("flexibility")]
         public async Task<ActionResult<FlexibilityChatResponse>> Chat([FromBody] FlexibilityChatRequest request)
@@ -56,7 +65,7 @@ namespace webapi.Controllers
                 // systemInstruction keeps the system prompt out of the main token budget
                 systemInstruction = new
                 {
-                    parts = new[] { new { text = BuildSystemPrompt(request.BuddyName) } }
+                    parts = new[] { new { text = BuildSystemPrompt(request.BuddyName, request.Language) } }
                 },
                 contents,
                 generationConfig = new

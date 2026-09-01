@@ -24,6 +24,9 @@ namespace webapi.Models.Chat
 
         /// <summary>The display name of the active buddy character (e.g. "Master Zen").</summary>
         public string BuddyName { get; set; } = "Pippin";
+
+        /// <summary>BCP-47 language code selected by the student (e.g. "en", "de", "ja").</summary>
+        public string Language { get; set; } = "en";
     }
 
     public class FlexibilityChatResponse

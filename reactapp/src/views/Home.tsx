@@ -32,16 +32,16 @@ export default function Home(): ReactElement {
                         <span className={"homepage__student-badge-name"}>{student.username}</span>
                         {onboardingStep === "complete" ? (
                             <Link className={"homepage__student-badge-action"} to={Paths.StudentDashboardPath}>
-                                Dashboard
+                                {t("home-dashboard")}
                             </Link>
                         ) : (
                             <Link className={"homepage__student-badge-action"} to={Paths.OnboardingResumePath}>
-                                Continue Tutorial
+                                {t("home-continue-tutorial")}
                             </Link>
                         )}
                         <button
                             className={"homepage__student-badge-logout"}
-                            title="Logout"
+                            title={t("home-logout")}
                             onClick={() => logoutStudent()}
                         >
                             <FontAwesomeIcon icon={faRightFromBracket} />
@@ -49,7 +49,7 @@ export default function Home(): ReactElement {
                     </div>
                 ) : (
                     <Link className={"link"} to={Paths.StudentLoginPath}>
-                        Login
+                        {t("home-login")}
                     </Link>
                 )}
                

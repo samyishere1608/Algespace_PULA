@@ -40,29 +40,36 @@ export function persistActiveBuddyId(studentId: number | string, buddyId: string
     localStorage.setItem(activeBuddyKey(studentId), buddyId);
 }
 
-// ── Coin wallet (separate from XP so spending doesn't affect rank) ────────────
-const coinsKey = (studentId: number | string) => `algespace_coins_${studentId}`;
+// ── Agency wallet helpers (unlocks are milestone-based, never spend) ─────────
 
-export function getCoins(studentId: number | string): number {
-    const val = parseInt(localStorage.getItem(coinsKey(studentId)) ?? "0", 10);
-    if (isNaN(val)) {
-        // Corrupted value (e.g. "NaN" written by a previous bug) — reset to 0
-        localStorage.setItem(coinsKey(studentId), "0");
-        return 0;
+export type AgencyWallet = "choice" | "insight" | "resolve";
+
+export interface AgencyWallets {
+    choiceXP: number;
+    insightXP: number;
+    resolveXP: number;
+}
+
+/** Softer unlock thresholds (outfits + buddies) — calibrated to real earning
+ *  rates so milestones stay reachable. Deliberately gentler than the Growth
+ *  Tree, which is a long-term visual and keeps its own scale. */
+export const AGENCY_LEVEL_THRESHOLDS = [0, 50, 100, 150, 250, 400];
+
+export function getAgencyLevel(xp: number): number {
+    let level = 0;
+    for (let i = 0; i < AGENCY_LEVEL_THRESHOLDS.length; i++) {
+        if (xp >= AGENCY_LEVEL_THRESHOLDS[i]) level = i;
+        else break;
     }
-    return val;
+    return level;
 }
 
-export function addCoins(studentId: number | string, amount: number): number {
-    const newTotal = getCoins(studentId) + amount;
-    localStorage.setItem(coinsKey(studentId), String(newTotal));
-    return newTotal;
-}
+export const WALLET_META: Record<AgencyWallet, { color: string; labelKey: string }> = {
+    choice: { color: "#ffd166", labelKey: "agency-choice" },
+    insight: { color: "#06d6a0", labelKey: "agency-insight" },
+    resolve: { color: "#ef476f", labelKey: "agency-resolve" },
+};
 
-export function spendCoins(studentId: number | string, amount: number): number {
-    const current = getCoins(studentId);
-    if (current < amount) throw new Error("Not enough coins");
-    const newTotal = current - amount;
-    localStorage.setItem(coinsKey(studentId), String(newTotal));
-    return newTotal;
+export function getWalletXp(wallets: AgencyWallets, wallet: AgencyWallet): number {
+    return wallet === "choice" ? wallets.choiceXP : wallet === "insight" ? wallets.insightXP : wallets.resolveXP;
 }

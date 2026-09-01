@@ -11,6 +11,7 @@ import general from "@translations/de/general.json";
 import study from "@translations/de/study.json";
 import substitution from "@translations/de/substitution.json";
 import variables from "@translations/de/variables.json";
+import student from "@translations/de/student.json";
 import aboutJA from "@translations/ja/about.json";
 import eliminationJA from "@translations/ja/elimination.json";
 import equalizationJA from "@translations/ja/equalization.json";
@@ -20,6 +21,7 @@ import generalJA from "@translations/ja/general.json";
 import studyJA from "@translations/ja/study.json";
 import substitutionJA from "@translations/ja/substitution.json";
 import variablesJA from "@translations/ja/variables.json";
+import studentJA from "@translations/ja/student.json";
 import aboutEN from "@translations/en/about.json";
 import eliminationEN from "@translations/en/elimination.json";
 import equalizationEN from "@translations/en/equalization.json";
@@ -29,6 +31,7 @@ import generalEN from "@translations/en/general.json";
 import studyEN from "@translations/en/study.json";
 import substitutionEN from "@translations/en/substitution.json";
 import variablesEN from "@translations/en/variables.json";
+import studentEN from "@translations/en/student.json";
 
 export enum Language {
     DE = "de",
@@ -51,7 +54,8 @@ export enum TranslationNamespaces {
     Substitution = "substitution",
     Variables = "variables",
     Study = "study",
-    Flexibility = "flexibility"
+    Flexibility = "flexibility",
+    Student = "student"
 }
 
 i18n.use(Backend)
@@ -80,7 +84,8 @@ i18n.use(Backend)
                 variables: variablesJA,
                 study: studyJA,
                 about: aboutJA,
-                flexibility: flexibilityJA
+                flexibility: flexibilityJA,
+                student: studentJA
             },
             en: {
                 general: generalEN,
@@ -91,7 +96,8 @@ i18n.use(Backend)
                 variables: variablesEN,
                 study: studyEN,
                 about: aboutEN,
-                flexibility: flexibilityEN
+                flexibility: flexibilityEN,
+                student: studentEN
             },
             de: {
                 general,
@@ -102,13 +108,16 @@ i18n.use(Backend)
                 variables,
                 study,
                 about,
-                flexibility
+                flexibility,
+                student
             }
         }
     });
 
 export default i18n;
 
+/** Returns the current language only if the backend supports it; otherwise falls back to "en". */
 export function getCurrentLanguage(): string {
-    return i18n.language;
+    const BACKEND_SUPPORTED = ["de", "en", "ja"];
+    return BACKEND_SUPPORTED.includes(i18n.language) ? i18n.language : "en";
 }

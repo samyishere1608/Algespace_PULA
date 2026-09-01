@@ -93,6 +93,41 @@
         font-size: 2.8rem;
         line-height: 1;
         filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+        width: 110px;
+        height: 110px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &--solo {
+            font-size: 3.8rem;
+            color: #ffd54f;
+        }
+    }
+
+    &__character-preview {
+        width: 110px;
+        height: 110px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 3px solid rgba(33, 158, 188, 0.5);
+        background: rgba(2, 48, 71, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.3rem;
+        box-shadow: 0 4px 16px rgba(33, 158, 188, 0.25);
+    }
+
+    &__character-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    &__character-fallback {
+        font-size: 2.5rem;
+        color: rgba(33, 158, 188, 0.7);
     }
 
     &__bonus {

@@ -2,6 +2,8 @@ import useAxios from "axios-hooks";
 import { plainToClass } from "class-transformer";
 import { ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { TranslationNamespaces } from "@/i18n.ts";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { BarteringExercise as BarteringExerciseProps } from "@/types/substitution/bartering/barteringExercise.ts";
 import { ErrorTranslations } from "@/types/shared/errorTranslations.ts";
@@ -28,6 +30,7 @@ export default function OnboardingBarteringExercise(): ReactElement {
 function Exercise({ exerciseId }: { exerciseId: number }): ReactElement {
     const navigate = useNavigate();
     const { student } = useAuth();
+    const { t } = useTranslation(TranslationNamespaces.Student);
 
     const [{ data, loading, error }] = useAxios(getPathToExercise(Paths.BarteringGamePath, exerciseId));
     const [{ data: eqData, loading: eqLoading }] = useAxios(getPathToExercises(Paths.EqualizationGamePath));
@@ -48,8 +51,8 @@ function Exercise({ exerciseId }: { exerciseId: number }): ReactElement {
 
     const overlay = (
         <OnboardingProgressOverlay
-            message="Great work! Now let's learn about the Equalization method."
-            buttonText="Continue to Equalization"
+            message={t("onboarding-bartering-message")}
+            buttonText={t("onboarding-bartering-cta")}
             disabled={eqLoading}
             onContinue={() => {
                 if (student) setOnboardingStep(student.id, "equalization");
