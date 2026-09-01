@@ -1,7 +1,7 @@
 import axios from "axios";
 import { addAccuracyEntry } from "./goalUtils";
 
-const BACKEND = "http://localhost:7273";
+const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
 const SEED_FLAG_PREFIX = "demo_seeded_";
 

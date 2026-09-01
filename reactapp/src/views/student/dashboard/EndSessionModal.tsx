@@ -6,7 +6,7 @@ import { TranslationNamespaces } from "@/i18n.ts";
 import { requestReflection } from "@utils/goalUtils.ts";
 import axios from "axios";
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:7273";
+const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
 interface Props {
     studentId: number | string;

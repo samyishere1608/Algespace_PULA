@@ -1,7 +1,7 @@
 import { AgentType, CompletedDemo } from "@/types/flexibility/enums.ts";
 import axios from "axios";
 
-const BACKEND = "http://localhost:7273";
+const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
 export type OnboardingStep = "bartering" | "equalization" | "elimination" | "complete";
 

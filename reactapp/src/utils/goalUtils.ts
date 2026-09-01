@@ -1,7 +1,7 @@
 import axios from "axios";
 import { StudyGoal, ALL_STUDY_GOALS } from "@views/student/dashboard/SetStudyPlanModal.tsx";
 
-const BACKEND = "http://localhost:7273";
+const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
 // ── Per-exercise Pippin counter ───────────────────────────────────────────────
 const PIPPIN_COUNT_KEY = "pippin_exercise_count";
