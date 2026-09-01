@@ -1,4 +1,4 @@
-import { AgentType, CompletedDemo } from "@/types/flexibility/enums.ts";
+import { AgentType, CompletedDemo, Method } from "@/types/flexibility/enums.ts";
 import axios from "axios";
 
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
@@ -37,6 +37,25 @@ function syncExerciseToBackend(studentId: number, category: string, exerciseKey:
             exerciseId: String(exerciseId),
         }).catch(() => { /* non-critical */ });
     } catch { /* silent */ }
+}
+
+// ── Flexibility solving-method choice ──────────────────────────────────────
+// Maps the method a student chose/used in a flexibility exercise to the key the
+// analytics "solving methods" chart reads (elimination / equalization / substitution).
+const FLEXIBILITY_METHOD_KEYS: Record<Method, string> = {
+    [Method.Equalization]: "equalization",
+    [Method.Substitution]: "substitution",
+    [Method.Elimination]: "elimination",
+};
+
+export function logFlexibilityMethodChoice(method: Method | undefined, exerciseId: number | string): void {
+    if (method === undefined) return;
+    const key = FLEXIBILITY_METHOD_KEYS[method];
+    if (!key) return;
+    const studentId = getCurrentStudentId();
+    if (studentId) {
+        syncExerciseToBackend(studentId, "flexibility", key, exerciseId);
+    }
 }
 
 export function getOnboardingStep(studentId: number): OnboardingStep | null {

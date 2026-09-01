@@ -37,7 +37,7 @@ import {
     FlexibilityStudyExerciseType
 } from "@/types/studies/enums.ts";
 import useFlexibilityTracker from "@hooks/useFlexibilityTracker.ts";
-import {getRandomAgent, setFlexibilityStudyExerciseCompleted, setPKExerciseCompleted} from "@utils/storageUtils.ts";
+import {getRandomAgent, setFlexibilityStudyExerciseCompleted, setPKExerciseCompleted, logFlexibilityMethodChoice} from "@utils/storageUtils.ts";
 import {PippinChat} from "@components/flexibility/PippinChat.tsx";
 import {equationToString} from "@utils/equationUtils.ts";
 
@@ -565,6 +565,7 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
             setFlexibilityStudyExerciseCompleted(studyId as number, flexibilityExerciseId);
         } else {
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
+            logFlexibilityMethodChoice(selectedMethod, flexibilityExerciseId);
         }
         handleEnd();
     }

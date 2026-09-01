@@ -3,7 +3,7 @@ import { Fragment, ReactElement, useMemo, useState } from "react";
 import { PippinChat } from "@components/flexibility/PippinChat.tsx";
 import { equationToString } from "@utils/equationUtils.ts";
 import { MatchingExercise as MatchingExerciseProps } from "@/types/flexibility/matchingExercise.ts";
-import { getRandomAgent, setPKExerciseCompleted, setFlexibilityStudyExerciseCompleted } from "@utils/storageUtils.ts";
+import { getRandomAgent, setPKExerciseCompleted, setFlexibilityStudyExerciseCompleted, logFlexibilityMethodChoice } from "@utils/storageUtils.ts";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { GameError, GameErrorType } from "@/types/shared/error.ts";
 import useFlexibilityTracker from "@hooks/useFlexibilityTracker.ts";
@@ -369,6 +369,7 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
             setFlexibilityStudyExerciseCompleted(studyId as number, flexibilityExerciseId);
         } else {
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
+            logFlexibilityMethodChoice(exercise.method, flexibilityExerciseId);
         }
         handleEnd();
     }

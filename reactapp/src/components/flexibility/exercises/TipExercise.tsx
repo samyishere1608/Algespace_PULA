@@ -15,7 +15,7 @@ import { useAuth } from "@/contexts/AuthProvider.tsx";
 import useFlexibilityTracker from "@hooks/useFlexibilityTracker.ts";
 import { IUser } from "@/types/studies/user.ts";
 import { FlexibilityExerciseActionPhase, FlexibilityExerciseChoicePhase, FlexibilityExercisePhase, FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
-import { getRandomAgent, setPKExerciseCompleted, setFlexibilityStudyExerciseCompleted } from "@utils/storageUtils.ts";
+import { getRandomAgent, setPKExerciseCompleted, setFlexibilityStudyExerciseCompleted, logFlexibilityMethodChoice } from "@utils/storageUtils.ts";
 import { OptionalExercise } from "@components/flexibility/choice/OptionalExercise.tsx";
 import { TipExercise as TipExerciseProps } from "@/types/flexibility/tipExercise.ts";
 
@@ -244,6 +244,7 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
             setFlexibilityStudyExerciseCompleted(studyId as number, flexibilityExerciseId);
         } else {
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
+            logFlexibilityMethodChoice(exercise.method, flexibilityExerciseId);
         }
         handleEnd();
     }

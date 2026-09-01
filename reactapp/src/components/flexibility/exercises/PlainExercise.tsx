@@ -33,7 +33,7 @@ import {
     FlexibilityStudyExerciseType
 } from "@/types/studies/enums.ts";
 import useFlexibilityTracker from "@hooks/useFlexibilityTracker.ts";
-import {getRandomAgent, setFlexibilityStudyExerciseCompleted, setPKExerciseCompleted} from "@utils/storageUtils.ts";
+import {getRandomAgent, setFlexibilityStudyExerciseCompleted, setPKExerciseCompleted, logFlexibilityMethodChoice} from "@utils/storageUtils.ts";
 import {EfficiencyExerciseEnd} from "@components/flexibility/solution/EfficiencyExerciseEnd.tsx";
 import {PlainExercise as PlainExerciseProps} from "@/types/flexibility/plainExercise.ts";
 
@@ -339,6 +339,7 @@ export function PlainExercise({ flexibilityExerciseId, exercise, condition, hand
             setFlexibilityStudyExerciseCompleted(studyId as number, flexibilityExerciseId);
         } else {
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
+            logFlexibilityMethodChoice(selectedMethod, flexibilityExerciseId);
         }
         handleEnd();
     }

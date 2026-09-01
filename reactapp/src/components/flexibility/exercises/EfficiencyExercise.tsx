@@ -36,7 +36,7 @@ import {
     FlexibilityStudyExerciseType
 } from "@/types/studies/enums.ts";
 import {EliminationParameters} from "@/types/flexibility/eliminationParameters.ts";
-import {getRandomAgent, setFlexibilityStudyExerciseCompleted, setPKExerciseCompleted} from "@utils/storageUtils.ts";
+import {getRandomAgent, setFlexibilityStudyExerciseCompleted, setPKExerciseCompleted, logFlexibilityMethodChoice} from "@utils/storageUtils.ts";
 
 export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition, handleEnd, isStudy = false, studyId }: {
     flexibilityExerciseId: number,
@@ -396,6 +396,7 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
             setFlexibilityStudyExerciseCompleted(studyId as number, flexibilityExerciseId);
         } else {
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
+            logFlexibilityMethodChoice(selectedMethod, flexibilityExerciseId);
         }
         handleEnd();
     }
