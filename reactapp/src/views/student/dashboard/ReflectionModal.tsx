@@ -67,6 +67,19 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     async function handleAnswer(mode: "self" | "pippin"): Promise<void> {
         if (loading) return;
         setLoading(true);
+        // ── Debug log: what we send to the backend ───────────────────────
+        console.log("[Reflection] SEND", JSON.stringify({
+            studentId,
+            queueItemId: item.id,
+            question,
+            mode,
+            answer: mode === "self" ? answer : "(pippin model answer)",
+            itemLabel: item.itemLabel,
+            itemMethod: item.method,
+            itemErrors: item.errors,
+            itemHints: item.hints,
+            itemPippinMessages: item.pippinMessages,
+        }, null, 2));
         try {
             const result = await evaluateReflection(
                 studentId,
@@ -76,6 +89,13 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 mode === "self" ? answer : "",
                 i18n.language?.slice(0, 2) ?? "en"
             );
+            // ── Debug log: what the backend/AI decided ───────────────────
+            console.log("[Reflection] RESULT", JSON.stringify({
+                feedback: result.feedback,
+                aligned: result.aligned,
+                insightXp: result.insightXp,
+                nextStep: result.nextStep,
+            }, null, 2));
             setFeedback(result.feedback);
             setNextStep(result.nextStep ?? "");
             setEarnedInsight(result.insightXp ?? 0);

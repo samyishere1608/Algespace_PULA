@@ -1291,6 +1291,7 @@ RULES:
                 });
 
             var weakness = ComputeWeakness(conn, request.StudentId);
+            Console.WriteLine($"[Reflection] Evaluate — student={request.StudentId}, itemId={request.QueueItemId}, label=\"{item.ItemLabel}\", type={item.ItemType}, method={item.Method}, errors={item.Errors}, hints={item.Hints}, pippin={item.PippinMessages}, Q={request.QuestionNumber}, mode={request.Mode}, answer=\"{request.Answer}\"");
 
             // Last 2 history turns for context (oldest → newest)
             var history = conn.Query<ReflectionHistoryRecord>(
@@ -1303,6 +1304,7 @@ RULES:
                 : "(none)";
 
             var fallback = BuildReflectionFallback(request, item, weakness);
+            Console.WriteLine($"[Reflection] Fallback ready — errors={item.Errors}, hints={item.Hints} (fallback: aligned={fallback.Aligned}, insight={fallback.InsightXp})");
 
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -1325,11 +1327,27 @@ RULES:
                 using var doc = JsonDocument.Parse(raw.Substring(jsonStart, jsonEnd - jsonStart + 1));
                 var root = doc.RootElement;
                 var feedback = root.TryGetProperty("feedback", out var fb) ? fb.GetString() ?? "" : fallback.Feedback;
-                var aligned = root.TryGetProperty("aligned", out var al) && al.GetBoolean();
-                var insightXp = root.TryGetProperty("insightXp", out var xp) && xp.TryGetInt32(out var xpVal)
-                    ? Math.Clamp(xpVal, 0, 3)
-                    : 0;
+
+                // GPT occasionally returns booleans/integers as strings — parse leniently.
+                bool aligned = false;
+                if (root.TryGetProperty("aligned", out var al))
+                {
+                    if (al.ValueKind == JsonValueKind.True) aligned = true;
+                    else if (al.ValueKind == JsonValueKind.False) aligned = false;
+                    else if (al.ValueKind == JsonValueKind.String) bool.TryParse(al.GetString(), out aligned);
+                }
+
+                int insightXp = 0;
+                if (root.TryGetProperty("insightXp", out var xp))
+                {
+                    if (xp.ValueKind == JsonValueKind.Number && xp.TryGetInt32(out var xpNum)) insightXp = xpNum;
+                    else if (xp.ValueKind == JsonValueKind.String && int.TryParse(xp.GetString(), out var xpStr)) insightXp = xpStr;
+                }
+                insightXp = Math.Clamp(insightXp, 0, 3);
+
                 var nextStep = root.TryGetProperty("nextStep", out var ns) ? ns.GetString() ?? "" : "";
+
+                Console.WriteLine($"[Reflection] AI result — aligned={aligned}, insightXp={insightXp}, feedback=\"{feedback}\", nextStep=\"{nextStep}\"");
 
                 return Ok(new ReflectionEvaluateResponse
                 {
@@ -1478,9 +1496,15 @@ Instructions:
 {langInstruction}
 TONE (very important): Be warm, brief and conversational — like a friend, not a report. NEVER say things like ""I saw on your performance..."", ""according to your data..."", or list their exact error/hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
 - If mode is 'Pippin told them': write a short friendly model answer AS Pippin, in your own words (no numbers), set aligned=false and insightXp=0.
-- If Q1 or Q2 and they answered themselves: decide whether their self-assessment ALIGNS with the actual performance. If aligned → insightXp=3 and give 1-2 warm celebrating sentences only. If not aligned → insightXp=0 and gently wonder with them in a conversational way (e.g. ""It felt easy to you? That's interesting — sometimes the tricky spots sneak up on us."") without quoting stats or scolding.
+- If Q1 or Q2 and they answered themselves: judge ALIGNMENT by whether their answer honestly acknowledges their actual performance:
+  * If errors+hints are 2 or more: they are ALIGNED whenever they mention making any mistakes/errors or difficulty (for example 'I made 2 errors' or 'it was a bit hard'). Even if they also say it felt 'fine' or 'good', mentioning the mistakes means they are ALIGNED → aligned=true, insightXp=3. Only mark NOT aligned if they clearly claim it was easy/perfect and mention no mistakes at all.
+  * If errors+hints are 0: they are ALIGNED if they say it felt easy/good/confident.
+  * For Q2 (method/decision): they are ALIGNED if their answer is specific and thoughtful — names the method they chose and reflects on it (e.g. 'I chose substitution and it felt right') — even though you cannot verify the correct method → aligned=true, insightXp=3.
+  If aligned → aligned=true, insightXp=3, with 1-2 warm celebrating sentences. If not → aligned=false, insightXp=0, and gently wonder with them (e.g. ""It felt easy to you? That's interesting — sometimes the tricky spots sneak up on us."") without quoting stats or scolding.
 - If Q3: ignore alignment. Generate ONE concrete, friendly next step targeting the weakest area and put it in nextStep. Set aligned=false, insightXp=0.
 - If the answer is gibberish/off-topic: warmly ask them to try again. aligned=false, insightXp=0.
+
+IMPORTANT: always include the ""aligned"" and ""insightXp"" keys with their exact boolean/integer values — never omit them and never quote the numbers as strings.
 
 Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insightXp"":0-3,""nextStep"":""...""}}";
         }
@@ -1517,9 +1541,9 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
 
             var answer = request.Answer?.ToLowerInvariant() ?? "";
             bool claimsStruggle = answer.Contains("hard") || answer.Contains("struggl") || answer.Contains("difficult")
-                || answer.Contains("mistake") || answer.Contains("hint") || answer.Contains("wrong");
+                || answer.Contains("mistake") || answer.Contains("error") || answer.Contains("wrong") || answer.Contains("hint");
             bool claimsEasy = answer.Contains("easy") || answer.Contains("good") || answer.Contains("great")
-                || answer.Contains("well") || answer.Contains("perfect");
+                || answer.Contains("well") || answer.Contains("perfect") || answer.Contains("fine");
             bool actuallyStruggled = (item.Errors + item.Hints) >= 2;
             bool aligned = (claimsStruggle && actuallyStruggled) || (claimsEasy && !actuallyStruggled);
 

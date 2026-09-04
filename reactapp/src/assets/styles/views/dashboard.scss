@@ -1576,6 +1576,100 @@
     }
 }
 
+/* ─── AI Mini-Plan Card ─────────────────────────────────────── */
+.ai-miniplan {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    margin: 0 0 0.9rem;
+    padding: 0.9rem 1rem;
+    background: linear-gradient(180deg, rgba(255, 193, 7, 0.14), rgba(255, 193, 7, 0.04));
+    border: 1px solid rgba(255, 193, 7, 0.32);
+    border-left: 3px solid #ffc107;
+    border-radius: 0.75rem;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    animation: fadeIn 0.2s ease;
+
+    &--nodata {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    &__header {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+    }
+
+    &__icon {
+        color: #ffc107;
+        font-size: 1rem;
+        margin-top: 0.1rem;
+        flex-shrink: 0;
+    }
+
+    &__title-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        flex: 1;
+        min-width: 0;
+    }
+
+    &__badge {
+        font-size: 0.58rem;
+        font-weight: 800;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #ffc107;
+    }
+
+    &__title {
+        font-size: 0.9rem;
+        font-weight: 800;
+        line-height: 1.3;
+        color: #fff;
+    }
+
+    &__narrative {
+        font-size: 0.78rem;
+        line-height: 1.55;
+        color: rgba(255, 255, 255, 0.85);
+        margin: 0;
+    }
+
+    &__body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    &__footer {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #ffe08a;
+    }
+
+    &__dismiss {
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.45);
+        cursor: pointer;
+        font-size: 0.85rem;
+        padding: 0.15rem;
+        flex-shrink: 0;
+        transition: color 0.15s;
+
+        &:hover {
+            color: #fff;
+        }
+
+        &:focus-visible {
+            outline: 2px solid #ffc107;
+            outline-offset: 2px;
+        }
+    }
+}
+
 /* ─── Study Plan Goal Row ────────────────────────────────────── */
 .goal-row {
     display: flex;
@@ -2199,6 +2293,141 @@
     }
 }
 
+/* ─── Character Unlock Popup ─────────────────────────────────── */
+.char-unlock-backdrop {
+    align-items: center;
+    justify-content: center;
+}
+
+.char-unlock {
+    position: relative;
+    width: min(380px, 92vw);
+    max-height: calc(100vh - 3rem);
+    overflow-y: auto;
+    background: linear-gradient(180deg, #0b3d5c, #06283b);
+    border: 1px solid var(--char-color, rgba(33, 158, 188, 0.35));
+    border-radius: 1.25rem;
+    padding: 2rem 1.5rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.55rem;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 32px color-mix(in srgb, var(--char-color, #219ebc) 35%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    animation: charUnlockPop 0.35s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+
+    &__close {
+        position: absolute;
+        top: 0.7rem;
+        right: 0.7rem;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.7);
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        transition: background 0.15s, color 0.15s;
+
+        &:hover {
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--char-color, var(--primary-blue));
+            outline-offset: 2px;
+        }
+    }
+
+    &__img {
+        width: 9rem;
+        height: 9rem;
+        object-fit: contain;
+        object-position: center;
+        filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.55));
+        animation: charUnlockFloat 2.4s ease-in-out infinite;
+    }
+
+    &__emoji {
+        font-size: 5rem;
+        line-height: 1;
+        animation: charUnlockFloat 2.4s ease-in-out infinite;
+    }
+
+    &__title {
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: var(--char-color, #8ecae6);
+        margin-top: 0.4rem;
+    }
+
+    &__name {
+        font-size: 1.6rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        color: #fff;
+    }
+
+    &__greeting {
+        font-size: 0.95rem;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.82);
+    }
+
+    &__btn {
+        margin-top: 0.75rem;
+        padding: 0.65rem 2.2rem;
+        border-radius: 2rem;
+        border: 1px solid var(--char-color, #219ebc);
+        background: color-mix(in srgb, var(--char-color, #219ebc) 24%, #012638);
+        color: #fff;
+        font-size: 0.85rem;
+        font-weight: 800;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        cursor: pointer;
+        box-shadow: 0 0 16px color-mix(in srgb, var(--char-color, #219ebc) 45%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        transition: background 0.15s, transform 0.1s;
+
+        &:hover {
+            background: color-mix(in srgb, var(--char-color, #219ebc) 36%, #012638);
+            transform: translateY(-1px);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--char-color, #219ebc);
+            outline-offset: 2px;
+        }
+    }
+}
+
+@keyframes charUnlockPop {
+    from {
+        opacity: 0;
+        transform: scale(0.8) translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes charUnlockFloat {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-6px);
+    }
+}
+
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -2722,6 +2951,28 @@
     &:hover {
         animation: none;
         opacity: 1;
+    }
+}
+
+/* --- AI reason shown inside a goal row ------------------------ */
+.goal-row__ai-reason {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    font-size: 0.68rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 209, 102, 0.08);
+    border-left: 2px solid #ffd166;
+    border-radius: 0.3rem;
+    padding: 0.35rem 0.5rem;
+    margin-top: 0.25rem;
+
+    &-icon {
+        color: #ffd166;
+        font-size: 0.62rem;
+        margin-top: 0.16rem;
+        flex-shrink: 0;
     }
 }
 

@@ -114,6 +114,10 @@
   "dashboard-tier-expert": "エキスパート",
   "dashboard-tier-master": "マスター",
 
+  "char-unlock-title": "新しいキャラクターが解放されました！",
+  "char-unlock-greeting": "こんにちは、{{user}}さん！ わたしは{{character}}だよ！",
+  "char-unlock-btn": "やったー！",
+
   "shop-owned": "所有済み",
   "shop-equipped": "装備中 ✓",
   "shop-equip": "装備する",

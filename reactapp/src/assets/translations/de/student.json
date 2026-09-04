@@ -114,6 +114,10 @@
   "dashboard-tier-expert": "Experte",
   "dashboard-tier-master": "Meister",
 
+  "char-unlock-title": "Neuer Charakter freigeschaltet!",
+  "char-unlock-greeting": "Hallo {{user}}! Ich bin {{character}}!",
+  "char-unlock-btn": "Super!",
+
   "shop-owned": "Besessen",
   "shop-equipped": "Ausgerüstet ✓",
   "shop-equip": "Ausrüsten",

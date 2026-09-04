@@ -114,6 +114,10 @@
   "dashboard-tier-expert": "Expert",
   "dashboard-tier-master": "Master",
 
+  "char-unlock-title": "New Character Unlocked!",
+  "char-unlock-greeting": "Hi {{user}}! I am {{character}}!",
+  "char-unlock-btn": "Awesome!",
+
   "shop-owned": "Owned",
   "shop-equipped": "Equipped ✓",
   "shop-equip": "Equip",

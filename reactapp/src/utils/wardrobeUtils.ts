@@ -73,3 +73,24 @@ export const WALLET_META: Record<AgencyWallet, { color: string; labelKey: string
 export function getWalletXp(wallets: AgencyWallets, wallet: AgencyWallet): number {
     return wallet === "choice" ? wallets.choiceXP : wallet === "insight" ? wallets.insightXP : wallets.resolveXP;
 }
+
+// ── Character unlock announcements (one-time celebration popup) ────────────
+
+const announcedUnlockKey = (studentId: number | string) =>
+    `algespace_unlocked_announced_${studentId}`;
+
+export function getAnnouncedUnlocks(studentId: number | string): string[] {
+    try {
+        return JSON.parse(localStorage.getItem(announcedUnlockKey(studentId)) ?? "[]") as string[];
+    } catch {
+        return [];
+    }
+}
+
+export function markUnlockAnnounced(studentId: number | string, characterId: string): void {
+    const announced = getAnnouncedUnlocks(studentId);
+    if (!announced.includes(characterId)) {
+        announced.push(characterId);
+        localStorage.setItem(announcedUnlockKey(studentId), JSON.stringify(announced));
+    }
+}

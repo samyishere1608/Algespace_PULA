@@ -41,11 +41,12 @@ import dashboardVideo from "@images/Dashboardimage.mp4";
 import "@styles/views/dashboard.scss";
 import ChooseBuddyModal, { BUDDIES } from "./dashboard/ChooseBuddyModal.tsx";
 import SetStudyPlanModal, { ALL_STUDY_GOALS, StudyGoal } from "./dashboard/SetStudyPlanModal.tsx";
-import CharacterShopModal, { CHARACTER_CATALOGUE, resolveOutfitSrc } from "./dashboard/CharacterShopModal.tsx";
+import CharacterShopModal, { CHARACTER_CATALOGUE, resolveOutfitSrc, type CharacterDef } from "./dashboard/CharacterShopModal.tsx";
+import CharacterUnlockModal from "./dashboard/CharacterUnlockModal.tsx";
 import { DailyIntentionModal } from "./dashboard/DailyIntentionModal.tsx";
 import { EndSessionModal } from "./dashboard/EndSessionModal.tsx";
 import { ReflectionModal } from "./dashboard/ReflectionModal.tsx";
-import { getEquippedOutfitId, persistEquippedOutfitId, getActiveBuddyId, persistActiveBuddyId } from "@utils/wardrobeUtils.ts";
+import { getEquippedOutfitId, persistEquippedOutfitId, getActiveBuddyId, persistActiveBuddyId, getAgencyLevel, getWalletXp, getAnnouncedUnlocks, markUnlockAnnounced } from "@utils/wardrobeUtils.ts";
 import { fetchStudentProgress, getGoalProgress, setAISuggestedGoals, fetchWeakness, setWeaknessTargetType, WeaknessResponse, getAccuracyLast5, getAccuracyStats } from "@utils/goalUtils.ts";
 import type { StudentProgressData } from "@utils/goalUtils.ts";
 import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addInsightXP, addChoiceXP } from "@utils/agencyUtils.ts";
@@ -126,6 +127,9 @@ export default function StudentDashboard(): ReactElement {
     // ── End Session Reflection (Anchor 5.1) ───────────────────────────────────
     const [showEndSession, setShowEndSession] = useState(false);
 
+    // ── Character unlock celebration ─────────────────────────────────────────
+    const [unlockQueue, setUnlockQueue] = useState<CharacterDef[]>([]);
+
     useEffect(() => {
         if (!student) return;
 
@@ -192,6 +196,28 @@ export default function StudentDashboard(): ReactElement {
     const agencyWallets = { choiceXP: agency.choiceXP, insightXP: agency.insightXP, resolveXP: agency.resolveXP };
     const stats = { ...PLACEHOLDER_STATS, currentXP: totalAgency, exercisesCompleted, streakDays, ...getLevelInfo(totalAgency) };
     const leaderboard = PLACEHOLDER_LEADERBOARD;
+
+    // ── Newly unlocked characters — one-time celebration popup ──────────────
+    useEffect(() => {
+        if (!student) return;
+        const announced = getAnnouncedUnlocks(student.id);
+        const newly = CHARACTER_CATALOGUE.filter((c) => {
+            if (c.unlockLevel === 0) return false;          // starter buddy — no popup
+            if (announced.includes(c.id)) return false;     // already celebrated
+            const xp = getWalletXp(agencyWallets, c.unlockWallet);
+            return getAgencyLevel(xp) >= c.unlockLevel;
+        });
+        if (newly.length > 0) setUnlockQueue(newly);
+    }, [student, agency]);
+
+    const currentUnlock = unlockQueue[0];
+
+    function handleUnlockClose(): void {
+        if (currentUnlock && student) {
+            markUnlockAnnounced(student.id, currentUnlock.id);
+        }
+        setUnlockQueue((q) => q.slice(1));
+    }
 
     // ── Analytics computations ────────────────────────────────────────────────
     const avgAccuracy = student ? getAccuracyLast5(student.id) : 100;
@@ -386,6 +412,10 @@ export default function StudentDashboard(): ReactElement {
     }
 
     function handleSkipIntention(): void {
+        if (student) {
+            // Persist a "skipped" marker so the popup doesn't re-appear on every reload
+            setDailyIntention(student.id, "skip");
+        }
         setShowDailyIntention(false);
     }
 
@@ -980,6 +1010,13 @@ export default function StudentDashboard(): ReactElement {
                     buddyImgSrc={buddyImgSrc}
                     onSelectPlan={handleDailyIntention}
                     onSkip={handleSkipIntention}
+                />
+            )}
+            {currentUnlock && student && (
+                <CharacterUnlockModal
+                    character={currentUnlock}
+                    userName={student.username ?? "Student"}
+                    onClose={handleUnlockClose}
                 />
             )}
             <AgencyXpToast />
