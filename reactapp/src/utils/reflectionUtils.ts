@@ -29,6 +29,8 @@ export interface ReflectionEvaluateResult {
     aligned: boolean;
     insightXp: number;
     nextStep: string;
+    /** True when the answer was off-topic and the student should rewrite it (no XP, not saved). */
+    needsRetry: boolean;
 }
 
 export async function fetchReflectionQueue(studentId: number): Promise<ReflectionQueueItem[]> {

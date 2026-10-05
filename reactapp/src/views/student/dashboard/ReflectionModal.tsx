@@ -1,4 +1,4 @@
-import { faArrowRight, faCheck, faLightbulb, faPen, faRobot, faSpinner, faTimes } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faCheck, faLightbulb, faPen, faRobot, faRotateRight, faSpinner, faTimes } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ReactElement, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,6 +23,21 @@ interface Props {
 
 type Phase = "answering" | "feedback";
 
+/**
+ * The second question is about the decision the student was working on, so a goal about comparing
+ * methods is asked about comparing methods rather than about choosing one.
+ *
+ * Keyed by the goal CATEGORY, which is what a goal reflection now stores in `itemId`.
+ */
+const Q2_KEY_BY_CATEGORY: Record<string, string> = {
+    selfExplanation: "reflection-q2-self-explanation",
+    methodComparison: "reflection-q2-method-comparison",
+    solveOnOwn: "reflection-q2-solve-on-own",
+};
+
+/** Exercise types whose whole point is the choice of method. */
+const DECISION_EXERCISE_TYPES = ["Suitability", "Efficiency", "Matching"];
+
 export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddyImgSrc, onAwardInsight, onClose }: Props): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
 
@@ -35,16 +50,32 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const [loading, setLoading] = useState(false);
     const [history, setHistory] = useState<ReflectionHistoryEntry[]>([]);
     const [earnedInsight, setEarnedInsight] = useState(0);
+    const [retryNotice, setRetryNotice] = useState("");
 
     const item = items[itemIndex];
     const totalQuestions = 3;
 
     const q2Key = useMemo(() => {
         if (!item) return "reflection-q2-generic";
-        const soloIds = ["choose-solo-once", "perfect-solo-session", "independence-champion"];
-        const decisionTypes = ["Suitability", "Efficiency", "Matching"];
-        if (item.itemType === "goal" && soloIds.includes(item.itemId)) return "reflection-q2-solo";
-        if (decisionTypes.includes(item.method)) return "reflection-q2-decision";
+
+        // A goal item carries its category in `itemId`, so the second question can be about the
+        // decision the student was actually working on rather than a generic one. The old
+        // hard-coded solo goal ids are gone: solo mode was removed with the free-text chat, so that
+        // branch could never fire again.
+        if (item.itemType === "goal") {
+            const byCategory = Q2_KEY_BY_CATEGORY[item.itemId];
+            if (byCategory) return byCategory;
+
+            // A method or exercise-type goal is about choosing, which is what the decision question
+            // asks. Hints and errors has no decision to ask about, so the generic question fits it
+            // better than the decision one.
+            return item.itemId === "method" || item.itemId === "exerciseType"
+                ? "reflection-q2-decision"
+                : "reflection-q2-generic";
+        }
+
+        // Exercise items carry the exercise type in `method`.
+        if (DECISION_EXERCISE_TYPES.includes(item.method)) return "reflection-q2-decision";
         return "reflection-q2-generic";
     }, [item]);
 
@@ -95,7 +126,18 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 aligned: result.aligned,
                 insightXp: result.insightXp,
                 nextStep: result.nextStep,
+                needsRetry: result.needsRetry,
             }, null, 2));
+
+            // An off-topic answer is not a reflection: do not grade it, do not award XP and do not
+            // record a turn. Stay in the answering phase so the student can rewrite it.
+            if (result.needsRetry) {
+                setRetryNotice(result.feedback);
+                setEarnedInsight(0);
+                return;
+            }
+
+            setRetryNotice("");
             setFeedback(result.feedback);
             setNextStep(result.nextStep ?? "");
             setEarnedInsight(result.insightXp ?? 0);
@@ -126,6 +168,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
+            setRetryNotice("");
             setPhase("answering");
             return;
         }
@@ -140,6 +183,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
+            setRetryNotice("");
             setPhase("answering");
         } else {
             onClose();
@@ -205,6 +249,12 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                             maxLength={400}
                             autoFocus
                         />
+                        {retryNotice && (
+                            <div className="reflection-modal__retry" role="status">
+                                <FontAwesomeIcon icon={faRotateRight} />
+                                <p>{retryNotice}</p>
+                            </div>
+                        )}
                         <div className="reflection-modal__actions">
                             <button
                                 className="button secondary-button"

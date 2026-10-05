@@ -1,0 +1,733 @@
+// Goal picker and the dashboard's active-goal cards.
+//
+// Only the pieces the goal feature introduces live here. The modal shell, the backdrop and the
+// footer buttons are the dashboard's existing `dash-modal` parts and are reused as-is, so this file
+// stays about goals rather than about modals.
+
+// One icon chip for the whole feature.
+//
+// A mixin rather than three hand-written copies, because the size, radius and tint of the mark are
+// the thing that makes the picker, the goal cards and the method cards read as one interface. Three
+// copies drift the moment one of them is touched.
+@mixin goal-icon-chip($size: 2.25rem, $glyph: 1rem) {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: $size;
+    height: $size;
+    border-radius: 0.6rem;
+    font-size: $glyph;
+    color: #8ecae6;
+    background-color: rgba(33, 158, 188, 0.16);
+    border: 1px solid rgba(33, 158, 188, 0.22);
+}
+
+.dash-modal.setgoals {
+    // Wider than the default modal, and wider than the shape of content alone would ask for. The
+    // chooser is a two-column grid whose descriptions are full sentences: at 380px they wrapped to
+    // four or five lines each and the whole thing read as a wall of text. Width is the cheapest fix
+    // — every line gets shorter without a single word being cut. `max-width` on `.dash-modal` still
+    // keeps it inside a narrow window.
+    width: 660px;
+
+    // Tighter frame than the shared modal, to give the body the room instead. The space between the
+    // cards is what should feel generous, not the margin around the panel.
+    padding: 1.4rem 1.5rem 1.5rem;
+
+    // The shared modal reserves 4rem of vertical margin, which is a lot to give up on a short window:
+    // the full chooser needs 574px, so at a 613px window the last row was clipped by 24px for the
+    // sake of 64px of unused backdrop. 2rem still floats it clear of the edges.
+    max-height: calc(100vh - 2rem);
+}
+
+.setgoals__body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    margin: 0 -0.5rem;
+    padding: 0 0.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(33, 158, 188, 0.25) transparent;
+
+    &::-webkit-scrollbar {
+        width: 5px;
+    }
+    &::-webkit-scrollbar-thumb {
+        background: rgba(33, 158, 188, 0.25);
+        border-radius: 3px;
+    }
+}
+
+// ── Already-chosen goals ──────────────────────────────────────────────────────
+
+.setgoals__active {
+    // A hairline under the goals they already have. This block is a different kind of content from
+    // the step below it — what you chose versus what you are choosing — and without the break the two
+    // ran together into one long column.
+    margin-bottom: 1.15rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.setgoals__section-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 0.5rem;
+}
+
+.setgoals__active-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.5rem;
+    background-color: rgba(33, 158, 188, 0.09);
+    border: 1px solid rgba(33, 158, 188, 0.22);
+    margin-bottom: 0.5rem;
+}
+
+.setgoals__active-icon {
+    color: #8ecae6;
+    font-size: 0.9rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.setgoals__active-label {
+    flex: 1 1 auto;
+    font-size: 0.78rem;
+    color: #e8f6fb;
+    line-height: 1.3;
+}
+
+.setgoals__remove {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.35rem;
+    border-radius: 0.35rem;
+    transition: color 0.15s, background-color 0.15s;
+
+    &:hover {
+        color: #ef476f;
+        background-color: rgba(239, 71, 111, 0.12);
+    }
+}
+
+// ── Category chooser ──────────────────────────────────────────────────────────
+
+.setgoals__categories {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+}
+
+// Below this the two columns stop being wider than they are tall, which is the whole point of the
+// layout — one column of full-width rows reads better than two cramped ones.
+@media (max-width: 560px) {
+    .setgoals__categories {
+        grid-template-columns: 1fr;
+    }
+}
+
+// Icon BESIDE the text, not above it. Stacked, every card was three or four lines tall and the grid
+// was a wall however much space sat between the cards; sideways, the same words take half the height
+// and the description gets the width to sit on two lines instead of three.
+.setgoals__category {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-align: left;
+    padding: 0.8rem 0.9rem;
+    border-radius: 0.6rem;
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    cursor: pointer;
+    // Deliberately no hover lift. A transform that moves the card under the cursor can leave the
+    // pointer on the edge and oscillate between states, and it gives the click target a moving
+    // bounding box for no gain in clarity — the border and fill already say "this is a button".
+    transition: border-color 0.15s, background-color 0.15s;
+
+    &:hover {
+        border-color: rgba(33, 158, 188, 0.6);
+        background-color: rgba(33, 158, 188, 0.12);
+    }
+}
+
+.setgoals__category-icon {
+    @include goal-icon-chip(1.9rem, 0.85rem);
+}
+
+.setgoals__category-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.setgoals__category-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.setgoals__category-desc {
+    font-size: 0.68rem;
+    line-height: 1.4;
+    // 45% white over this surface is about 4:1 — under the 4.5:1 floor for body text.
+    color: rgba(255, 255, 255, 0.55);
+}
+
+// ── Builder ───────────────────────────────────────────────────────────────────
+
+.setgoals__builder-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+}
+
+.setgoals__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0.2rem 0;
+
+    &:hover {
+        color: #8ecae6;
+    }
+}
+
+.setgoals__builder-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.setgoals__builder-icon {
+    color: #8ecae6;
+    font-size: 0.9rem;
+}
+
+.setgoals__builder-desc {
+    font-size: 0.7rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 1.15rem;
+}
+
+// ── Which exercises move this goal ───────────────────────────────────────────
+
+// A quiet panel, not a warning. Two of the six goals can only be worked on in some exercise types,
+// and the point is to tell the student which ones to pick — not to talk them out of the goal.
+.setgoals__where {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.7rem 0.8rem;
+    margin-bottom: 1.15rem;
+    border-radius: 0.6rem;
+    background-color: rgba(33, 158, 188, 0.08);
+    border: 1px solid rgba(33, 158, 188, 0.2);
+}
+
+.setgoals__where-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.setgoals__where-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.setgoals__where-type {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #8ecae6;
+    background-color: rgba(33, 158, 188, 0.18);
+    border: 1px solid rgba(33, 158, 188, 0.32);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+}
+
+.setgoals__where-note {
+    font-size: 0.7rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.62);
+}
+
+.setgoals__field {
+    margin-bottom: 1.15rem;
+}
+
+.setgoals__field-label {
+    display: block;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-bottom: 0.35rem;
+}
+
+.setgoals__options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.setgoals__option {
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+        border-color: rgba(33, 158, 188, 0.5);
+        color: #fff;
+    }
+
+    &--selected {
+        background-color: rgba(33, 158, 188, 0.28);
+        border-color: #219ebc;
+        color: #fff;
+    }
+}
+
+.setgoals__confirm {
+    width: 100%;
+    margin-top: 0.9rem;
+    padding: 0.6rem;
+    border-radius: 0.6rem;
+    border: none;
+    background: linear-gradient(135deg, #219ebc 0%, #126782 100%);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: filter 0.15s;
+
+    &:hover {
+        filter: brightness(1.12);
+    }
+}
+
+// ── Suggested plan ────────────────────────────────────────────────────────────
+
+// The whole of the AI step's content now, so it needs no bottom margin of its own.
+.setgoals__plan {
+    margin-bottom: 0;
+    padding: 0.9rem 0.95rem;
+    border-radius: 0.6rem;
+    background-color: rgba(255, 209, 102, 0.07);
+    border: 1px solid rgba(255, 209, 102, 0.28);
+}
+
+.setgoals__plan-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.3rem;
+}
+
+.setgoals__plan-icon {
+    color: #ffd166;
+    font-size: 0.85rem;
+}
+
+.setgoals__plan-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #ffe3a3;
+}
+
+.setgoals__plan-narrative {
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 0.6rem;
+}
+
+.setgoals__plan-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.45rem 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.setgoals__plan-row-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.setgoals__plan-row-label {
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.3;
+}
+
+.setgoals__plan-row-reason {
+    display: block;
+    font-size: 0.68rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.55);
+    margin-top: 0.1rem;
+}
+
+.setgoals__plan-take {
+    flex-shrink: 0;
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 0.45rem;
+    border: 1px solid rgba(33, 158, 188, 0.5);
+    background-color: rgba(33, 158, 188, 0.16);
+    color: #8ecae6;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+
+    &:hover:not(:disabled) {
+        background-color: rgba(33, 158, 188, 0.32);
+        color: #fff;
+    }
+
+    &:disabled {
+        border-color: rgba(255, 255, 255, 0.14);
+        background-color: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.35);
+        cursor: default;
+    }
+}
+
+// ── The first step: how to arrive at a goal ──────────────────────────────────
+
+// Two cards, both full width, neither pre-selected: the point of the step is the decision.
+.setgoals__methods {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.setgoals__method {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    width: 100%;
+    text-align: left;
+    padding: 1rem 1.1rem;
+    border-radius: 0.75rem;
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+
+    &:hover {
+        border-color: rgba(33, 158, 188, 0.6);
+        background-color: rgba(33, 158, 188, 0.12);
+    }
+}
+
+// The suggestion route is amber, the same as the panel it opens, so the card and the screen behind it
+// read as one path rather than two unrelated places.
+.setgoals__method--ai {
+    background-color: rgba(255, 209, 102, 0.06);
+    border-color: rgba(255, 209, 102, 0.28);
+
+    .setgoals__method-icon {
+        color: #ffd166;
+        background-color: rgba(255, 209, 102, 0.12);
+        border-color: rgba(255, 209, 102, 0.3);
+    }
+
+    &:hover {
+        border-color: rgba(255, 209, 102, 0.55);
+        background-color: rgba(255, 209, 102, 0.13);
+    }
+}
+
+.setgoals__method-icon {
+    @include goal-icon-chip;
+}
+
+.setgoals__method-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.setgoals__method-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.setgoals__method-desc {
+    font-size: 0.7rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+// ── The two inner steps ──────────────────────────────────────────────────────
+
+.setgoals__own,
+.setgoals__ai {
+    display: flex;
+    flex-direction: column;
+}
+
+// Each step's own back link. `align-self` because a flex column would otherwise stretch it.
+.setgoals__own > .setgoals__back,
+.setgoals__ai > .setgoals__back {
+    align-self: flex-start;
+    margin-bottom: 0.7rem;
+}
+
+.setgoals__ai-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.62);
+
+    &--failed {
+        border: 1px dashed rgba(255, 255, 255, 0.12);
+        border-radius: 0.75rem;
+    }
+}
+
+.setgoals__retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #ffd166;
+    background-color: rgba(255, 209, 102, 0.08);
+    border: 1px solid rgba(255, 209, 102, 0.3);
+    border-radius: 1.25rem;
+    padding: 0.45rem 0.95rem;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+
+    &:hover {
+        background-color: rgba(255, 209, 102, 0.16);
+        border-color: rgba(255, 209, 102, 0.5);
+    }
+}
+
+// ── Footer buttons ────────────────────────────────────────────────────────────
+//
+// "Fertig" closes the picker; it does not complete anything. Adding a goal is the action that does,
+// so the dismissal is drawn as a secondary button. Two full-width primaries stacked on each other
+// made the one that does nothing the loudest thing on screen.
+
+.dash-modal.setgoals .dash-modal__action-btn {
+    width: 100%;
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.82rem;
+    font-weight: 700;
+    border-radius: 0.6rem;
+    padding: 0.6rem;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.3);
+        color: #fff;
+    }
+}
+
+.dash-modal.setgoals .dash-modal__default-note {
+    font-size: 0.7rem;
+    line-height: 1.4;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+// The dismissal and its note sit closer together than the shared footer allows, so the body above
+// them gets the difference.
+.dash-modal.setgoals .dash-modal__footer {
+    margin-top: 0.6rem;
+    gap: 0.45rem;
+}
+
+// One visible focus ring for everything this feature adds. The dashboard removes the default outline
+// in places, and a keyboard user has to be able to see which control they are on — including inside
+// the modal, where the trap makes it easy to get lost.
+.goal-card__remove,
+.goals-empty__cta,
+.setgoals__method,
+.setgoals__category,
+.setgoals__option,
+.setgoals__confirm,
+.setgoals__back,
+.setgoals__remove,
+.setgoals__plan-take,
+.setgoals__retry,
+.dash-modal.setgoals .dash-modal__action-btn,
+.dashboard__section-header-cta--active-goals {
+    &:focus-visible {
+        outline: 2px solid #8ecae6;
+        outline-offset: 2px;
+    }
+}
+
+// ── Dashboard: active goal cards ──────────────────────────────────────────────
+
+// One goal per row, and the same three-part shape the KPI cards use: a tinted icon chip, the text,
+// then the value. A row of goals should read as part of the dashboard rather than as a list that was
+// dropped into it.
+.goals-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.goal-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.8rem 0.9rem;
+    background-color: rgba(1, 38, 56, 0.5);
+    border: 1px solid rgba(33, 158, 188, 0.16);
+    border-left: 3px solid #219ebc;
+    border-radius: 0.75rem;
+    transition: border-color 0.15s;
+
+    &:hover {
+        border-color: rgba(33, 158, 188, 0.34);
+    }
+}
+
+// The category mark. Decorative — the label beside it already names the goal — so it is hidden from
+// the accessibility tree and carries only the category's colour.
+.goal-card__icon {
+    @include goal-icon-chip;
+}
+
+.goal-card__body {
+    flex: 1 1 auto;
+    // Lets the label truncate instead of widening the row past its container.
+    min-width: 0;
+}
+
+.goal-card__label {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.35;
+    margin-bottom: 0.45rem;
+}
+
+.goal-card__progress-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+.goal-card__track {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 6px;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.goal-card__fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #219ebc 0%, #06d6a0 100%);
+    transition: width 0.4s ease;
+}
+
+// Never wraps: "0 / 5 Aufgaben" split over two lines reads as two separate facts.
+.goal-card__value {
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+// The reminder that this goal only advances in some exercise types. On the card rather than only in
+// the picker, because the moment it matters is when the student is choosing what to practise.
+// Rendered for the two restricted goals only, so the other four cards stay as they were.
+.goal-card__note {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.45rem;
+    font-size: 0.68rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.62);
+
+    svg {
+        flex-shrink: 0;
+        font-size: 0.7rem;
+        color: #8ecae6;
+    }
+}
+
+// A meaningful control, so it needs 3:1 against the card. The old 30% white was about 1.6:1 —
+// invisible until you happened to hover it.
+.goal-card__remove {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    background: none;
+    border: none;
+    border-radius: 0.5rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: color 0.15s, background-color 0.15s;
+
+    &:hover {
+        color: #ef476f;
+        background-color: rgba(239, 71, 111, 0.12);
+    }
+}

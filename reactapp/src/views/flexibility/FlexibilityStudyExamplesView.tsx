@@ -65,7 +65,7 @@ function ExerciseList({ completedExercises }: { completedExercises?: (number | s
                             {t(GeneralTranslations.NAV_EXERCISE)} {index + 1}
                         </p>
                         <p>{FlexibilityStudyExerciseType[entry.exerciseType]}</p>
-                        <p className={"exercise-list__status"}>{isCompleted ? t(GeneralTranslations.COMPLETED) : "To-Do"}</p>
+                        <p className={"exercise-list__status"}>{isCompleted ? t(GeneralTranslations.COMPLETED) : t(GeneralTranslations.TODO)}</p>
                         <FontAwesomeIcon className={"exercise-font"} icon={faChevronRight} />
                     </div>
                 );

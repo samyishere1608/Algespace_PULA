@@ -1,23 +1,50 @@
 using Dapper;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using webapi.Models.Analytics;
+using webapi.Models.Anchors;
 using webapi.Models.Database;
 using webapi.Models.Student;
+using webapi.Services;
 
 namespace webapi.Controllers
 {
     [ApiController]
     [Route("student-progress")]
-    public class StudentProgressController(IConfiguration configuration, IHttpClientFactory httpClientFactory) : ControllerBase
+    public class StudentProgressController(IConfiguration configuration, IHttpClientFactory httpClientFactory, IAnchorTrackingService anchors) : ControllerBase
     {
         private readonly IConfiguration _configuration = configuration;
         private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+
+        /// <summary>
+        /// The student's measured behaviour. Goal suggestion needs it because the useful thing to
+        /// suggest is almost always the thing they have been avoiding, and that is not visible in any
+        /// of the counters this controller keeps for itself.
+        /// </summary>
+        private readonly IAnchorTrackingService _anchors = anchors;
         // ── Ensure tables exist ───────────────────────────────────────────────
+
+        /// <summary>
+        /// Whether the schema has already been checked in this process.
+        ///
+        /// Running this DDL on every request was the single most expensive thing in the API. It is
+        /// roughly twenty statements, most of them `ALTER TABLE ADD COLUMN` for a column that already
+        /// exists, so most of them throw and are swallowed — and each one still takes a write lock on
+        /// the students database. On a read route that is pure cost, and under concurrent use every
+        /// request queues behind every other request's schema check.
+        ///
+        /// The statements are idempotent, so once per process is enough. This mirrors what
+        /// `AnchorStoreSettings.EnsureTables` has always done at startup, and the comment there says
+        /// exactly why — this controller was the one place that did not follow it.
+        /// </summary>
+        private static bool _schemaChecked;
 
         private static void EnsureTables(Microsoft.Data.Sqlite.SqliteConnection conn)
         {
+            if (_schemaChecked) return;
             conn.Execute(
                 $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.ProgressTable} " +
                 $"({StudentProgressDBSettings.ProgressScheme})");
@@ -40,6 +67,14 @@ namespace webapi.Controllers
                 $"({StudentProgressDBSettings.GoalsScheme})");
 
             conn.Execute(
+                $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.ActiveGoalsTable} " +
+                $"({StudentProgressDBSettings.ActiveGoalsScheme})");
+
+            conn.Execute(
+                $"CREATE INDEX IF NOT EXISTS IX_{StudentProgressDBSettings.ActiveGoalsTable}_Student " +
+                $"ON {StudentProgressDBSettings.ActiveGoalsTable} (StudentId)");
+
+            conn.Execute(
                 $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.ExerciseLogTable} " +
                 $"({StudentProgressDBSettings.ExerciseLogScheme})");
 
@@ -55,9 +90,32 @@ namespace webapi.Controllers
                 $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.ReflectionQueueTable} " +
                 $"({StudentProgressDBSettings.ReflectionQueueScheme})");
 
+            // What the student decided on the exercise, so the reflection can be graded against
+            // what actually happened rather than against a low error count the help itself produced.
+            // Safe to run repeatedly — the ALTER fails once the column exists.
+            try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionQueueTable} ADD COLUMN Decisions TEXT NOT NULL DEFAULT ''"); } catch { }
+
             conn.Execute(
                 $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.ReflectionHistoryTable} " +
                 $"({StudentProgressDBSettings.ReflectionHistoryScheme})");
+
+            // Only after every statement above has succeeded, so a partial failure is retried on the
+            // next request rather than leaving the schema permanently half-built.
+            _schemaChecked = true;
+        }
+
+        /// <summary>
+        /// Runs the schema check once at startup, so that no request ever pays for it.
+        ///
+        /// Without this the first burst of traffic would all find `_schemaChecked` still false and
+        /// every one of them would run the DDL — which is the cost this exists to avoid, just moved
+        /// to the busiest possible moment.
+        /// </summary>
+        public static void InitializeSchema()
+        {
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
         }
 
         /// <summary>
@@ -73,12 +131,13 @@ namespace webapi.Controllers
             int errors,
             int hints,
             int pippinMessages,
-            string method)
+            string method,
+            string decisions = "")
         {
             conn.Execute(
                 $"INSERT INTO {StudentProgressDBSettings.ReflectionQueueTable} " +
-                "(StudentId, ItemType, ItemId, ItemLabel, Status, Errors, Hints, PippinMessages, Method, CompletedAt) " +
-                "VALUES (@StudentId, @ItemType, @ItemId, @ItemLabel, 'pending', @Errors, @Hints, @PippinMessages, @Method, @CompletedAt)",
+                "(StudentId, ItemType, ItemId, ItemLabel, Status, Errors, Hints, PippinMessages, Method, Decisions, CompletedAt) " +
+                "VALUES (@StudentId, @ItemType, @ItemId, @ItemLabel, 'pending', @Errors, @Hints, @PippinMessages, @Method, @Decisions, @CompletedAt)",
                 new
                 {
                     StudentId = studentId,
@@ -89,6 +148,7 @@ namespace webapi.Controllers
                     Hints = hints,
                     PippinMessages = pippinMessages,
                     Method = method,
+                    Decisions = decisions ?? string.Empty,
                     CompletedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
                 });
 
@@ -170,9 +230,119 @@ namespace webapi.Controllers
             });
         }
 
-        // ── POST /student-progress/log-goal ──────────────────────────────────
+        // ── Active goals ─────────────────────────────────────────────────────
+        //
+        // The student's current goals live here and nowhere else. Every mutation returns the
+        // resulting list, so the client never has to guess what the server now holds and never has
+        // to re-read to find out — one round trip, one source of truth.
+
+        private static List<ActiveGoalRecord> ReadActiveGoals(Microsoft.Data.Sqlite.SqliteConnection conn, long studentId)
+            => conn.Query<ActiveGoalRecord>(
+                $"SELECT * FROM {StudentProgressDBSettings.ActiveGoalsTable} " +
+                "WHERE StudentId = @StudentId ORDER BY CreatedAt, Id",
+                new { StudentId = studentId }).AsList();
+
+        /// <summary>Puts a client timestamp into the form the goal code depends on.</summary>
+        private static string NormalizeGoalStamp(string? stamp)
+        {
+            if (DateTimeOffset.TryParse(stamp, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
+                return parsed.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss") + "Z";
+
+            return DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss") + "Z";
+        }
+
+        /// <summary>The student's current goals, oldest first.</summary>
+        [HttpGet("goals/{studentId:long}")]
+        public ActionResult<IReadOnlyList<ActiveGoalRecord>> GetActiveGoals(long studentId)
+        {
+            if (studentId <= 0) return BadRequest("Invalid student ID.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            return Ok(ReadActiveGoals(conn, studentId));
+        }
+
+        /// <summary>Sets a goal: adds it, or replaces the existing one with the same id.</summary>
+        [HttpPost("goals")]
+        public ActionResult<IReadOnlyList<ActiveGoalRecord>> SetActiveGoal([FromBody] SetActiveGoalRequest request)
+        {
+            if (request.StudentId <= 0 || string.IsNullOrWhiteSpace(request.Id) || string.IsNullOrWhiteSpace(request.Category))
+                return BadRequest("Invalid request.");
+
+            // A goal with no target can never be reached, and nothing about it can be measured, so it
+            // is refused rather than stored. The CATEGORY is deliberately not validated here: the
+            // catalogue belongs to the client, and pinning it server-side would mean a migration
+            // every time a category is renamed — the exact coupling this table avoids.
+            if (!(request.Target > 0))
+                return BadRequest("Target must be greater than zero.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            // CreatedAt is deliberately absent from the UPDATE branch. Progress is counted from the
+            // moment the goal was set, so re-saving a goal must not move its own start line: doing so
+            // would either erase work already counted, or let a student reset the clock at will.
+            conn.Execute(
+                $"INSERT INTO {StudentProgressDBSettings.ActiveGoalsTable} " +
+                "(StudentId, Id, Category, Focus, Metric, Target, Quality, MaxPerExercise, CreatedAt) " +
+                "VALUES (@StudentId, @Id, @Category, @Focus, @Metric, @Target, @Quality, @MaxPerExercise, @CreatedAt) " +
+                "ON CONFLICT(StudentId, Id) DO UPDATE SET Category = @Category, Focus = @Focus, " +
+                "Metric = @Metric, Target = @Target, Quality = @Quality, MaxPerExercise = @MaxPerExercise",
+                new
+                {
+                    request.StudentId,
+                    request.Id,
+                    request.Category,
+                    Focus = request.Focus ?? string.Empty,
+                    Metric = string.IsNullOrWhiteSpace(request.Metric) ? "exercises" : request.Metric,
+                    request.Target,
+                    Quality = request.Quality ?? string.Empty,
+                    request.MaxPerExercise,
+                    CreatedAt = NormalizeGoalStamp(request.CreatedAt)
+                });
+
+            return Ok(ReadActiveGoals(conn, request.StudentId));
+        }
+
         /// <summary>
-        /// Logs a goal completion, appends XP, and returns the new total XP.
+        /// Removes goals: one of them, or several at once.
+        ///
+        /// One route and one verb, deliberately. This project has no other DELETE endpoint and the
+        /// CORS policy allows only GET/PUT/POST, so a DELETE route here is unreachable from the
+        /// browser — which is exactly what happened when this was first written: the request was
+        /// refused in preflight and the goal silently stayed. Widening a production CORS policy for a
+        /// single call was not worth it, and removing one goal and clearing completed goals are the
+        /// same operation in any case.
+        /// </summary>
+        [HttpPost("goals/remove")]
+        public ActionResult<IReadOnlyList<ActiveGoalRecord>> RemoveActiveGoals([FromBody] RemoveActiveGoalsRequest request)
+        {
+            if (request.StudentId <= 0 || request.GoalIds.Count == 0)
+                return BadRequest("Invalid request.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            conn.Execute(
+                $"DELETE FROM {StudentProgressDBSettings.ActiveGoalsTable} " +
+                "WHERE StudentId = @StudentId AND Id IN @Ids",
+                new { request.StudentId, Ids = request.GoalIds });
+
+            return Ok(ReadActiveGoals(conn, request.StudentId));
+        }
+
+        // ── POST /student-progress/log-goal ────────────────────────────────
+        /// <summary>
+        /// Records a completed goal and queues it for reflection.
+        ///
+        /// The XP itself is awarded through the agency wallets, not here — this endpoint exists so the
+        /// completion has a durable record (for the "recently completed" list, the weekly XP chart
+        /// and the reflection queue) even if the student clears their browser storage.
         /// </summary>
         [HttpPost("log-goal")]
         public ActionResult<int> LogGoal([FromBody] LogGoalRequest request)
@@ -184,11 +354,12 @@ namespace webapi.Controllers
             conn.Open();
             EnsureTables(conn);
 
-            // Insert goal completion log
+            // PippinMessages is written as 0: the free-text AI chat was removed, so there is no longer
+            // any such thing to count. The column stays for the historical rows that have it.
             conn.Execute(
                 $"INSERT INTO {StudentProgressDBSettings.GoalsTable} " +
                 "(StudentId, GoalId, GoalLabel, XpEarned, ExerciseType, TotalErrors, TotalHints, PippinMessages, CompletedAt) " +
-                "VALUES (@StudentId, @GoalId, @GoalLabel, @XpEarned, @ExerciseType, @TotalErrors, @TotalHints, @PippinMessages, @CompletedAt)",
+                "VALUES (@StudentId, @GoalId, @GoalLabel, @XpEarned, @ExerciseType, @TotalErrors, @TotalHints, 0, @CompletedAt)",
                 new
                 {
                     request.StudentId,
@@ -198,7 +369,6 @@ namespace webapi.Controllers
                     request.ExerciseType,
                     request.TotalErrors,
                     request.TotalHints,
-                    request.PippinMessages,
                     CompletedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
                 });
 
@@ -210,7 +380,7 @@ namespace webapi.Controllers
 
             // Queue a reflection for this completed goal
             EnqueueReflection(conn, request.StudentId, "goal", request.GoalId, request.GoalLabel,
-                request.TotalErrors, request.TotalHints, request.PippinMessages, request.ExerciseType);
+                request.TotalErrors, request.TotalHints, 0, request.ExerciseType);
 
             var newTotal = conn.ExecuteScalar<int>(
                 $"SELECT TotalXP FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId = @StudentId",
@@ -286,7 +456,7 @@ namespace webapi.Controllers
             if (!string.IsNullOrWhiteSpace(request.ExerciseType))
             {
                 EnqueueReflection(conn, request.StudentId, "exercise", request.ExerciseType, request.ExerciseType,
-                    request.Errors, request.Hints, 0, request.ExerciseType);
+                    request.Errors, request.Hints, 0, request.ExerciseType, request.Decisions);
             }
 
             return Ok();
@@ -910,12 +1080,12 @@ Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"","
                         if (!validCategories.Contains(category))
                             category = "unclear";
 
-                        return Ok(new ReflectOnStatsResponse { Feedback = feedback.Trim(), Category = category });
+                        return Ok(new ReflectOnStatsResponse { Feedback = AiTextFormatter.StripMathDelimiters(feedback), Category = category });
                     }
                 }
                 catch { /* fall through to raw text */ }
 
-                return Ok(new ReflectOnStatsResponse { Feedback = rawText.Trim(), Category = "unclear" });
+                return Ok(new ReflectOnStatsResponse { Feedback = AiTextFormatter.StripMathDelimiters(rawText), Category = "unclear" });
             }
             catch
             {
@@ -932,10 +1102,16 @@ Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"","
         /// Uses Gemini to suggest 3 goals from the predefined catalogue based on
         /// the student's performance data. Each suggestion includes a one-line reason.
         /// For demo user "demo1", synthetic data is generated if no real data exists.
+        ///
+        /// `language` is the UI language. Everything this returns is prose the student reads in the
+        /// goal picker, so it has to arrive in their language — from the model via an instruction, and
+        /// from the rule-based fallback, which builds its own sentences server-side.
         /// </summary>
         [HttpPost("suggest-goals/{studentId}")]
-        public async Task<ActionResult<GoalPlanResponse>> SuggestGoals(long studentId)
+        public async Task<ActionResult<GoalPlanResponse>> SuggestGoals(long studentId, [FromQuery] string? language = null)
         {
+            var lang = GoalSuggestionText.Resolve(language);
+
             using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
             conn.Open();
             EnsureTables(conn);
@@ -974,7 +1150,8 @@ Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"","
             {
                 return Ok(new GoalPlanResponse
                 {
-                    PlanNarrative = "I don't have enough data yet to make personalized suggestions. Complete a few exercises first — any type you like!"
+                    PlanTitle = GoalSuggestionText.NoDataTitle(lang),
+                    PlanNarrative = GoalSuggestionText.NoDataNarrative(lang)
                 });
             }
 
@@ -982,14 +1159,21 @@ Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"","
                 .GroupBy(e => e.ExerciseType)
                 .ToDictionary(g => g.Key, g => g.Count());
 
+            // What the student actually does when offered something, which is the one input that makes
+            // a suggestion specific rather than generic. Null when their history is too thin, which is
+            // handled by the same "not enough data" path as a first suggestion.
+            var profile = _anchors.GetProfile(studentId);
+
+            var stats = BuildSuggestionStats(studentId, isDemo, progress, typeCounts, profile);
+
             // Try OpenAI first, fall back to rules if it fails
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (!string.IsNullOrWhiteSpace(apiKey))
             {
                 try
                 {
-                    var aiResult = await TryAISuggestions(apiKey, studentId, isDemo, progress, typeCounts);
-                    if (aiResult != null)
+                    var aiResult = await TryAISuggestions(apiKey, stats, language);
+                    if (aiResult != null && aiResult.Goals.Count > 0)
                         return Ok(aiResult);
                 }
                 catch
@@ -999,125 +1183,37 @@ Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"","
             }
 
             // Rule-based fallback (always works, no AI needed)
-            return Ok(GenerateFallbackPlan(progress, typeCounts));
+            return Ok(GenerateFallbackPlan(progress, typeCounts, profile, lang));
         }
 
         // ── AI suggestion helper ───────────────────────────────────────────────
 
-        private async Task<GoalPlanResponse?> TryAISuggestions(
-            string apiKey, long studentId, bool isDemo,
-            StudentProgressRecord progress, Dictionary<string, int> typeCounts)
+        private async Task<GoalPlanResponse?> TryAISuggestions(string apiKey, string statsSummary, string? language)
         {
-            var statsSummary = new StringBuilder();
-            statsSummary.AppendLine($"Student ID: {studentId}" + (isDemo ? " (demo user)" : ""));
-            statsSummary.AppendLine($"Exercises completed: {progress.ExercisesCompleted}");
-            statsSummary.AppendLine($"Streak: {progress.StreakDays} days");
-            statsSummary.AppendLine($"Agency XP — Choice: {progress.ChoiceXP}, Insight: {progress.InsightXP}, Resolve: {progress.ResolveXP}");
-            statsSummary.AppendLine("Exercise breakdown:");
-            foreach (var kv in typeCounts)
-                statsSummary.AppendLine($"  - {kv.Key}: {kv.Value} exercises");
-            if (typeCounts.Count == 0)
-                statsSummary.AppendLine("  (No exercises completed yet)");
 
-            // ── Compute weak area for personalized suggestions ──────────
-            int total = typeCounts.Values.Sum();
-            int suit = typeCounts.GetValueOrDefault("Suitability", 0);
-            int eff = typeCounts.GetValueOrDefault("Efficiency", 0);
-            int match = typeCounts.GetValueOrDefault("Matching", 0);
-
-            // Fetch average errors/hints/pippin from goal completions
-            double avgErrors = 0, avgHints = 0, avgPippin = 0;
-            if (total > 0)
-            {
-                using var conn2 = DBSettings.GetSQLiteConnectionForStudentsDB();
-                conn2.Open();
-                var goalStats = conn2.QueryFirstOrDefault<GoalCompletionStats>(
-                    $"SELECT COUNT(*) AS TotalGoalCompletions, " +
-                    $"COALESCE(AVG(TotalErrors), 0) AS AvgErrors, " +
-                    $"COALESCE(AVG(TotalHints), 0) AS AvgHints, " +
-                    $"COALESCE(AVG(PippinMessages), 0) AS AvgPippin " +
-                    $"FROM {StudentProgressDBSettings.GoalsTable} " +
-                    "WHERE StudentId = @StudentId", new { StudentId = studentId });
-                avgErrors = goalStats?.AvgErrors ?? 0;
-                avgHints = goalStats?.AvgHints ?? 0;
-                avgPippin = goalStats?.AvgPippin ?? 0;
-            }
-
-            int decisionScore = total > 0 ? (int)Math.Round((double)suit / total * 100) : 0;
-            int efficiencyScore = total > 0 ? (int)Math.Round((double)eff / total * 100) : 0;
-            int methodScore = total > 0 ? (int)Math.Round((double)match / total * 100) : 0;
-            int compScore = total > 0 ? Math.Max(0, 100 - (int)Math.Round(avgErrors * 20)) : 50;
-            int indepScore = total > 0 ? Math.Max(0, 100 - (int)Math.Round((avgHints + avgPippin) * 33)) : 50;
-            int consistencyScore = Math.Min(100, (int)Math.Round((double)(progress.StreakDays) / 7 * 100));
-
-            // Find weakest area (simple approach: lowest-scoring dimension)
-            string weakestArea;
-            int weakestScore;
-            if (decisionScore <= efficiencyScore && decisionScore <= methodScore && decisionScore <= compScore && decisionScore <= indepScore && decisionScore <= consistencyScore)
-                { weakestArea = "Decision Accuracy"; weakestScore = decisionScore; }
-            else if (efficiencyScore <= methodScore && efficiencyScore <= compScore && efficiencyScore <= indepScore && efficiencyScore <= consistencyScore)
-                { weakestArea = "Efficiency Judgment"; weakestScore = efficiencyScore; }
-            else if (methodScore <= compScore && methodScore <= indepScore && methodScore <= consistencyScore)
-                { weakestArea = "Method Recognition"; weakestScore = methodScore; }
-            else if (compScore <= indepScore && compScore <= consistencyScore)
-                { weakestArea = "Computational Skill"; weakestScore = compScore; }
-            else if (indepScore <= consistencyScore)
-                { weakestArea = "Independence"; weakestScore = indepScore; }
-            else
-                { weakestArea = "Consistency"; weakestScore = consistencyScore; }
-
-            statsSummary.AppendLine();
-            statsSummary.AppendLine($"AREA TO IMPROVE: {weakestArea} (score: {weakestScore}/100).");
-            statsSummary.AppendLine("IMPORTANT: At least 1 of your 3 suggestions should help the student improve in this area.");
-
-            var goalCatalogue = @"
-AVAILABLE GOALS (you MUST only suggest from this list, using the exact IDs):
-
-TIER 1 — First Steps (EASY):
-  - try-suitability (Try a Suitability Exercise): Complete 1 Suitability exercise — decide which method fits best.
-  - try-efficiency (Try an Efficiency Exercise): Complete 1 Efficiency exercise — choose the fastest method.
-  - try-matching (Try a Matching Exercise): Complete 1 Matching exercise — pair equations to methods.
-  - choose-solo-once (Go Solo Once): Complete 1 exercise choosing ""Solve on my own"" without unlocking Pippin.
-
-TIER 2 — Growing Independence (MEDIUM):
-  - hint-free-run (Hint-Free Run): Complete an exercise using 0 hints and 0 Pippin messages.
-  - no-ai-day (Pippin-Free Day): Complete 2 exercises today without using Pippin at all.
-  - method-explorer (Method Explorer): Use all 3 solving methods (Substitution, Elimination, Equalization) in one session.
-  - three-day-streak (3-Day Practice Streak): Complete at least one exercise on 3 consecutive days.
-
-TIER 3 — Decision Mastery (HARD):
-  - master-suitability (Master Suitability): Correctly identify the best method in 3 Suitability exercises.
-  - master-efficiency (Master Efficiency): Identify the most efficient method and explain why in 3 Efficiency exercises.
-  - master-matching (Master Matching): Correctly match 3 equation systems to their optimal methods.
-  - perfect-solo-session (Perfect Solo Session): Complete 3 consecutive solo exercises with 0 errors and 0 hints.
-  - accuracy-sharp (Sharp Shooter): Maintain over 80% accuracy across 5 consecutive exercises.
-
-TIER 4 — Self-Directed Growth (HARD):
-  - set-and-complete-plan (Plan Fulfilled): Set 3+ goals and complete ALL of them within the same week.
-  - face-your-weakness (Face Your Weakness): Identify your weakest exercise type, then complete 3 exercises of that type.
-  - seven-day-streak (7-Day Practice Streak): Complete at least one exercise on 7 consecutive days.
-  - reflect-and-improve (Reflect & Improve): Write a reflection after a session, then complete an exercise applying what you learned.
-  - independence-champion (Independence Champion): Complete 10 exercises total in solo mode without ever unlocking Pippin.
-";
+            var goalCatalogue = BuildGoalCatalogueForPrompt();
 
             var prompt = $@"You are a helpful study planner. Create a coherent mini-plan of 3 goals for this student.
 
 Student data:
 {statsSummary}
 
+{GoalSuggestionText.LangInstruction(language)}
+
 {goalCatalogue}
 
 RULES:
-1. First, write a SHORT plan title (max 6 words) that captures the theme — e.g. ""Build Your Elimination Confidence"" or ""Strengthen Your Independence"".
-2. Write a 2-sentence plan narrative explaining WHY these 3 goals work together for this student. Mention their weakest area and reference specific stats (e.g. streak days, accuracy, method counts).
-3. Suggest EXACTLY 3 goals using the EXACT IDs above.
-4. At least 1 goal MUST target the student's ""Area to Improve"".
-5. For EACH goal, write a specific, data-aware reason (max 20 words). Be concrete — reference the student's actual numbers (e.g. ""You've done 0 Matching exercises — start here to build method awareness"" or ""Your 2-day streak is close to the 3-day goal — keep going!""). Never use generic phrases like ""great area to grow"" without data backing.
-6. Respond ONLY in this JSON format:
-{{""planTitle"":""short title"",""planNarrative"":""2-sentence narrative"",""goals"":[{{""id"":""goal-id"",""reason"":""reason text""}},{{""id"":""goal-id"",""reason"":""reason text""}},{{""id"":""goal-id"",""reason"":""reason text""}}]}}";
+1. Write a SHORT plan title (max 6 words) capturing the theme.
+2. Write a 2-sentence narrative explaining WHY these 3 goals fit together for THIS student. Reference their own numbers. Never use generic praise.
+3. Speak TO the student, using ""you"" and ""your"". The title, the narrative and every reason are shown to the student directly, so never write about them in the third person (""the student"", ""they have"").
+4. Suggest EXACTLY 3 goals, using ONLY the categories listed above, spelled exactly as given.
+5. WHAT THEY ARE AVOIDING COMES FIRST. If the data names a behaviour the student consistently turns down, at least one goal MUST target it. That is the most useful thing you can suggest — they cannot see their own pattern, and it is the one input that makes a suggestion specific rather than generic.
+6. For each goal give: category, focus (a method or an exercise type, or omit for any), metric, target, and for hintsAndErrors also quality and maxPerExercise. Then a specific, data-aware reason (max 20 words) quoting the student's own numbers. Never write a reason that would fit any student.
+7. Respond ONLY in this JSON format:
+{{""planTitle"":""short title"",""planNarrative"":""2-sentence narrative"",""goals"":[{{""category"":""methodComparison"",""focus"":""Elimination"",""metric"":""exercises"",""target"":5,""quality"":"""",""maxPerExercise"":0,""reason"":""reason text""}}]}}";
 
             var text = await CallOpenAI(apiKey,
-                "You are a study planner. Only suggest goals from the provided catalogue. Always output valid JSON with planTitle, planNarrative, and goals array.",
+                "You are a study planner. Only suggest goals from the provided catalogue, using the exact category names. Address the student as \"you\". Always output valid JSON with planTitle, planNarrative, and goals array.",
                 prompt);
 
             if (text == null) return null;
@@ -1133,114 +1229,285 @@ RULES:
 
             if (plan == null || plan.Goals == null || plan.Goals.Count == 0) return null;
 
-            var validIds = new HashSet<string>
-            { "try-suitability", "try-efficiency", "try-matching", "choose-solo-once",
-              "hint-free-run", "no-ai-day", "method-explorer", "three-day-streak",
-              "master-suitability", "master-efficiency", "master-matching", "perfect-solo-session", "accuracy-sharp",
-              "set-and-complete-plan", "face-your-weakness", "seven-day-streak", "reflect-and-improve", "independence-champion" };
+            // Everything the model produces is normalised against the catalogue, so a suggestion is
+            // always a goal that exists with legal values. An invented category is dropped rather than
+            // repaired: guessing what it meant could hand the student a goal about something nobody
+            // asked for.
+            plan.Goals = plan.Goals
+                .Select(NormaliseGoalSuggestion)
+                .OfType<GoalSuggestion>()
+                .GroupBy(suggestion => $"{suggestion.Category}|{suggestion.Focus}|{suggestion.Metric}|{suggestion.Target}|{suggestion.Quality}|{suggestion.MaxPerExercise}")
+                .Select(group => group.First())
+                .Take(3)
+                .ToList();
 
-            plan.Goals = plan.Goals.Where(s => validIds.Contains(s.Id ?? "")).Take(3).ToList();
             return plan.Goals.Count > 0 ? plan : null;
+        }
+
+        /// <summary>
+        /// Describes the goal menu to the model.
+        ///
+        /// Built from <see cref="GoalCatalogue"/> rather than written out by hand, so the prompt and
+        /// the validation can never disagree — a menu the model is told about but the server then
+        /// rejects would produce suggestions that silently vanish.
+        /// </summary>
+        private static string BuildGoalCatalogueForPrompt()
+        {
+            var lines = new List<string>
+            {
+                "AVAILABLE GOAL CATEGORIES (use these exact category names):",
+                ""
+            };
+
+            foreach (var category in GoalCatalogue.Categories)
+            {
+                lines.Add($"  - {category}: the student aims to {GoalCatalogue.Describe(category)}.");
+                lines.Add($"      counted in: {string.Join(" or ", GoalCatalogue.MetricsFor(category))}.");
+
+                var focuses = GoalCatalogue.FocusesFor(category);
+                lines.Add(focuses.Length > 0
+                    ? $"      focus: one of {string.Join(", ", focuses)}, or omit for any."
+                    : "      focus: not applicable — omit it.");
+
+                lines.Add($"      target: one of {string.Join(", ", GoalCatalogue.ExerciseTargets)} exercises"
+                          + (GoalCatalogue.AllowsMinutes(category)
+                              ? $", or one of {string.Join(", ", GoalCatalogue.MinuteTargets)} minutes."
+                              : "."));
+
+                if (category == GoalCatalogue.HintsAndErrors)
+                {
+                    lines.Add("      quality: \"hints\" or \"errors\"; maxPerExercise: one of "
+                              + string.Join(", ", GoalCatalogue.QualityLimits) + ".");
+                }
+            }
+
+            return string.Join("\n", lines);
+        }
+
+        /// <summary>
+        /// Forces one model suggestion into a goal the picker can actually build.
+        ///
+        /// Returns null when the category is not one of the six. Everything else is snapped to a legal
+        /// value rather than rejected, because a suggestion that is merely mis-sized is still useful
+        /// advice and should not be thrown away over a number.
+        /// </summary>
+        private static GoalSuggestion? NormaliseGoalSuggestion(GoalSuggestion raw)
+        {
+            if (raw is null) return null;
+
+            var category = raw.Category?.Trim() ?? "";
+            if (!GoalCatalogue.IsCategory(category)) return null;
+
+            var metrics = GoalCatalogue.MetricsFor(category);
+            var metric = metrics.Contains(raw.Metric) ? raw.Metric : metrics[0];
+
+            var focuses = GoalCatalogue.FocusesFor(category);
+            var focus = focuses.FirstOrDefault(f => string.Equals(f, raw.Focus, StringComparison.OrdinalIgnoreCase)) ?? "";
+
+            var suggestion = new GoalSuggestion
+            {
+                Category = category,
+                Focus = focus,
+                Metric = metric,
+                Target = GoalCatalogue.SnapTarget(metric, raw.Target > 0 ? raw.Target : GoalCatalogue.TargetsFor(metric)[0]),
+                Reason = raw.Reason?.Trim() ?? ""
+            };
+
+            if (category == GoalCatalogue.HintsAndErrors)
+            {
+                suggestion.Quality = raw.Quality == "errors" ? "errors" : "hints";
+
+                // Snapped, not clamped: 0 is a meaningful limit (hint-free), and quietly turning a
+                // request for "no hints at all" into "up to one hint" would change what was asked.
+                suggestion.MaxPerExercise = GoalCatalogue.QualityLimits
+                    .OrderBy(limit => Math.Abs(limit - raw.MaxPerExercise))
+                    .ThenBy(limit => limit)
+                    .First();
+            }
+
+            return suggestion;
+        }
+
+        /// <summary>
+        /// Everything the planner is told about the student, as one block.
+        ///
+        /// The avoidance profile is the part that was missing. Without it the suggestions could only
+        /// see volume and accuracy, so they could recommend practising something the student already
+        /// does constantly, or miss the one behaviour they consistently decline.
+        /// </summary>
+        private static string BuildSuggestionStats(
+            long studentId,
+            bool isDemo,
+            StudentProgressRecord progress,
+            Dictionary<string, int> typeCounts,
+            AvoidanceProfile profile)
+        {
+            var lines = new StringBuilder();
+
+            lines.AppendLine($"Student ID: {studentId}" + (isDemo ? " (demo user)" : ""));
+            lines.AppendLine($"Exercises completed: {progress.ExercisesCompleted}");
+            lines.AppendLine($"Practice streak: {progress.StreakDays} days");
+            lines.AppendLine("Exercise breakdown:");
+            foreach (var kv in typeCounts)
+                lines.AppendLine($"  - {kv.Key}: {kv.Value} exercises");
+            if (typeCounts.Count == 0)
+                lines.AppendLine("  (none yet)");
+
+            lines.AppendLine();
+            if (profile.IsColdStart)
+            {
+                lines.AppendLine("What you do when offered a choice: not enough history yet — do NOT claim to know this student's habits.");
+            }
+            else
+            {
+                lines.AppendLine($"What you do when offered a choice (across {profile.Attempts} exercises):");
+                foreach (var stat in profile.Elements)
+                {
+                    if (stat.Opportunities == 0) continue;
+                    var name = string.IsNullOrEmpty(stat.Value) ? stat.Label : stat.Value;
+                    lines.AppendLine($"  - {name}: you took it up {stat.Engaged} of {stat.Opportunities} times");
+                }
+
+                lines.AppendLine();
+                if (profile.Gaps.Count > 0)
+                {
+                    lines.AppendLine("CONSISTENTLY AVOIDED — build at least one goal around this:");
+                    foreach (var gap in profile.Gaps)
+                    {
+                        var name = string.IsNullOrEmpty(gap.Value) ? gap.Label : gap.Value;
+                        var element = GoalCatalogue.CategoryForElement(gap.Element);
+                        lines.AppendLine($"  - {name}: only {gap.Engaged} of {gap.Opportunities} times"
+                                         + (element is null ? "" : $" (goal category: {element})"));
+                    }
+                }
+                else
+                {
+                    lines.AppendLine("No consistent avoidance detected — you engage with what is offered.");
+                }
+
+                if (profile.AverageErrors is not null)
+                    lines.AppendLine($"Average per exercise: {profile.AverageErrors} errors, {profile.AverageHints} hints.");
+            }
+
+            return lines.ToString();
         }
 
         // ── Fallback suggestion generator (rule-based, no AI) ──────────────────
 
+        /// <summary>
+        /// Rule-based plan, for when there is no API key or the model fails.
+        ///
+        /// Driven by the same inputs as the model — the avoidance profile above all — so a student
+        /// gets specific, actionable suggestions even with no AI at all. A fallback that produced
+        /// generic advice would make the whole feature look broken whenever the model is unavailable,
+        /// which on a school network is often.
+        /// </summary>
         private static GoalPlanResponse GenerateFallbackPlan(
             StudentProgressRecord progress,
-            Dictionary<string, int> typeCounts)
+            Dictionary<string, int> typeCounts,
+            AvoidanceProfile profile,
+            GoalSuggestionText.Lang lang)
         {
             var suggestions = new List<GoalSuggestion>();
 
-            // ── Detect weakest area (simple heuristic) ────────────────────
-            int total = typeCounts.Values.Sum();
-            int suit = typeCounts.GetValueOrDefault("Suitability", 0);
-            int eff = typeCounts.GetValueOrDefault("Efficiency", 0);
-            int match = typeCounts.GetValueOrDefault("Matching", 0);
+            // 1. The behaviour they avoid. Only three of the six dimensions can be turned down, and a
+            //    gap among those is the most useful thing we can offer — it is the one thing the
+            //    student cannot see about themselves.
+            var declinableGap = profile.Gaps.FirstOrDefault(gap =>
+                gap.Element is AnchorElement.SelfExplanation or AnchorElement.MethodComparison or AnchorElement.SolveOnOwn);
 
-            // Lowest exercise-type count = weakest among the three
-            string weakestType;
-            int minCount;
-            if (total == 0) { weakestType = "Suitability"; minCount = 0; }
-            else if (suit <= eff && suit <= match) { weakestType = "Suitability"; minCount = suit; }
-            else if (eff <= suit && eff <= match) { weakestType = "Efficiency"; minCount = eff; }
-            else { weakestType = "Matching"; minCount = match; }
-
-            // Map weakest type → goal IDs that target it
-            var weaknessGoalMap = new Dictionary<string, string[]>
+            if (declinableGap is not null)
             {
-                ["Suitability"] = new[] { "try-suitability", "master-suitability" },
-                ["Efficiency"] = new[] { "try-efficiency", "master-efficiency" },
-                ["Matching"] = new[] { "try-matching", "master-matching" },
-            };
-            var weaknessGoals = weaknessGoalMap.GetValueOrDefault(weakestType, new[] { "try-suitability" });
+                var category = GoalCatalogue.CategoryForElement(declinableGap.Element)!;
+                var declined = declinableGap.Opportunities - declinableGap.Engaged;
 
-            // Always include at least one weakness-targeting goal
-            string weaknessGoal = total > 5 ? weaknessGoals.Last() : weaknessGoals.First();
-
-            // If very new (≤2 exercises), suggest Tier 1 goals
-            if (progress.ExercisesCompleted <= 2)
-            {
-                suggestions.Add(new GoalSuggestion { Id = weaknessGoal, Reason = $"You've only tried {total} exercise(s) so far — a {weakestType} one is a great next step!" });
-                suggestions.Add(new GoalSuggestion { Id = "try-efficiency", Reason = "Learn to pick the fastest method — a key skill for harder problems." });
-                suggestions.Add(new GoalSuggestion { Id = "three-day-streak", Reason = $"Start a daily habit — you're at {progress.StreakDays} day(s), just a few more!" });
-                // Prevent duplicates
-                suggestions = suggestions.GroupBy(s => s.Id).Select(g => g.First()).Take(3).ToList();
-                return new GoalPlanResponse
+                suggestions.Add(new GoalSuggestion
                 {
-                    PlanTitle = "Get Started Strong",
-                    PlanNarrative = $"You're just beginning with {progress.ExercisesCompleted} exercise(s) completed! Start with a {weakestType} exercise to explore different methods, then build consistency with a daily streak.",
-                    Goals = suggestions
-                };
+                    Category = category,
+                    Metric = GoalCatalogue.ExercisesMetric,
+                    Target = 5,
+                    Reason = GoalSuggestionText.DeclinedReason(
+                        declinableGap.Element, declined, declinableGap.Opportunities, lang)
+                });
             }
 
-            // Intermediate (3-5 exercises): suggest Tier 2 goals + weakness
-            if (progress.ExercisesCompleted <= 5)
+            // 2. The least-practised exercise type — real, visible, and always actionable.
+            var total = typeCounts.Values.Sum();
+            var leastPractised = GoalCatalogue.ExerciseTypes
+                .Select(type => (Type: type, Count: typeCounts.GetValueOrDefault(type, 0)))
+                .OrderBy(entry => entry.Count)
+                .First();
+
+            suggestions.Add(new GoalSuggestion
             {
-                suggestions.Add(new GoalSuggestion { Id = weaknessGoal, Reason = $"You've done {total} total exercises but only {minCount} {weakestType} — time to balance your skills!" });
-                suggestions.Add(new GoalSuggestion { Id = "hint-free-run", Reason = "Challenge yourself to solve without hints — you might surprise yourself!" });
-                suggestions.Add(new GoalSuggestion { Id = "no-ai-day", Reason = "Try a full session without Pippin — 2 exercises on your own builds real confidence." });
+                Category = GoalCatalogue.ExerciseType,
+                Focus = leastPractised.Type,
+                Metric = GoalCatalogue.ExercisesMetric,
+                Target = 3,
+                Reason = GoalSuggestionText.LeastPractisedReason(
+                    leastPractised.Count, total, leastPractised.Type, lang)
+            });
 
-                if (progress.StreakDays >= 2)
-                    suggestions.Add(new GoalSuggestion { Id = "three-day-streak", Reason = $"You're at {progress.StreakDays} days — just {3 - progress.StreakDays} more to hit the 3-day streak!" });
-                else
-                    suggestions.Add(new GoalSuggestion { Id = "method-explorer", Reason = "Use all 3 methods (Substitution, Elimination, Equalization) — become versatile." });
-
-                suggestions = suggestions.GroupBy(s => s.Id).Select(g => g.First()).Take(3).ToList();
-                return new GoalPlanResponse
+            // 3. Whatever their record actually shows, rather than a fixed third suggestion.
+            if (profile.AverageHints is > 1)
+            {
+                suggestions.Add(new GoalSuggestion
                 {
-                    PlanTitle = "Build Your Independence",
-                    PlanNarrative = $"You've completed {progress.ExercisesCompleted} exercises — building momentum! Your {weakestType} skills (only {minCount} attempts) need attention. Pair that with a hint-free or Pippin-free challenge to grow both math and independence.",
-                    Goals = suggestions
-                };
+                    Category = GoalCatalogue.HintsAndErrors,
+                    Metric = GoalCatalogue.ExercisesMetric,
+                    Target = 3,
+                    Quality = "hints",
+                    MaxPerExercise = 1,
+                    Reason = GoalSuggestionText.HintsReason(profile.AverageHints ?? 0, lang)
+                });
             }
-
-            // Advanced (6+ exercises): suggest Tier 3/4 goals + weakness
-            suggestions.Add(new GoalSuggestion { Id = weaknessGoal, Reason = $"You've done {total} exercises but {weakestType} is your least-practiced area ({minCount} attempts) — let's change that!" });
-
-            if (progress.StreakDays >= 3)
-                suggestions.Add(new GoalSuggestion { Id = "seven-day-streak", Reason = $"You're at {progress.StreakDays} straight days — push for the full 7-day streak!" });
+            else if (profile.AverageErrors is > 1)
+            {
+                suggestions.Add(new GoalSuggestion
+                {
+                    Category = GoalCatalogue.HintsAndErrors,
+                    Metric = GoalCatalogue.ExercisesMetric,
+                    Target = 3,
+                    Quality = "errors",
+                    MaxPerExercise = 1,
+                    Reason = GoalSuggestionText.ErrorsReason(profile.AverageErrors ?? 0, lang)
+                });
+            }
             else
-                suggestions.Add(new GoalSuggestion { Id = "three-day-streak", Reason = $"Rebuild your momentum — you're at {progress.StreakDays} day(s), aim for 3!" });
-
-            suggestions.Add(new GoalSuggestion { Id = "face-your-weakness", Reason = $"Check your dashboard stats — your {weakestType} area needs 3 focused exercises." });
-
-            if (progress.ResolveXP >= 50)
-                suggestions.Add(new GoalSuggestion { Id = "independence-champion", Reason = $"You've earned {progress.ResolveXP} Resolve XP — shoot for 10 solo exercises to become an Independence Champion!" });
-            else if (progress.ChoiceXP >= 30)
-                suggestions.Add(new GoalSuggestion { Id = "set-and-complete-plan", Reason = $"With {progress.ChoiceXP} Choice XP, you're ready to plan your own week — set 3 goals and crush them." });
-
-            // Ensure variety
-            if (suggestions.Count < 3)
             {
-                suggestions.Add(new GoalSuggestion { Id = "accuracy-sharp", Reason = $"Level up your precision — maintain 80%+ accuracy across your next 5 exercises." });
-                suggestions.Add(new GoalSuggestion { Id = "perfect-solo-session", Reason = "Challenge yourself: 3 solo exercises in a row with zero mistakes and zero hints." });
+                var leastUsed = profile.Elements
+                    .Where(stat => stat.Element == AnchorElement.Method && !string.IsNullOrEmpty(stat.Value))
+                    .OrderBy(stat => stat.Engaged)
+                    .FirstOrDefault();
+
+                var method = leastUsed?.Value ?? GoalCatalogue.Methods[0];
+                var methodNeverUsed = profile.IsColdStart || leastUsed is null || leastUsed.Engaged == 0;
+
+                suggestions.Add(new GoalSuggestion
+                {
+                    Category = GoalCatalogue.Method,
+                    Focus = method,
+                    Metric = GoalCatalogue.ExercisesMetric,
+                    Target = 3,
+                    Reason = GoalSuggestionText.MethodReason(method, leastUsed?.Engaged ?? 0, methodNeverUsed, lang)
+                });
             }
 
-            suggestions = suggestions.GroupBy(s => s.Id).Select(g => g.First()).Take(3).ToList();
+            // The three above are distinct by construction, but a gap and the least-practised type can
+            // land on the same category, and repeating a goal would waste a slot.
+            suggestions = suggestions
+                .GroupBy(suggestion => suggestion.Category + "|" + suggestion.Focus)
+                .Select(group => group.First())
+                .Take(3)
+                .ToList();
+
+            var avoided = declinableGap is not null;
+
             return new GoalPlanResponse
             {
-                PlanTitle = "Level Up Your Skills",
-                PlanNarrative = $"You've completed {progress.ExercisesCompleted} exercises — great work! Now it's time to target your {weakestType} weak spot while pushing toward mastery-level goals. Consistency + challenge = growth.",
+                PlanTitle = GoalSuggestionText.Title(avoided, lang),
+                PlanNarrative = GoalSuggestionText.Narrative(
+                    avoided, progress.ExercisesCompleted, leastPractised.Type, lang),
                 Goals = suggestions
             };
         }
@@ -1293,6 +1560,29 @@ RULES:
             var weakness = ComputeWeakness(conn, request.StudentId);
             Console.WriteLine($"[Reflection] Evaluate — student={request.StudentId}, itemId={request.QueueItemId}, label=\"{item.ItemLabel}\", type={item.ItemType}, method={item.Method}, errors={item.Errors}, hints={item.Hints}, pippin={item.PippinMessages}, Q={request.QuestionNumber}, mode={request.Mode}, answer=\"{request.Answer}\"");
 
+            // Deterministic features of the student's own words, extracted once and used for two
+            // purposes: the off-topic gate below (always) and the feedback prompt (only when the
+            // AiFeatures:NlpInformedFeedback flag is on).
+            var answerFeatures = string.IsNullOrWhiteSpace(request.Answer)
+                ? null
+                : NlpFeatureExtractor.Extract(request.Answer, request.Language);
+
+            // Off-topic gate. Runs before the model so that an unrelated answer is never graded,
+            // never praised and never earns XP — the student is asked to write it again instead.
+            // Asking Pippin for a model answer is exempt: there is no student answer to judge.
+            if (request.Mode != "pippin" && OffTopicDetector.IsOffTopic(request.Answer, answerFeatures))
+            {
+                Console.WriteLine($"[Reflection] Off-topic gate — rejected answer=\"{request.Answer}\"");
+                return Ok(new ReflectionEvaluateResponse
+                {
+                    Feedback = OffTopicDetector.RetryMessage(request.Language),
+                    Aligned = false,
+                    InsightXp = 0,
+                    NextStep = "",
+                    NeedsRetry = true
+                });
+            }
+
             // Last 2 history turns for context (oldest → newest)
             var history = conn.Query<ReflectionHistoryRecord>(
                 $"SELECT * FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
@@ -1312,7 +1602,23 @@ RULES:
 
             try
             {
-                var prompt = BuildReflectionPrompt(request, item, weakness, historyText);
+                // The signals only steer the wording of the feedback when the flag is on. The
+                // off-topic gate above must NOT depend on this switch — it is a safety check, so it
+                // always runs.
+                var promptFeatures = _configuration.GetValue("AiFeatures:NlpInformedFeedback", false)
+                    ? answerFeatures
+                    : null;
+
+                if (promptFeatures is not null)
+                {
+                    Console.WriteLine(
+                        $"[Reflection] NLP signals — lang={promptFeatures.Language}, unit={promptFeatures.TokenUnit}, " +
+                        $"chars={promptFeatures.CharacterCount}, givesReason={promptFeatures.GivesReason}, " +
+                        $"mentionsMethod={promptFeatures.MentionsMethod}, methods=[{string.Join(", ", promptFeatures.MethodsMentioned)}], " +
+                        $"uncertainty={promptFeatures.UncertaintyMarkers.Count}, affect={promptFeatures.AffectMarkers.Count}");
+                }
+
+                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures);
 
                 var raw = await CallOpenAI(apiKey,
                     "You are Pippin, a warm encouraging study coach chatting with a student. Compare their reflection answer to their real performance, but keep it conversational and kind — like a friend checking in. Always output valid JSON with exactly these keys: feedback (string), aligned (boolean), insightXp (integer 0-3), nextStep (string, filled only for the final question otherwise empty).",
@@ -1347,14 +1653,63 @@ RULES:
 
                 var nextStep = root.TryGetProperty("nextStep", out var ns) ? ns.GetString() ?? "" : "";
 
+                // Second, semantic off-topic catch, for unrelated answers the deterministic gate let
+                // through (for example a topic that happens to contain a maths word).
+                bool offTopic = false;
+                if (root.TryGetProperty("offTopic", out var ot))
+                {
+                    if (ot.ValueKind == JsonValueKind.True) offTopic = true;
+                    else if (ot.ValueKind == JsonValueKind.False) offTopic = false;
+                    else if (ot.ValueKind == JsonValueKind.String) bool.TryParse(ot.GetString(), out offTopic);
+                }
+
+                if (offTopic && request.Mode != "pippin")
+                {
+                    Console.WriteLine($"[Reflection] Off-topic (model) — rejected answer=\"{request.Answer}\"");
+                    return Ok(new ReflectionEvaluateResponse
+                    {
+                        Feedback = OffTopicDetector.RetryMessage(request.Language),
+                        Aligned = false,
+                        InsightXp = 0,
+                        NextStep = "",
+                        NeedsRetry = true
+                    });
+                }
+
+                // Asking Pippin for a model answer is not the student's own reflection, so it can
+                // never be "aligned" and never earns XP. The prompt already says this, but the model
+                // still congratulated the student and handed out Insight XP — so it is enforced here
+                // as well. Prompt for behaviour, code for guarantees.
+                if (request.Mode == "pippin")
+                {
+                    aligned = false;
+                    insightXp = 0;
+                }
+
+                // Q3 asks for something concrete to work on next, not for a self-assessment, so
+                // there is nothing to be aligned with and nothing to earn. Same reasoning as the
+                // pippin case above: the fallback already returns 0 here, but the model handed out
+                // full marks anyway, so the rule is enforced in code rather than requested.
+                if (request.QuestionNumber == 3)
+                {
+                    aligned = false;
+                    insightXp = 0;
+                }
+
                 Console.WriteLine($"[Reflection] AI result — aligned={aligned}, insightXp={insightXp}, feedback=\"{feedback}\", nextStep=\"{nextStep}\"");
 
                 return Ok(new ReflectionEvaluateResponse
                 {
-                    Feedback = string.IsNullOrWhiteSpace(feedback) ? fallback.Feedback : feedback.Trim(),
+                    Feedback = AiTextFormatter.StripMathDelimiters(
+                        string.IsNullOrWhiteSpace(feedback) ? fallback.Feedback : feedback),
                     Aligned = aligned,
                     InsightXp = insightXp,
-                    NextStep = nextStep.Trim()
+                    // Q3 exists to produce this line, and the model left it empty while still writing
+                    // warm feedback about the answer — so the student saw praise and no next step at
+                    // all. The rule-based plan already computes a concrete one, so use it rather than
+                    // show nothing. For Q1 and Q2 the fallback's value is empty, so this is a no-op.
+                    NextStep = AiTextFormatter.StripMathDelimiters(
+                        string.IsNullOrWhiteSpace(nextStep) ? fallback.NextStep : nextStep)
                 });
             }
             catch
@@ -1461,8 +1816,11 @@ RULES:
             ReflectionEvaluateRequest request,
             ReflectionQueueRecord item,
             WeaknessResponse weakness,
-            string historyText)
+            string historyText,
+            NlpFeatures? features = null)
         {
+            var signalBlock = features is null ? string.Empty : BuildSignalBlock(features);
+
             var questionLabel = request.QuestionNumber switch
             {
                 1 => "Q1 - overall self-assessment",
@@ -1483,6 +1841,7 @@ RULES:
 
             return $@"Student completed: {item.ItemLabel} (item type: {item.ItemType}, method/exercise type: {item.Method}).
 Actual performance on it: {item.Errors} errors, {item.Hints} hints, {item.PippinMessages} Pippin messages.
+What they decided during it: {DescribeDecisions(item.Decisions)}.
 Weakest area: {weakestText}.
 
 Previous reflection turns (for context):
@@ -1491,22 +1850,100 @@ Previous reflection turns (for context):
 Current question: {questionLabel}
 Mode: {mode}
 Student answer: {(string.IsNullOrWhiteSpace(request.Answer) ? "(empty)" : request.Answer)}
-
+{signalBlock}
 Instructions:
 {langInstruction}
 TONE (very important): Be warm, brief and conversational — like a friend, not a report. NEVER say things like ""I saw on your performance..."", ""according to your data..."", or list their exact error/hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
-- If mode is 'Pippin told them': write a short friendly model answer AS Pippin, in your own words (no numbers), set aligned=false and insightXp=0.
+NO FOLLOW-UP QUESTIONS (very important): This reflection is ONE question and ONE answer. The student cannot reply again. Never ask them anything, never probe for more detail, never invite them to explain further, and never end your feedback with a question mark. Deliver your feedback as a complete statement and stop.
+- If mode is 'Pippin told them': the student pressed ""Pippin, tell me"" instead of writing an answer, so there is no answer to judge. NEVER grade them, never say they answered correctly, and never praise their answer — there is nothing to praise, and doing so would be dishonest. Instead, use what actually happened on this exercise (the errors, hints and Pippin messages stated above) to give ONE concrete piece of guidance: what their pattern suggests about where they got stuck, and what specifically to try differently next time. Speak directly to the student as Pippin. Set aligned=false and insightXp=0 — requesting help never earns XP.
 - If Q1 or Q2 and they answered themselves: judge ALIGNMENT by whether their answer honestly acknowledges their actual performance:
+  * If they were SHOWN the answer — check ""what they decided"" above and look for them choosing to be shown instead of working it out — then a low error count is NOT evidence that it was easy. They did not solve it, they were handed it. So if they say it felt easy or they found it simple, they are NOT aligned (aligned=false, insightXp=0). Acknowledge that this was one where the solution was shown, warmly and without scolding, and keep it brief.
   * If errors+hints are 2 or more: they are ALIGNED whenever they mention making any mistakes/errors or difficulty (for example 'I made 2 errors' or 'it was a bit hard'). Even if they also say it felt 'fine' or 'good', mentioning the mistakes means they are ALIGNED → aligned=true, insightXp=3. Only mark NOT aligned if they clearly claim it was easy/perfect and mention no mistakes at all.
-  * If errors+hints are 0: they are ALIGNED if they say it felt easy/good/confident.
+  * If errors+hints are 0 AND they were not shown the answer: they are ALIGNED if they say it felt easy/good/confident.
+  * If they declined to explain their own reasoning (see ""what they decided""), treat a confident claim about how they reasoned with more caution, but do not punish it merely for that.
   * For Q2 (method/decision): they are ALIGNED if their answer is specific and thoughtful — names the method they chose and reflects on it (e.g. 'I chose substitution and it felt right') — even though you cannot verify the correct method → aligned=true, insightXp=3.
-  If aligned → aligned=true, insightXp=3, with 1-2 warm celebrating sentences. If not → aligned=false, insightXp=0, and gently wonder with them (e.g. ""It felt easy to you? That's interesting — sometimes the tricky spots sneak up on us."") without quoting stats or scolding.
+  If aligned → aligned=true, insightXp=3, with 1-2 warm celebrating sentences. If not → aligned=false, insightXp=0, and gently offer a warm observation instead (e.g. ""That's interesting — sometimes the tricky spots sneak up on us."") without quoting stats, without scolding, and without asking the student anything.
 - If Q3: ignore alignment. Generate ONE concrete, friendly next step targeting the weakest area and put it in nextStep. Set aligned=false, insightXp=0.
-- If the answer is gibberish/off-topic: warmly ask them to try again. aligned=false, insightXp=0.
+- OFF-TOPIC: if the answer is clearly unrelated to maths and to this exercise (a random word, a different topic entirely, keyboard mashing), set offTopic=true, aligned=false, insightXp=0, and leave feedback empty — the app shows its own message asking the student to write the reflection again. Use this ONLY when the answer is genuinely unrelated: a short, vague, unsure or partly incoherent answer that is still about the exercise is a valid reflection and is NOT off-topic. When in doubt, do not flag it.
 
-IMPORTANT: always include the ""aligned"" and ""insightXp"" keys with their exact boolean/integer values — never omit them and never quote the numbers as strings.
+IMPORTANT: always include the ""aligned"", ""insightXp"" and ""offTopic"" keys with their exact boolean/integer values — never omit them and never quote the numbers as strings.
 
-Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insightXp"":0-3,""nextStep"":""...""}}";
+Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insightXp"":0-3,""offTopic"":true|false,""nextStep"":""...""}}";
+        }
+
+        /// <summary>
+        /// Renders deterministic NLP signals as prompt guidance.
+        ///
+        /// Two deliberate choices: the block is explicitly subordinate to the TONE/ALIGNMENT rules
+        /// above (otherwise it would fight the "just celebrate and stop there" rule), and only
+        /// actionable signals are included — raw counts stay out so the tutor cannot quote numbers
+        /// back at the student.
+        ///
+        /// Nothing here may invite a question. The reflection is one question and one answer, so
+        /// signals are used only to choose wording, never to ask the student for more.
+        /// </summary>
+        private static string BuildSignalBlock(NlpFeatures f)
+        {
+            var points = new List<string>
+            {
+                f.MentionsMethod && f.MethodsMentioned.Count > 0
+                    ? $"- they named a solving method ({string.Join(", ", f.MethodsMentioned)}) — referring to it by name is welcome"
+                    : "- they did not name a specific solving method — do not ask which one; just work with what they did say",
+                f.GivesReason
+                    ? "- they gave a reason (a causal word was used) — acknowledge it, that is worth praising"
+                    : "- they gave no reason — completely fine; NEVER ask why and never ask them to explain further",
+            };
+
+            if (f.UncertaintyMarkers.Count > 0)
+                points.Add("- they sounded unsure or hedged — be extra reassuring");
+
+            if (f.AffectMarkers.Count > 0)
+                points.Add("- they expressed a feeling about the task (difficulty or ease) — acknowledge the feeling");
+
+            if (f.CharacterCount > 0 && f.CharacterCount <= 12)
+                points.Add("- the answer is very short — keep your reply short and warm as well; do not ask for more detail");
+
+            return $@"
+Signals detected in their answer (machine-extracted and imperfect — treat as hints only):
+{string.Join("\n", points)}
+
+How to use these: they exist ONLY to help you choose wording. Never mention that anything was detected, never turn them into claims about the student, never quote them, and never ask the student a question because of them. The TONE and ALIGNMENT rules below always take precedence — if those say to simply celebrate and stop, do exactly that and ignore these hints.
+";
+        }
+
+        /// <summary>
+        /// Turns the stored decision summary into a phrase the tutor can reason about.
+        ///
+        /// The stored form is machine-shaped ("SolveOnOwn=Declined") precisely so it is cheap to
+        /// write from the exercise. Saying "not recorded" rather than nothing matters: an exercise
+        /// with no decision points is not the same as one where the student engaged, and an absent
+        /// field would let the model read silence as a clean run.
+        /// </summary>
+        private static string DescribeDecisions(string decisions)
+        {
+            if (string.IsNullOrWhiteSpace(decisions)) return "not recorded for this exercise";
+
+            var parts = new List<string>();
+
+            foreach (var chunk in decisions.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var bits = chunk.Split('=');
+                if (bits.Length != 2) continue;
+
+                var what = bits[0] switch
+                {
+                    "SelfExplanation" => "explaining their own reasoning",
+                    "MethodComparison" => "comparing two methods",
+                    "SolveOnOwn" => "working the solution out themselves",
+                    _ => bits[0]
+                };
+
+                parts.Add(bits[1] == "Declined"
+                    ? $"chose to be shown instead of {what}"
+                    : $"took up {what}");
+            }
+
+            return parts.Count == 0 ? "not recorded for this exercise" : string.Join("; ", parts);
         }
 
         private static ReflectionEvaluateResponse BuildReflectionFallback(
@@ -1544,8 +1981,16 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
                 || answer.Contains("mistake") || answer.Contains("error") || answer.Contains("wrong") || answer.Contains("hint");
             bool claimsEasy = answer.Contains("easy") || answer.Contains("good") || answer.Contains("great")
                 || answer.Contains("well") || answer.Contains("perfect") || answer.Contains("fine");
-            bool actuallyStruggled = (item.Errors + item.Hints) >= 2;
-            bool aligned = (claimsStruggle && actuallyStruggled) || (claimsEasy && !actuallyStruggled);
+
+            // Help taken means a low error count is not evidence of anything: the help produced it. A
+            // student who asked to be shown the answer and then said it felt easy has not read their
+            // own performance accurately, and counting that as good self-assessment would reward
+            // exactly the students who did the least of the work.
+            bool tookHelp = item.Decisions.Contains("=Declined", StringComparison.Ordinal);
+            bool lowErrors = (item.Errors + item.Hints) < 2;
+            bool easyClaimIsBackedByEvidence = lowErrors && !tookHelp;
+
+            bool aligned = (claimsStruggle && !lowErrors) || (claimsEasy && easyClaimIsBackedByEvidence);
 
             return new ReflectionEvaluateResponse
             {
@@ -1623,10 +2068,34 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
                 .GetString();
         }
 
-        /// <summary>AI goal suggestion response item.</summary>
+        /// <summary>
+        /// One suggested goal, in the same shape the picker builds a goal from.
+        ///
+        /// The model returns this and the server normalises it (see <see cref="GoalCatalogue"/>), so
+        /// a suggestion is always a goal that actually exists with legal values. The model cannot
+        /// invent a category or a target size that the picker would then refuse — and it cannot
+        /// quietly suggest a goal the student is unable to complete.
+        /// </summary>
         public class GoalSuggestion
         {
-            public string Id { get; set; } = "";
+            /// <summary>One of the six categories. A suggestion with anything else is discarded.</summary>
+            public string Category { get; set; } = "";
+
+            /// <summary>Method or exercise type to narrow to. Empty means "any".</summary>
+            public string Focus { get; set; } = "";
+
+            /// <summary>"exercises" | "minutes".</summary>
+            public string Metric { get; set; } = GoalCatalogue.ExercisesMetric;
+
+            public int Target { get; set; }
+
+            /// <summary>hintsAndErrors only: "hints" | "errors".</summary>
+            public string Quality { get; set; } = "";
+
+            /// <summary>hintsAndErrors only: the per-exercise limit.</summary>
+            public int MaxPerExercise { get; set; }
+
+            /// <summary>Why this goal, for this student. Shown verbatim under the suggestion.</summary>
             public string Reason { get; set; } = "";
         }
 

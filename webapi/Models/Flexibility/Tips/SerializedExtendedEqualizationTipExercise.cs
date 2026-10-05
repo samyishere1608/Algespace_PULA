@@ -107,10 +107,10 @@ namespace webapi.Models.Flexibility
                 SecondEquationIsIsolatedIn = SecondEquationIsIsolatedIn,
                 FirstVariable = JsonSerializer.Deserialize<Variable>(FirstVariable) ?? throw new ArgumentException(),
                 SecondVariable = JsonSerializer.Deserialize<Variable>(SecondVariable) ?? throw new ArgumentException(),
-                Question = language == Language.de ? QuestionDE : QuestionEN,
-                AgentMessageForTask = language == Language.de ? AgentMessageForTaskDE : AgentMessageForTaskEN,
-                AgentMessageForFirstSolution = language == Language.de ? AgentMessageForFirstSolutionDE : AgentMessageForFirstSolutionEN,
-                AgentMessageForSecondSolution = language == Language.de ? AgentMessageForSecondSolutionDE : AgentMessageForSecondSolutionEN
+                Question = ExerciseContentJapanese.Pick(language, QuestionDE, QuestionEN),
+                AgentMessageForTask = ExerciseContentJapanese.Pick(language, AgentMessageForTaskDE, AgentMessageForTaskEN),
+                AgentMessageForFirstSolution = ExerciseContentJapanese.Pick(language, AgentMessageForFirstSolutionDE, AgentMessageForFirstSolutionEN),
+                AgentMessageForSecondSolution = ExerciseContentJapanese.Pick(language, AgentMessageForSecondSolutionDE, AgentMessageForSecondSolutionEN)
             };
         }
 

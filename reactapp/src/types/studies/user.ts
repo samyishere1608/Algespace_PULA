@@ -10,3 +10,12 @@ export interface IUser {
     readonly expirationDate?: string;
     readonly token: string;
 }
+
+/**
+ * The parts of an identity the exercise tracker records under.
+ *
+ * Deliberately narrower than `IUser`. A student session has no study type and no agent condition,
+ * and the tracker reads only these three fields — saying exactly that lets a study login and a
+ * student login both satisfy it honestly, without casting one into the other's shape.
+ */
+export type TrackerUser = Pick<IUser, "id" | "username" | "token">;

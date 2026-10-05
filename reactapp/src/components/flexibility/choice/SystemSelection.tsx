@@ -34,6 +34,7 @@ export function SystemSelection(
         trackHints,
         trackChoice,
         trackChoiceIntervention,
+        reconsiderDecline,
         trackType,
         condition,
         decidePersonalIntervention
@@ -52,6 +53,11 @@ export function SystemSelection(
         trackHints: () => void;
         trackChoice: (choice: string) => void;
         trackChoiceIntervention: (choice: string) => void;
+        /**
+         * Offers the one nudge before a decline takes effect; resolves true if the student takes it.
+         * Optional because a study run has no nudge — the study module has no counterpart for it.
+         */
+        reconsiderDecline?: () => Promise<boolean>;
         trackType: (type: number) => void;
         condition: AgentCondition,
         decidePersonalIntervention: (method: number) => Promise<{ trigger: boolean; messageType: number }>;
@@ -117,19 +123,21 @@ export function SystemSelection(
                         loadNextStep(true);
                     }
                 }}
-                handleNo={() => {
-                    trackChoice("No");
-                    if(condition == AgentCondition.PersonalMotivationalAgent){
-                        if(decision){
+                reconsider={reconsiderDecline}
+                handleNo={(engaged) => {
+                    // `engaged` is true when the nudge turned the decline into a retry, i.e. the "Ja"
+                    // path. Where an answer leads differs only when the personal agent is intervening.
+                    const goNext = (engaged: boolean): void => {
+                        if (condition == AgentCondition.PersonalMotivationalAgent && (engaged ? !decision : decision)) {
                             setPersonalIntervention(true);
                         }
-                        else{
-                            loadNextStep(false);
+                        else {
+                            loadNextStep(engaged);
                         }
-                    }
-                    else{
-                        loadNextStep(false);
-                    }
+                    };
+
+                    trackChoice(engaged ? "Yes" : "No");
+                    goNext(engaged);
                 }}
                 agentType={agentType} agentExpression={AgentExpression.Smiling} additionalMessage={additionalMessage}
             >

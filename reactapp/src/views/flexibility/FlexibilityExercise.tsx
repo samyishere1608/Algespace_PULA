@@ -1,6 +1,6 @@
 import useAxios from "axios-hooks";
 import { plainToClass } from "class-transformer";
-import { ReactElement, useRef, useState } from "react";
+import { ReactElement, useState } from "react";
 import { ErrorTranslations } from "@/types/shared/errorTranslations.ts";
 import { GeneralTranslations } from "@/types/shared/generalTranslations.ts";
 import ErrorScreen from "@components/shared/ErrorScreen.tsx";
@@ -15,7 +15,8 @@ import { AgentCondition, FlexibilityExerciseType } from "@/types/flexibility/enu
 import { getExerciseNumber, handleNavigationClick } from "@utils/utils.ts";
 import { ErrorBoundary } from "react-error-boundary";
 import NavigationBar from "@components/shared/NavigationBar.tsx";
-import { getCurrentLanguage } from "@/i18n.ts";
+import { useTranslation } from "react-i18next";
+import { TranslationNamespaces, getCurrentLanguage } from "@/i18n.ts";
 import { SuitabilityExercise as SuitabilityExerciseProps } from "@/types/flexibility/suitabilityExercise.ts";
 import { SuitabilityExercise } from "@components/flexibility/exercises/SuitabilityExercise.tsx";
 import { EfficiencyExercise } from "@components/flexibility/exercises/EfficiencyExercise.tsx";
@@ -28,39 +29,26 @@ import { TipExercise } from "@components/flexibility/exercises/TipExercise.tsx";
 import { PlainExercise as PlainExerciseProps } from "@/types/flexibility/plainExercise.ts";
 import { PlainExercise } from "@components/flexibility/exercises/PlainExercise.tsx";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
-import { StudyGoal } from "@views/student/dashboard/SetStudyPlanModal.tsx";
+import type { StudyGoal } from "@/types/student/goal.ts";
 import {
-    checkCompletedGoals,
-    logGoalCompletion,
-    logExerciseCompletion,
-    getPippinExerciseCount,
-    resetPippinExerciseCount,
-    getExerciseErrorCount,
-    resetExerciseErrorCount,
-    getExerciseHintCount,
-    resetExerciseHintCount,
-    incrementPippinFreeCount,
-    incrementSuitabilityExerciseCount,
-    incrementEfficiencyExerciseCount,
-    incrementMatchingExerciseCount,
-    incrementSoloExerciseCount,
-    incrementSoloExerciseCountToday,
-    incrementPippinExerciseCountToday,
-    addExerciseTimeToday,
-    incrementConsecutiveSoloCount,
-    resetConsecutiveSoloCount,
     addAccuracyEntry,
-    incrementWeaknessExerciseCount,
-    getWeaknessTargetType,
-    ExerciseCompletionData,
-} from "@utils/goalUtils.ts";
-import { addResolveXP, addInsightXP, addChoiceXP } from "@utils/agencyUtils.ts";
-import { showAgencyToast, AgencyXpToast } from "@components/shared/AgencyXpToast.tsx";
-import { PippinLockContext } from "@/contexts/PippinLockContext.tsx";
-import { SolveChoiceScreen } from "@components/flexibility/SolveChoiceScreen.tsx";
+    getExerciseDecisions,
+    getExerciseErrorCount,
+    getExerciseHintCount,
+    logExerciseCompletion,
+    resetExerciseDecisions,
+    resetExerciseErrorCount,
+    resetExerciseHintCount,
+} from "@utils/progressUtils.ts";
+import { getActiveGoals } from "@utils/activeGoals.ts";
+import { GOAL_RESOLVE_XP, asTranslate, describeGoal } from "@utils/goalCatalog.ts";
+import { claimCompletedGoals, earliestGoalStart, fetchGoalEventsAfterExercise } from "@utils/goalProgress.ts";
+import { forgetAvoidanceProfile } from "@utils/avoidanceProfile.ts";
+import { AgencyXpToast, showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
 
 export default function FlexibilityExercise({ isStudyExample }: { isStudyExample: boolean }): ReactElement {
     const [exitOverlay, setExitOverlay] = useState<[boolean, boolean]>([false, false]);
+    const { t } = useTranslation(TranslationNamespaces.Student);
     const location = useLocation();
     const { exerciseId } = useParams();
 
@@ -70,39 +58,15 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
     // ── Goal celebration state ────────────────────────────────────────────────
     const [celebrationData, setCelebrationData] = useState<{
         goals: StudyGoal[];
-        xpEarned: number;
-        newTotalXP: number;
+        resolveXpEarned: number;
         navigateTo: string;
     } | null>(null);
 
     const { student } = useAuth();
 
-    // ── Solo/Pippin choice ─────────────────────────────────────────
-    // null = choice screen visible; "solo"/"pippin" = exercise running
-    const [solveChoice, setSolveChoice] = useState<"solo" | "pippin" | null>(
-        isStudyExample || !student ? "pippin" : null
-    );
-    const [pippinUnlocked, setPippinUnlocked] = useState(false);
-    // Refs so buildHandleEnd closures always read the latest values
-    const solveChoiceRef = useRef<"solo" | "pippin">("pippin");
-    const pippinUnlockedRef = useRef(false);
-    const exerciseStartTime = useRef<number>(performance.now());
-
-    // Prevent Choice XP farming — persist per exercise ID in localStorage
-    function hasAwardedChoiceXp(exId: number): boolean {
-        const key = `choice_xp_awarded_${student?.id ?? "guest"}_${exId}`;
-        return localStorage.getItem(key) === "1";
-    }
-    function markChoiceXpAwarded(exId: number): void {
-        const key = `choice_xp_awarded_${student?.id ?? "guest"}_${exId}`;
-        localStorage.setItem(key, "1");
-    }
-
-    // Active goal IDs stored in localStorage by the dashboard, scoped per student
-    const goalKey = `active_goal_ids_${student?.id ?? "guest"}`;
-    const activeGoalIds: string[] = JSON.parse(
-        localStorage.getItem(goalKey) ?? "[]"
-    ) as string[];
+    // The Solo/Pippin choice screen was removed along with the free-text chat. Every student now
+    // goes straight into the exercise. Agency is exercised through the in-exercise decision anchors
+    // instead, which are recorded and drive the avoidance profile.
 
     if (exerciseId === undefined || exerciseId === "undefined" || concreteExerciseType === undefined || concreteExerciseId === undefined) {
         return <ErrorScreen text={ErrorTranslations.ERROR_EXERCISE_ID} routeToReturn={Paths.FlexibilityStudyExamplesPath} showFrownIcon={true} />;
@@ -114,136 +78,70 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
     /** Called by each exercise component when the student finishes. */
     function buildHandleEnd(navigateTo: string, exerciseTypeName: string): () => void {
         return function () {
-            const wasSoloMode = solveChoiceRef.current === "solo" && !pippinUnlockedRef.current;
-            const data: ExerciseCompletionData = {
-                exerciseType: exerciseTypeName,
-                totalErrors: getExerciseErrorCount(),
-                totalHints: getExerciseHintCount(),
-                pippinMessages: getPippinExerciseCount(),
-                isSolo: wasSoloMode,
-            };
+            const errors = getExerciseErrorCount();
+            const hints = getExerciseHintCount();
+            const decisions = getExerciseDecisions();
 
             // Reset counters for the next exercise
             resetExerciseErrorCount();
             resetExerciseHintCount();
-            resetPippinExerciseCount();
+            resetExerciseDecisions();
 
-            // Always log exercise completion for stats (non-blocking)
-            if (student) {
-                void logExerciseCompletion(student.id, exerciseTypeName, data.totalErrors, data.totalHints);
-            }
-
-            // Increment pippin-free-day counter if Pippin wasn't used this exercise
-            if (data.pippinMessages === 0 && student) {
-                incrementPippinFreeCount(student.id);
-            }
-
-            // Increment suitability exercise counter for Master Suitability goal
-            if (exerciseTypeName === "Suitability" && student) {
-                incrementSuitabilityExerciseCount(student.id);
-            }
-            // Increment efficiency exercise counter for Master Efficiency goal
-            if (exerciseTypeName === "Efficiency" && student) {
-                incrementEfficiencyExerciseCount(student.id);
-            }
-            // Increment matching exercise counter for Master Matching goal
-            if (exerciseTypeName === "Matching" && student) {
-                incrementMatchingExerciseCount(student.id);
-            }
-
-            // Increment solo exercise counter for Independence Champion & Go Solo Once
-            const isSolo = solveChoiceRef.current === "solo" && !pippinUnlockedRef.current;
-            if (isSolo && student) {
-                incrementSoloExerciseCount(student.id);
-            }
-
-            // Increment weakness counter for Face Your Weakness goal
-            if (student) {
-                const weaknessTarget = getWeaknessTargetType(student.id);
-                if (weaknessTarget && exerciseTypeName === weaknessTarget) {
-                    incrementWeaknessExerciseCount(student.id, exerciseTypeName);
-                }
-            }
-
-            // Track solo vs pippin exercise completion for session summary
-            if (student) {
-                const isSolo = solveChoiceRef.current === "solo" && !pippinUnlockedRef.current;
-                if (isSolo) {
-                    incrementSoloExerciseCountToday(student.id);
-                } else {
-                    incrementPippinExerciseCountToday(student.id);
-                }
-
-                // Track exercise time
-                const elapsed = (performance.now() - exerciseStartTime.current) / 1000;
-                addExerciseTimeToday(student.id, elapsed);
-
-                // Track consecutive solo for Perfect Solo Session
-                if (wasSoloMode) {
-                    incrementConsecutiveSoloCount(student.id);
-                } else {
-                    resetConsecutiveSoloCount(student.id);
-                }
-
-                // Track accuracy for Sharp Shooter + dashboard KPI
-                addAccuracyEntry(student.id, data.totalErrors, data.totalHints);
-            }
-
-            // Check which active goals are satisfied
-            const completed = checkCompletedGoals(activeGoalIds, data, student?.id);
-
-            if (completed.length > 0 && student) {
-                // ── Coin system removed — kept as comment for future use ──
-                // const coinMultiplier = solveChoiceRef.current === "solo" && !pippinUnlockedRef.current ? 2 : 1;
-                // const totalCoins = completed.reduce((sum, g) => sum + g.coinReward, 0) * coinMultiplier;
-                // addCoins(student.id, totalCoins);
-
-                // ── Anchor 3.1: Solo vs AI follow-through ───────────────
-                const wasSolo = solveChoiceRef.current === "solo";
-                const wasPippin = solveChoiceRef.current === "pippin";
-                const didUnlockPippin = pippinUnlockedRef.current;
-                const usedNoHints = data.totalHints === 0 && data.pippinMessages === 0;
-
-                if (wasSolo && !didUnlockPippin) {
-                    // Scenario 1: Chose solo + never unlocked AI → full Resolve (followed through)
-                    addResolveXP(student.id, 5, "solo-followed-through");
-                    showAgencyToast("resolve", 5);
-                } else if (wasSolo && didUnlockPippin && data.totalErrors >= 3) {
-                    // Scenario 2: Chose solo + unlocked AI after genuinely trying → Insight (chose what's right in the moment)
-                    addInsightXP(student.id, 3, "genuine-try-then-ai");
-                    showAgencyToast("insight", 3);
-                } else if (wasSolo && didUnlockPippin) {
-                    // Scenario 3: Chose solo + unlocked AI immediately → tiny Insight, no Resolve (commitment wasn't true)
-                    addInsightXP(student.id, 1, "solo-quick-surrender");
-                } else if (wasPippin && usedNoHints) {
-                    // Scenario 4: Chose Pippin + used zero hints → Insight (self-restraint)
-                    addInsightXP(student.id, 3, "pippin-unused-help");
-                    showAgencyToast("insight", 3);
-                }
-
-                // ── Agency XP for goal completion ─────────────────────
-                let agencyEarned = 0;
-                completed.forEach(() => {
-                    // Follow-through on any goal earns the same Resolve — the distinction
-                    // between self-picked and AI-suggested is made at goal-setting time.
-                    addResolveXP(student.id, 5, "goal-completed");
-                    agencyEarned += 5;
-                });
-                if (agencyEarned > 0) {
-                    showAgencyToast("resolve", agencyEarned);
-                }
-
-                // Log all to backend, then show celebration
-                Promise.all(completed.map((g) => logGoalCompletion(student.id, g, data)))
-                    .then(() => {
-                        setCelebrationData({ goals: completed, xpEarned: 0, newTotalXP: 0, navigateTo });
-                    })
-                    .catch(() => {
-                        window.location.href = navigateTo;
-                    });
-            } else {
+            // Nothing else can be done without a student: the goal check reads their own history,
+            // and the completion log has nowhere to go.
+            if (!student) {
                 window.location.href = navigateTo;
+                return;
             }
+
+            // Always log exercise completion for stats (non-blocking). The decisions ride along so
+            // the reflection can tell what the student actually chose, not just how many times they
+            // slipped.
+            void logExerciseCompletion(student.id, exerciseTypeName, errors, hints, decisions);
+            addAccuracyEntry(student.id, errors, hints);
+
+            // This exercise just changed the avoidance profile, so the cached reading is stale. The
+            // next exercise's first declined decision must not be judged on the old one.
+            forgetAvoidanceProfile(student.id);
+
+            // The goals are a server read now, so the check begins by asking for them. When there
+            // are none the student leaves straight away; the round trip is the price of the goals
+            // surviving a cleared browser, and it happens once per finished exercise.
+            void (async () => {
+                const goals = await getActiveGoals(student.id);
+                if (goals.length === 0) {
+                    window.location.href = navigateTo;
+                    return;
+                }
+
+                try {
+                    // The tracker posts this attempt immediately before handing control back, and
+                    // that post is not awaited — so the read has to wait for it to land. See
+                    // `fetchGoalEventsAfterExercise` for how that race is closed and why giving up
+                    // is safe.
+                    const events = await fetchGoalEventsAfterExercise(student.id, earliestGoalStart(goals));
+                    const completed = await claimCompletedGoals(
+                        student.id, goals, events, (goal) => describeGoal(goal, asTranslate(t)));
+
+                    if (completed.length === 0) {
+                        window.location.href = navigateTo;
+                        return;
+                    }
+
+                    setCelebrationData({
+                        goals: completed.map((entry) => entry.goal),
+                        resolveXpEarned: completed.length * GOAL_RESOLVE_XP,
+                        navigateTo,
+                    });
+
+                    // The XP is announced where it was earned. Waiting for the dashboard would put
+                    // the toast a screen away from the thing that caused it.
+                    showAgencyToast("resolve", completed.length * GOAL_RESOLVE_XP);
+                } catch {
+                    // A failed check must never trap the student in the exercise.
+                    window.location.href = navigateTo;
+                }
+            })();
         };
     }
 
@@ -258,35 +156,12 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                                style={{ minHeight: "3.5rem" }} />
                 <div className={"flexibility-view__container"}>
                     <div className={"flexibility-view__contents"}>
-                        {solveChoice === null ? (
-                            <SolveChoiceScreen onChoose={(mode) => {
-                                solveChoiceRef.current = mode;
-                                setSolveChoice(mode);
-                                exerciseStartTime.current = performance.now();  // start timer
-                                // Anchor 3.1: Award Choice XP once per exercise (persisted)
-                                if (student && !hasAwardedChoiceXp(id)) {
-                                    markChoiceXpAwarded(id);
-                                    addChoiceXP(student.id, 3, mode === "solo" ? "picked-solo" : "picked-pippin");
-                                    showAgencyToast("choice", 3);
-                                }
-                            }} />
-                        ) : (
-                            <PippinLockContext.Provider value={{
-                                soloMode: solveChoice === "solo",
-                                pippinUnlocked,
-                                onUnlock: () => {
-                                    pippinUnlockedRef.current = true;
-                                    setPippinUnlocked(true);
-                                },
-                            }}>
-                                {isStudyExample ?
-                                    <ExampleExercise concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId}
-                                                     flexibilityId={id} navigateBackTo={Paths.FlexibilityStudyExamplesPath} /> :
-                                    <Exercise concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId} flexibilityId={id}
-                                              navigateBackTo={Paths.FlexibilityPath} buildHandleEnd={buildHandleEnd} />
-                                }
-                            </PippinLockContext.Provider>
-                        )}
+                        {isStudyExample ?
+                            <ExampleExercise concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId}
+                                             flexibilityId={id} navigateBackTo={Paths.FlexibilityStudyExamplesPath} /> :
+                            <Exercise concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId} flexibilityId={id}
+                                      navigateBackTo={Paths.FlexibilityPath} buildHandleEnd={buildHandleEnd} />
+                        }
                     </div>
                 </div>
             </div>
@@ -296,13 +171,10 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
             {celebrationData && (
                 <GoalCelebrationOverlay
                     completedGoals={celebrationData.goals}
-                    xpEarned={celebrationData.xpEarned}
-                    newTotalXP={celebrationData.newTotalXP}
+                    resolveXpEarned={celebrationData.resolveXpEarned}
                     onContinue={() => {
-                        // Remove completed goals so Active Missions updates immediately
-                        const completedIds = new Set(celebrationData.goals.map((g) => g.id));
-                        const remaining = activeGoalIds.filter((id) => !completedIds.has(id));
-                        localStorage.setItem(goalKey, JSON.stringify(remaining));
+                        // The goals were already removed from storage when they were claimed, so the
+                        // dashboard reads the updated list without any work here.
                         window.location.href = celebrationData.navigateTo;
                     }}
                 />

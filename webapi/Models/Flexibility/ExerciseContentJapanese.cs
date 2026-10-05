@@ -1,12 +1,21 @@
+using webapi.Models.User;
+
 namespace webapi.Models.Flexibility
 {
     /// <summary>
-    /// Japanese translations for the self-explanation content (option texts, reasons and
-    /// the self-explanation agent message) that is served by the backend in Efficiency and
-    /// Matching exercises. The data is keyed by the English string so that the same
-    /// translation is reused wherever a string appears more than once.
+    /// Japanese translations for exercise content that the backend serves in the exercise JSON —
+    /// self-explanation option texts and reasons, and the pedagogical agent's motivational messages.
+    /// Keyed by the English string, so one translation covers every exercise that uses it.
+    ///
+    /// This existed as `SelfExplanationJapanese` and was wired to ONLY the self-explanation agent
+    /// message, which is why a Japanese student saw English for the first/second-solution, comparison,
+    /// resolving and task messages while the self-explanation one was Japanese. It covers all of them
+    /// now, and every `Deserialize(language)` picks it up.
+    ///
+    /// `Translate` returns the English text when a string is not in the dictionary, so a message added
+    /// later degrades to the old behaviour instead of throwing or rendering nothing.
     /// </summary>
-    public static class SelfExplanationJapanese
+    public static class ExerciseContentJapanese
     {
         private static readonly Dictionary<string, string> Translations = new(StringComparer.Ordinal)
         {
@@ -136,7 +145,60 @@ namespace webapi.Models.Flexibility
             { "Subtracting gives −3x−3y=−15; x is not eliminated.", "引くと −3x−3y=−15 になり、x は消えません。" },
             { "Equalization can be applied directly to 2y without dividing the equations by 2 first.", "式を2で割らなくても、2y に対して等値法を直接使えます。" },
             { "That describes substitution, not equalization.", "それは代入法の説明であり、等値法ではありません。" },
-            { "Equalization also works when both equations are solved for a multiple of the same variable.", "等値法は、両方の式が同じ変数の倍数について解かれている場合にも使えます。" }
+            { "Equalization also works when both equations are solved for a multiple of the same variable.", "等値法は、両方の式が同じ変数の倍数について解かれている場合にも使えます。" },
+
+            // ── Agent messages: comparing methods (Suitability) ──────────────────────────────────
+            { "In exams, you often need to know different approaches. Comparing different methods prepares you optimally for this.", "試験では、さまざまな解き方を知っていることがよく求められます。いろいろな方法を比較することで、それに十分備えられます。" },
+            { "Each method has its advantages and disadvantages. By comparing them, you will learn which method is best used when.", "それぞれの方法には長所と短所があります。比較することで、どの方法をいつ使うのが最適かが分かります。" },
+            { "By comparing them, you will learn which methods are faster or easier. This helps you to work more efficiently and make better use of your time.", "比較することで、どの方法が速いか、簡単かが分かります。より効率よく作業でき、時間をうまく使えるようになります。" },
+            { "The comparison shows you how different approaches can lead to the same result. This broadens your understanding and shows you new perspectives.", "比較することで、違う解き方でも同じ結果にたどり着けることが分かります。理解が広がり、新しい視点が得られます。" },
+            { "Comparing different methods deepens your understanding of mathematical concepts and how they are related.", "さまざまな方法を比較すると、数学的な概念とそのつながりについての理解が深まります。" },
+            { "Comparing different methods helps you to recognise and correct possible errors. You can see if and where you are wrong with a method.", "さまざまな方法を比較すると、間違いに気づいて直しやすくなります。どの方法で、どこを間違えたのかが分かります。" },
+            { "If you know and can compare several methods, you are more flexible and can choose the best method depending on the problem.", "いくつかの方法を知り、比べられると、より柔軟になり、問題に応じて最適な方法を選べます。" },
+            { "Comparing methods sharpens your judgement for the most efficient approach.", "方法を比較することで、最も効率的な解き方を見極める力が磨かれます。" },
+            { "Knowing several methods makes you more flexible and adaptable.", "いくつかの方法を知っていると、より柔軟に対応できます。" },
+            { "Comparing methods shows you which approach is most suitable for certain tasks.", "方法を比較することで、ある課題にどの解き方が最も適しているかが分かります。" },
+
+            // ── Agent messages: calculating by hand (first/second solution) ──────────────────────
+            { "If you regularly calculate by hand, you will become faster and more efficient at solving tasks.", "定期的に手計算をすると、問題をより速く、効率よく解けるようになります。" },
+            { "Computers sometimes make mistakes or are operated incorrectly. If you regularly calculate by hand, you can easily recognise and correct such errors.", "コンピューターは時々間違えたり、操作を誤ったりします。定期的に手計算をすると、そうした間違いに気づいて直しやすくなります。" },
+            { "Solving equations by hand makes you less dependent on technology.", "手計算で方程式を解くと、技術への依存が少なくなります。" },
+            { "If you regularly calculate by hand, you will learn to work more accurately and pay attention to details.", "定期的に手計算をすると、より正確に、細部に気を配って作業できるようになります。" },
+            { "If you regularly calculate by hand, you will become faster and more efficient.", "定期的に手計算をすると、より速く、効率的になります。" },
+            { "If you regularly calculate by hand, you will continuously expand and improve your maths skills.", "定期的に手計算をすると、数学の力が絶えず伸びていきます。" },
+            { "By calculating by hand, you will better understand how mathematical concepts and rules are related.", "手計算をすることで、数学的な概念と法則のつながりをよりよく理解できます。" },
+            { "Trying out different calculations by hand makes you flexible and adaptable when solving problems.", "いろいろな計算を手で試すと、問題を解くときに柔軟に対応できるようになります。" },
+            { "By calculating by hand, you will better understand how mathematical concepts are related.", "手計算をすることで、数学的な概念同士のつながりをよりよく理解できます。" },
+            { "If you calculate by hand, you become less dependent on technical aids and can rely on your own skills.", "手計算をすると、道具への依存が減り、自分の力に頼れるようになります。" },
+            { "Calculators and computers are not always available. If you can calculate by hand, you are well prepared in any situation.", "電卓やコンピューターがいつも使えるとは限りません。手計算ができれば、どんな状況でも十分に対応できます。" },
+            { "If you calculate by hand, you understand the individual steps better and can recognise and correct errors more quickly.", "手計算をすると、一つ一つの手順をよりよく理解でき、間違いにも早く気づいて直せます。" },
+            { "If you can solve simple equations by hand, you will be better prepared to tackle complex problems.", "簡単な方程式を手で解けると、複雑な問題に取り組む備えができます。" },
+            { "Manual calculations are required in many exams. Regular practice prepares you optimally for this.", "多くの試験では手計算が必要です。定期的に練習することで、それに十分備えられます。" },
+            { "If you calculate by hand, you learn to work more precisely and pay attention to details.", "手計算をすると、より正確に、細部に気を配って作業できるようになります。" },
+            { "Computers sometimes make mistakes. If you regularly calculate by hand, you can easily recognise and correct such errors.", "コンピューターは時々間違えます。定期的に手計算をすると、そうした間違いに気づいて直しやすくなります。" },
+            { "Many everyday problems require basic mathematical knowledge, which you will deepen through manual calculation.", "日常の多くの問題には基礎的な数学の知識が必要で、手計算を通じてそれを深められます。" },
+            { "If you calculate by hand, you become less dependent on technical aids.", "手計算をすると、道具への依存が少なくなります。" },
+            { "Regularly practising different methods prepares you optimally for exams.", "さまざまな方法を定期的に練習すると、試験に十分備えられます。" },
+
+            // ── Agent messages: trying an alternative method (Resolving) ─────────────────────────
+            { "Trying out different methods shows you that there are often several ways to solve a problem.", "いろいろな方法を試すと、一つの問題に解き方がいくつもあることが多いと分かります。" },
+            { "An alternative method can be faster and more efficient. By practising different approaches, you will find the method that suits you best.", "別の方法のほうが速く効率的なこともあります。いろいろな解き方を練習すると、自分に合った方法が見つかります。" },
+            { "By trying out a different method, you discover new ways to solve the problem. This will help you to find out which method is quickest or easiest, which will help you to work more efficiently.", "別の方法を試すと、問題の新しい解き方に気づけます。どの方法が一番速いか、簡単かが分かり、より効率よく作業できます。" },
+            { "If you master different methods, you can react flexibly to different problems.", "さまざまな方法を使いこなせると、いろいろな問題に柔軟に対応できます。" },
+            { "If you know several methods, you are more flexible and can choose the best method depending on the problem.", "いくつかの方法を知っていると、より柔軟になり、問題に応じて最適な方法を選べます。" },
+            { "If you have mastered different methods, you will be better prepared for more complex problems. You can then choose the method that best suits the problem at hand.", "さまざまな方法を使いこなせると、より複雑な問題にも備えられます。目の前の問題に最も適した方法を選べるようになります。" },
+            { "If you try out a different method, you may notice mistakes that you previously overlooked. This will help you to work more precisely and improve your skills.", "別の方法を試すと、これまで見落としていた間違いに気づくことがあります。より正確に作業でき、力も伸びます。" },
+            { "Solving a problem in several ways deepens your understanding of the connections.", "一つの問題をいくつもの方法で解くと、つながりについての理解が深まります。" },
+            { "If you try out a different method, you may notice mistakes that you previously overlooked.", "別の方法を試すと、これまで見落としていた間違いに気づくことがあります。" },
+            { "If you try a different method, you can immediately see which method is most efficient for this system.", "別の方法を試すと、この連立方程式にどの方法が最も効率的かがすぐに分かります。" },
+
+            // ── Agent messages: what this task teaches (Tip exercises) ───────────────────────────
+            { "In this task, you will learn an additional strategy that can also help you with other tasks.", "この課題では、他の課題にも役立つ追加のやり方を学びます。" },
+            { "In this task, you will learn how to use the substitution method even more efficiently. This will also prepare you well for more difficult tasks.", "この課題では、代入法をさらに効率よく使う方法を学びます。より難しい課題への備えにもなります。" },
+
+            // ── Tip-exercise questions, rendered as-is when the data sets them ──────────────────
+            { "Did you know that you can also use the equation method if both equations in the system are solved for the same multiple of a variable? Would you like to try out such a task?", "連立方程式の両方の式が、同じ変数の同じ倍数について解かれている場合にも、等値法が使えることを知っていましたか？そのような問題を試してみませんか？" },
+            { "Did you know that you can also substitute the term belonging to a multiple of a variable into the other equation if the same multiple of the variable occurs in this equation? Would you like to try out an example of this substitution method?", "ある式に変数の同じ倍数が含まれているとき、その倍数の項を他の式に代入できることを知っていましたか？この代入法の例を試してみませんか？" }
         };
 
         public static string? Translate(string? english)
@@ -147,6 +209,26 @@ namespace webapi.Models.Flexibility
             }
 
             return Translations.TryGetValue(english, out var japanese) ? japanese : english;
+        }
+
+        /// <summary>
+        /// Picks the text for a language: German for de, the Japanese translation for ja, English
+        /// otherwise. Null-safe in both directions: a field the data leaves unset stays null instead
+        /// of becoming an empty string, because the client treats null as "fall back to the UI string"
+        /// and an empty string as "render nothing" — turning one into the other blanks the line.
+        ///
+        /// Every Deserialize(language) goes through here, so a new field cannot be wired for German
+        /// and silently forgotten for Japanese, which is how the agent messages went untranslated
+        /// while the self-explanation one was fine.
+        /// </summary>
+        public static string? Pick(Language language, string? de, string? en)
+        {
+            if (language == Language.de)
+            {
+                return de;
+            }
+
+            return language == Language.ja ? Translate(en) : en;
         }
     }
 }

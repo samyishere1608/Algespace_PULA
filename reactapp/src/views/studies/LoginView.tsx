@@ -50,13 +50,13 @@ export default function LoginView(): ReactElement {
                     <p>{t(GeneralTranslations.LOGIN_TEXT)}</p>
                     <div className={"input__container"}>
                         <label>{t(GeneralTranslations.LOGIN_NAME)}</label>
-                        <input autoFocus className={"input__box"} type={"text"} value={username} placeholder="Username" maxLength={20} onChange={handleUsernameChange}
+                        <input autoFocus className={"input__box"} type={"text"} value={username} placeholder={t(GeneralTranslations.LOGIN_NAME)} maxLength={20} onChange={handleUsernameChange}
                                onKeyDown={handleKeyDown} />
                     </div>
                     <div className={"input__container"}>
                         <label>{t(GeneralTranslations.LOGIN_PW)}</label>
                         <div className={"input__password-box"}>
-                            <input className={"input__box"} type={showPassword ? "text" : "password"} value={password} placeholder="Password" maxLength={20}
+                            <input className={"input__box"} type={showPassword ? "text" : "password"} value={password} placeholder={t(GeneralTranslations.LOGIN_PW)} maxLength={20}
                                    onChange={handlePasswordChange} onKeyDown={handleKeyDown} />
                             <span className={"input__password-eye"} onClick={() => setShowPassword(!showPassword)}>
                                 {showPassword ? <FontAwesomeIcon icon={faEye} /> : <FontAwesomeIcon icon={faEyeSlash} />}
@@ -67,7 +67,7 @@ export default function LoginView(): ReactElement {
                 {loading && <Loader />}
                 {error[0] && <p className={"login__error"}>{t(error[1], { ns: TranslationNamespaces.Error })}</p>}
                 <button className={"button primary-button"} disabled={username === "" || password === "" || loading} onClick={handleLogin}>
-                    Login
+                    {t(GeneralTranslations.BUTTON_LOGIN)}
                 </button>
             </div>
         </div>

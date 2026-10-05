@@ -1,13 +1,11 @@
 import { AgentCondition, AgentType, IsolatedIn, MatchingExerciseState, Method, SelectedEquation } from "@/types/flexibility/enums.ts";
-import { Fragment, ReactElement, useMemo, useState } from "react";
-import { PippinChat } from "@components/flexibility/PippinChat.tsx";
-import { equationToString } from "@utils/equationUtils.ts";
+import { ReactElement, useMemo, useState } from "react";
 import { MatchingExercise as MatchingExerciseProps } from "@/types/flexibility/matchingExercise.ts";
 import { getRandomAgent, setPKExerciseCompleted, setFlexibilityStudyExerciseCompleted, logFlexibilityMethodChoice } from "@utils/storageUtils.ts";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { GameError, GameErrorType } from "@/types/shared/error.ts";
-import useFlexibilityTracker from "@hooks/useFlexibilityTracker.ts";
-import { IUser } from "@/types/studies/user.ts";
+import useFlexibilityTracker, { ANCHOR_TRACKING_BASE, STUDY_TRACKING_BASE } from "@hooks/useFlexibilityTracker.ts";
+import useTrackerIdentity from "@hooks/useTrackerIdentity.ts";
 import { FlexibilityExerciseActionPhase, FlexibilityExerciseChoicePhase, FlexibilityExercisePhase, FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
 import { SystemTransformation } from "@components/flexibility/system/SystemTransformation.tsx";
 import { FlexibilityEquation as FlexibilityEquationProps, FlexibilityEquation } from "@/types/math/linearEquation.ts";
@@ -41,6 +39,7 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
     }, []);
 
     const { user } = useAuth();
+    const { logging, owner } = useTrackerIdentity(isStudy);
     if (isStudy) {
         if (user === undefined) {
             throw new GameError(GameErrorType.AUTH_ERROR);
@@ -53,6 +52,7 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
     const {
         trackActionInPhase,
         trackChoice,
+        reconsiderDecline,
         trackType,
         trackErrorInPhase,
         trackHintsInPhase,
@@ -62,7 +62,20 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
         decideCalculationIntervention,
         decideExplainIntervention
 
-    } = useFlexibilityTracker(isStudy, user as IUser, studyId as number, flexibilityExerciseId, exercise.id, FlexibilityStudyExerciseType.Matching, performance.now(), condition, agentType, FlexibilityExercisePhase.SystemSelection);
+    } = useFlexibilityTracker(
+        // Logged-in students track too, not only study participants.
+        logging,
+        owner,
+        studyId ?? 0,
+        flexibilityExerciseId,
+        exercise.id,
+        FlexibilityStudyExerciseType.Matching,
+        performance.now(),
+        condition,
+        agentType,
+        isStudy ? STUDY_TRACKING_BASE : ANCHOR_TRACKING_BASE,
+        FlexibilityExercisePhase.SystemSelection
+    );
 
     const randomOrder = useMemo(() => {
         return getRandomOrder(exercise.alternativeSystems.length + 1);
@@ -93,6 +106,7 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
                     trackError={trackErrorInPhase}
                     trackHints={trackHintsInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SelfExplanationChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SelfExplanationChoice)}
                     trackChoiceIntervention={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SelfExplanationInterventionChoice)}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeSelfExplanation)}
                     condition={condition}
@@ -246,6 +260,8 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
                     trackAction={(action: string) => trackActionInPhase(action, FlexibilityExerciseActionPhase.FirstSolutionActions)}
                     trackError={trackErrorInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
+                    reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeFirstSolution)}
                     condition={condition}
@@ -302,6 +318,8 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
                     trackAction={(action: string) => trackActionInPhase(action, FlexibilityExerciseActionPhase.SecondSolutionActions)}
                     trackError={trackErrorInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionChoice)}
+                    reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeSecondSolution)}
                     condition={condition}
@@ -337,23 +355,21 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
         }
     }
 
-    // Build context string for Pippin AI
-    const pippinContext = [
-        `Exercise type: Matching`,
-        `Current step: ${MatchingExerciseState[exerciseState]}`,
-        `Equation 1: ${equationToString(exercise.firstEquation)}`,
-        `Equation 2: ${equationToString(exercise.secondEquation)}`,
-        `Variables: ${exercise.firstVariable.name} and ${exercise.secondVariable.name}`,
-    ].filter(Boolean).join("\n");
-
-    return (
-        <Fragment>
-            {content}
-            <PippinChat exerciseContext={pippinContext} />
-        </Fragment>
-    );
+    // The free-text Pippin chat was removed. In-exercise agency now runs through the decision
+    // anchors, which are recorded and feed the avoidance profile.
+    return content;
 
     function handleSelection(selfExplain: boolean): void {
+        // The method this attempt is worked with.
+        //
+        // Matching NAMES the method rather than asking the student to choose one, so the exercise
+        // object is the only place it exists — but the student still solves the system with it, and
+        // "practise Elimination" is the same act here as it is in Suitability. Without this write the
+        // attempt carried no method at all, so a narrowed method goal could never count a Matching
+        // exercise however many the student did. `trackActionInPhase` with this phase is what the
+        // backend turns into `FlexibilityAttempt.SelectedMethod`.
+        trackActionInPhase(`${Method[exercise.method]}`, FlexibilityExerciseActionPhase.SelectedMethod);
+
         if (selfExplain) {
             setNextTrackingPhase(FlexibilityExercisePhase.SelfExplanation);
             setExerciseState(MatchingExerciseState.SelfExplanation);

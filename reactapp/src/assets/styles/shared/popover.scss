@@ -84,10 +84,12 @@
     }
 }
 
+// Re-enabled: hints are a tracked dimension again (students can set hint targets, and taking
+// hints feeds the avoidance profile), so the button must be reachable. It was previously hidden
+// by an explicit product decision.
 .flexibility-hint-button {
     position: absolute;
     bottom: 2rem;
-    display: none !important;   // hint button hidden per product decision
 }
 
 .agent-popover,

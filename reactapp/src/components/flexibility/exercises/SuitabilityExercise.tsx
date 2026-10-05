@@ -1,5 +1,5 @@
 import {TranslationNamespaces} from "@/i18n.ts";
-import {Fragment, ReactElement, useMemo, useState} from "react";
+import {ReactElement, useMemo, useState} from "react";
 import {useTranslation} from "react-i18next";
 import {EliminationParameters} from "@/types/flexibility/eliminationParameters.ts";
 import {
@@ -29,17 +29,17 @@ import {SystemTransformation} from "@components/flexibility/system/SystemTransfo
 import {determineSecondEquation, getTransformationStatus} from "@utils/utils.ts";
 import "@styles/flexibility/flexibility.scss";
 import {useAuth} from "@/contexts/AuthProvider.tsx";
-import {IUser} from "@/types/studies/user.ts";
+import useTrackerIdentity from "@hooks/useTrackerIdentity.ts";
 import {
     FlexibilityExerciseActionPhase,
     FlexibilityExerciseChoicePhase,
     FlexibilityExercisePhase,
     FlexibilityStudyExerciseType
 } from "@/types/studies/enums.ts";
-import useFlexibilityTracker from "@hooks/useFlexibilityTracker.ts";
+import useFlexibilityTracker, { ANCHOR_TRACKING_BASE, STUDY_TRACKING_BASE } from "@hooks/useFlexibilityTracker.ts";
 import {getRandomAgent, setFlexibilityStudyExerciseCompleted, setPKExerciseCompleted, logFlexibilityMethodChoice} from "@utils/storageUtils.ts";
-import {PippinChat} from "@components/flexibility/PippinChat.tsx";
-import {equationToString} from "@utils/equationUtils.ts";
+
+
 
 export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition, handleEnd, isStudy = false, studyId }: {
     flexibilityExerciseId: number,
@@ -60,6 +60,7 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
     }, []); // Compute agent once upon mount
 
     const { user } = useAuth();
+    const { logging, owner } = useTrackerIdentity(isStudy);
     if (isStudy) {
         if (user === undefined) {
             throw new GameError(GameErrorType.AUTH_ERROR);
@@ -72,6 +73,7 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
         initializeTrackingPhase,
         trackActionInPhase,
         trackChoice,
+        reconsiderDecline,
         trackType,
         trackErrorInPhase,
         trackHintsInPhase,
@@ -82,7 +84,20 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
         decideComparisonIntervention,
         decideResolvingIntervention
 
-    } = useFlexibilityTracker(isStudy, user as IUser, studyId as number, flexibilityExerciseId, exercise.id, FlexibilityStudyExerciseType.Suitability, performance.now(), condition, agentType);
+    } = useFlexibilityTracker(
+        // Logged-in students track too, not only study participants. Without this the anchors are
+        // inert outside the study module and nothing is recorded for the avoidance profile.
+        logging,
+        owner,
+        studyId ?? 0,
+        flexibilityExerciseId,
+        exercise.id,
+        FlexibilityStudyExerciseType.Suitability,
+        performance.now(),
+        condition,
+        agentType,
+        isStudy ? STUDY_TRACKING_BASE : ANCHOR_TRACKING_BASE
+    );
 
 
     const [exerciseState, setExerciseState] = useState<SuitabilityExerciseState>(SuitabilityExerciseState.MethodSelection);
@@ -252,6 +267,8 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
                     trackAction={(action: string) => trackActionInPhase(action, FlexibilityExerciseActionPhase.FirstSolutionActions)}
                     trackError={trackErrorInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
+                    reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeFirstSolution)}
                     condition={condition}
@@ -308,6 +325,8 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
                     trackAction={(action: string) => trackActionInPhase(action, FlexibilityExerciseActionPhase.SecondSolutionActions)}
                     trackError={trackErrorInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionChoice)}
+                    reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeSecondSolution)}
                     condition={condition}
@@ -370,6 +389,9 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
                             }
                         }
                     }}
+                    // The phase depends on which of the two prompts this is, so both bindings follow it.
+                    reconsiderDecline={() => reconsiderDecline(compare ? FlexibilityExerciseChoicePhase.ComparisonChoice : FlexibilityExerciseChoicePhase.ResolvingChoice)}
+                    reconsiderInterventionDecline={() => reconsiderDecline(compare ? FlexibilityExerciseChoicePhase.ComparisonInterventionChoice : FlexibilityExerciseChoicePhase.ResolvingInterventionChoice)}
                     setSecondChoice={(secondChoice: boolean): void => {
                         if (secondChoice) {
                             if (compare) {
@@ -543,22 +565,9 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
         }
     }
 
-    // Build context string for Pippin AI
-    const pippinContext = [
-        `Exercise type: Suitability`,
-        `Current step: ${SuitabilityExerciseState[exerciseState]}`,
-        `Equation 1: ${equationToString(exercise.firstEquation)}`,
-        `Equation 2: ${equationToString(exercise.secondEquation)}`,
-        `Variables: ${exercise.firstVariable.name} and ${exercise.secondVariable.name}`,
-        selectedMethod ? `Selected method: ${Method[selectedMethod]}` : null,
-    ].filter(Boolean).join("\n");
-
-    return (
-        <Fragment>
-            {content}
-            <PippinChat exerciseContext={pippinContext} />
-        </Fragment>
-    );
+    // The free-text Pippin chat was removed. In-exercise agency now runs through the decision
+    // anchors, which are recorded and feed the avoidance profile.
+    return content;
 
     function handleExerciseEnd(): void {
         if (isStudy) {

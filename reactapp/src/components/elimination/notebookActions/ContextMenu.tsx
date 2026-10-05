@@ -1,10 +1,14 @@
 import { faCopy, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import React, { ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowContainer, Popover } from "react-tiny-popover";
+import { TranslationNamespaces } from "@/i18n.ts";
 import "@styles/shared/popover.scss";
 
 export default function ContextMenu({ child, open, setOpen, handleDelete, canDelete, handleCopy, canCopy }: { child: ReactElement; open: boolean; setOpen: (value: React.SetStateAction<boolean>) => void; handleDelete: () => void; canDelete: boolean; handleCopy: () => void; canCopy: boolean }): ReactElement {
+    const { t } = useTranslation(TranslationNamespaces.General);
+
     return (
         <Popover
             containerStyle={{ zIndex: "200" }}
@@ -19,13 +23,13 @@ export default function ContextMenu({ child, open, setOpen, handleDelete, canDel
                         <div className={"context-menu-popover__container"}>
                             {canDelete && (
                                 <div className={"context-menu-popover__item"} onClick={handleDeleteClick}>
-                                    <p>Delete</p>
+                                    <p>{t("context-menu-delete")}</p>
                                     <FontAwesomeIcon icon={faTrash} />
                                 </div>
                             )}
                             {canCopy && (
                                 <div className={"context-menu-popover__item"} onClick={handleCopyClick}>
-                                    <p>Copy</p>
+                                    <p>{t("context-menu-copy")}</p>
                                     <FontAwesomeIcon icon={faCopy} />
                                 </div>
                             )}

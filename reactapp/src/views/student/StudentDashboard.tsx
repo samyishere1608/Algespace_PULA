@@ -8,6 +8,8 @@ import {
     faGaugeHigh,
     faHome,
     faLightbulb,
+    faMedal,
+    faPlus,
     faRightFromBracket,
     faShieldHalved,
     faTimes,
@@ -40,15 +42,21 @@ import dashboardBackground from "@images/Dashboardbackground.png";
 import dashboardVideo from "@images/Dashboardimage.mp4";
 import "@styles/views/dashboard.scss";
 import ChooseBuddyModal, { BUDDIES } from "./dashboard/ChooseBuddyModal.tsx";
-import SetStudyPlanModal, { ALL_STUDY_GOALS, StudyGoal } from "./dashboard/SetStudyPlanModal.tsx";
+import SetGoalsModal from "./dashboard/SetGoalsModal.tsx";
+import type { GoalOrigin } from "./dashboard/SetGoalsModal.tsx";
 import CharacterShopModal, { CHARACTER_CATALOGUE, resolveOutfitSrc, type CharacterDef } from "./dashboard/CharacterShopModal.tsx";
 import CharacterUnlockModal from "./dashboard/CharacterUnlockModal.tsx";
 import { DailyIntentionModal } from "./dashboard/DailyIntentionModal.tsx";
 import { EndSessionModal } from "./dashboard/EndSessionModal.tsx";
 import { ReflectionModal } from "./dashboard/ReflectionModal.tsx";
 import { getEquippedOutfitId, persistEquippedOutfitId, getActiveBuddyId, persistActiveBuddyId, getAgencyLevel, getWalletXp, getAnnouncedUnlocks, markUnlockAnnounced } from "@utils/wardrobeUtils.ts";
-import { fetchStudentProgress, getGoalProgress, setAISuggestedGoals, fetchWeakness, setWeaknessTargetType, WeaknessResponse, getAccuracyLast5, getAccuracyStats } from "@utils/goalUtils.ts";
-import type { StudentProgressData } from "@utils/goalUtils.ts";
+import { fetchStudentProgress, getAccuracyLast5, getAccuracyStats } from "@utils/progressUtils.ts";
+import type { StudentProgressData } from "@utils/progressUtils.ts";
+import type { GoalProgress, StudyGoal } from "@/types/student/goal.ts";
+import { addGoal, getActiveGoals, removeGoal } from "@utils/activeGoals.ts";
+import { GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef } from "@utils/goalCatalog.ts";
+import { claimCompletedGoals, computeProgress, earliestGoalStart, fetchGoalEvents } from "@utils/goalProgress.ts";
+import { awardChoiceForSettingAGoal } from "@utils/choiceAwards.ts";
 import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addInsightXP, addChoiceXP } from "@utils/agencyUtils.ts";
 import { seedDemoData } from "@utils/demoData.ts";
 import { fetchReflectionQueue, completeReflection, ReflectionQueueItem } from "@utils/reflectionUtils.ts";
@@ -68,15 +76,13 @@ interface LeaderboardEntry {
 
 const PLACEHOLDER_STATS = {
     exercisesCompleted: 0,
-    exercisesDelta: "+0 this week",
+    exercisesDelta: 0,
     currentXP: 0,
     xpForNextLevel: 500,
     level: 1,
     levelName: "Beginner",
     streakDays: 0,
 };
-
-// Missions start empty — user adds them via SET STUDY PLAN
 
 const PLACEHOLDER_LEADERBOARD: LeaderboardEntry[] = [
     { rank: 1, username: "—", xp: 0 },
@@ -116,7 +122,9 @@ export default function StudentDashboard(): ReactElement {
     const [goalsThisWeek, setGoalsThisWeek] = useState<StudentProgressData["goalsThisWeek"]>([]);
     const [solvingMethodCounts, setSolvingMethodCounts] = useState<{ method: string; value: number }[]>([]);
     const [pendingMilestone, setPendingMilestone] = useState<number | null>(null);
-    const [weakness, setWeakness] = useState<WeaknessResponse | null>(null);
+
+    // ── The student's own goals, and how far along each one is ────────────────
+    const [goalProgressMap, setGoalProgressMap] = useState<Record<string, GoalProgress>>({});
 
     // ── Dashboard tabs (side navigation) ─────────────────────────────────────
     const [activeTab, setActiveTab] = useState<"main" | "analytics" | "leaderboard" | "tree">("main");
@@ -132,6 +140,11 @@ export default function StudentDashboard(): ReactElement {
 
     useEffect(() => {
         if (!student) return;
+
+        // Read the goals straight away rather than waiting on the fetches below. They are their own
+        // request against their own table now, so a failure of the legacy progress call must not be
+        // able to hide the student's goals along with it.
+        void refreshGoals(student.id);
 
         // Seed demo data for the demo account (one-time, before fetching)
         const init = student.username === "userdemo1"
@@ -151,11 +164,6 @@ export default function StudentDashboard(): ReactElement {
                     setStreakDays(data.streakDays ?? 0);
                     setGoalsThisWeek(data.goalsThisWeek ?? []);
                     setSolvingMethodCounts(data.solvingMethodCounts ?? []);
-
-                    // ── Weakness detection ────────────────────────────────
-                    fetchWeakness(student.id).then((w) => {
-                        if (w) setWeakness(w);
-                    }).catch(() => {});
 
                     // ── Follow-through check for daily intention ──────────
                     const today = new Date().toISOString().slice(0, 10);
@@ -189,6 +197,10 @@ export default function StudentDashboard(): ReactElement {
                 setShowDailyIntention(true);
             }
         });
+        // Intentionally keyed on the student alone: this runs once per login, and refreshGoals is
+        // redefined every render, so listing it would refetch the whole goal progress on any state
+        // change anywhere on the dashboard.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [student]);
 
     // ── Legacy level info (derived from total agency XP for now) ─────────────
@@ -224,17 +236,6 @@ export default function StudentDashboard(): ReactElement {
     const accuracyStats = student
         ? getAccuracyStats(student.id)
         : { errors: 0, hints: 0, exercises: 0, avgErrors: 0, avgHints: 0 };
-
-    // Goals completed this week grouped by difficulty
-    const difficultyCounts: Record<"easy" | "medium" | "hard", number> = { easy: 0, medium: 0, hard: 0 };
-    for (const g of goalsThisWeek) {
-        const goal = ALL_STUDY_GOALS.find((sg) => sg.id === g.goalId);
-        if (!goal) continue;
-        const diff = goal.difficulty.toLowerCase();
-        if (diff === "easy" || diff === "medium" || diff === "hard") {
-            difficultyCounts[diff] += 1;
-        }
-    }
 
     // Agency XP split + focus step for the weakest wallet
     const xpSplit = [
@@ -273,24 +274,21 @@ export default function StudentDashboard(): ReactElement {
 
     // ── Modals ────────────────────────────────────────────────────────────────
     const [showBuddyPopup, setShowBuddyPopup] = useState(false);
-    const [showStudyPlan, setShowStudyPlan] = useState(false);
+    const [showGoals, setShowGoals] = useState(false);
     const [showBuddyChooser, setShowBuddyChooser] = useState(false);
     const [showShop, setShowShop] = useState(false);
     const [showXpInfo, setShowXpInfo] = useState(false);
 
-    // ── Post-exercise reflection (Pippin prompt) ──────────────────────────
+    // ── Post-exercise reflection (buddy prompt) ───────────────────────────
     const [reflectionQueue, setReflectionQueue] = useState<ReflectionQueueItem[]>([]);
     const [showReflectionPrompt, setShowReflectionPrompt] = useState(false);
     const [showReflectionModal, setShowReflectionModal] = useState(false);
 
     const [activeBuddyId, setActiveBuddyId] = useState(() => getActiveBuddyId(student?.id ?? "guest"));
-    const [activeGoalIds, setActiveGoalIds] = useState<string[]>(() => {
-        try {
-            const key = `active_goal_ids_${student?.id ?? "guest"}`;
-            return JSON.parse(localStorage.getItem(key) ?? "[]") as string[];
-        }
-        catch { return []; }
-    });
+
+    // Empty until the server answers. The goals are a table read now, so there is nothing to seed
+    // the list from on the first render — the cards appear with the goals, one fetch later.
+    const [activeGoals, setActiveGoals] = useState<StudyGoal[]>([]);
 
     // Track equipped outfit per character, initialised from localStorage (scoped per student)
     const [equippedOutfitIds, setEquippedOutfitIds] = useState<Record<string, string>>(() => {
@@ -310,67 +308,74 @@ export default function StudentDashboard(): ReactElement {
             ? resolveOutfitSrc(activeBuddyId, equippedOutfitIds[activeBuddyId])
             : undefined) ?? activeCatalogue?.baseSrc;
 
-    const activeGoals: StudyGoal[] = ALL_STUDY_GOALS.filter((g) => activeGoalIds.includes(g.id));
+    const translate = asTranslate(t);
 
-    function handleRemoveGoal(id: string): void {
-        setActiveGoalIds((prev) => {
-            const updated = prev.filter((gid) => gid !== id);
-            const key = `active_goal_ids_${student?.id ?? "guest"}`;
-            localStorage.setItem(key, JSON.stringify(updated));
-            return updated;
+    /**
+     * Repoints every active goal at the student's own history: refreshes the progress bars, claims
+     * any goal that has now been reached, and awards the Resolve XP for it.
+     *
+     * Run on dashboard load, and again whenever a goal is added or removed. The dashboard is the
+     * reliable checkpoint — a goal reached during an exercise can be missed there if the attempt had
+     * not been written yet, but by the time the student is back here it cannot be missed.
+     */
+    async function refreshGoals(studentId: number): Promise<void> {
+        const goals = await getActiveGoals(studentId);
+        setActiveGoals(goals);
+
+        if (goals.length === 0) {
+            setGoalProgressMap({});
+            return;
+        }
+
+        const events = await fetchGoalEvents(studentId, earliestGoalStart(goals));
+        setGoalProgressMap(Object.fromEntries(goals.map((goal) => [goal.id, computeProgress(goal, events)])));
+
+        const completed = await claimCompletedGoals(studentId, goals, events, (goal) => describeGoal(goal, translate));
+        if (completed.length === 0) return;
+
+        // Claiming removes the goals on the server, so re-read rather than filtering locally — that
+        // keeps one source of truth for what is still active.
+        setActiveGoals(await getActiveGoals(studentId));
+        setGoalProgressMap((prev) => {
+            const next = { ...prev };
+            completed.forEach((entry) => delete next[entry.goal.id]);
+            return next;
         });
+
+        const xp = completed.length * GOAL_RESOLVE_XP;
+        showAgencyToast("resolve", xp);
+        setAgency(getAgencyProgress(studentId));
     }
 
-    async function handleSavePlan(ids: string[], aiSuggestedIds: string[]): Promise<void> {
-        setActiveGoalIds(ids);
-        const key = `active_goal_ids_${student?.id ?? "guest"}`;
-        localStorage.setItem(key, JSON.stringify(ids));
-        // Track which goals were AI-suggested
-        if (student) {
-            setAISuggestedGoals(student.id, aiSuggestedIds);
-            // If Face Your Weakness is selected, fetch weakness and set target
-            if (ids.includes("face-your-weakness")) {
-                const weakness = await fetchWeakness(student.id);
-                if (weakness?.weakest?.recommendedExercise) {
-                    setWeaknessTargetType(student.id, weakness.weakest.recommendedExercise);
-                }
-            }
+    async function handleAddGoal(goal: StudyGoal, origin: GoalOrigin): Promise<void> {
+        if (!student) return;
 
-            // ── Insight XP: Student naturally targets their weak area ──
-            // Fetch weakness if not already loaded
-            let weakData = weakness;
-            if (!weakData) {
-                weakData = await fetchWeakness(student.id);
-                if (weakData) setWeakness(weakData);
-            }
-            if (weakData?.weakest) {
-                const weaknessKey = weakData.weakest.key;
-                // Map weakness dimension → helpful goal categories
-                const WEAKNESS_TO_CATEGORIES: Record<string, string[]> = {
-                    "decision-accuracy": ["decision"],
-                    "efficiency-judgment": ["decision"],
-                    "method-recognition": ["decision"],
-                    "computational-skill": ["math"],
-                    "independence": ["ai", "independence"],
-                    "consistency": ["engagement"],
-                };
-                const helpfulCategories = WEAKNESS_TO_CATEGORIES[weaknessKey] ?? [];
-                // Check if any selected NON-AI goals target the weak area
-                const aiSet = new Set(aiSuggestedIds);
-                const selfPickedForWeakness = ids.filter((id) => {
-                    if (aiSet.has(id)) return false; // not self-awareness if AI did it
-                    const goal = ALL_STUDY_GOALS.find((g) => g.id === id);
-                    return goal && helpfulCategories.includes(goal.category);
-                });
-                if (selfPickedForWeakness.length > 0) {
-                    const insightAmount = Math.min(selfPickedForWeakness.length * 8, 24);
-                    addInsightXP(student.id, insightAmount, "targeted-weak-area");
-                    showAgencyToast("insight", insightAmount);
-                    setAgency(getAgencyProgress(student.id));
-                }
-            }
-        }
-        setShowStudyPlan(false);
+        setActiveGoals(await addGoal(student.id, goal));
+
+        // Picking your own direction is a Choice act, and Choice does not require having done
+        // anything yet — deciding is itself the skill. Bounded to once a day because goals can be
+        // added and removed in a loop, which would otherwise pay per click.
+        //
+        // A goal taken from a suggestion earns nothing: the reward is for deciding, and accepting
+        // the system's proposal is not deciding.
+        if (origin === "student") awardChoiceForSettingAGoal(student.id);
+
+        // Show the new goal at 0% immediately rather than waiting for the fetch. Nothing in the
+        // student's history predates the goal, so the honest starting figure is zero.
+        setGoalProgressMap((prev) => ({ ...prev, [goal.id]: computeProgress(goal, []) }));
+
+        void refreshGoals(student.id);
+    }
+
+    async function handleRemoveGoal(goalId: string): Promise<void> {
+        if (!student) return;
+
+        setActiveGoals(await removeGoal(student.id, goalId));
+        setGoalProgressMap((prev) => {
+            const next = { ...prev };
+            delete next[goalId];
+            return next;
+        });
     }
 
     function handleSelectBuddy(id: string): void {
@@ -403,7 +408,7 @@ export default function StudentDashboard(): ReactElement {
         if (choice === "practice") {
             navigate(Paths.FlexibilityPath);
         } else if (choice === "goal") {
-            setShowStudyPlan(true);
+            setShowGoals(true);
         } else if (choice === "review") {
             // "Review my progress" — jump straight to the Analytics tab
             setActiveTab("analytics");
@@ -581,7 +586,7 @@ export default function StudentDashboard(): ReactElement {
             {/* ── Body ────────────────────────────────────────────────────── */}
             <div className={"dashboard__body"}>
                 {/* ── Side tab navigation ─────────────────────────────────── */}
-                <aside className={"dashboard__tabs"} role="tablist" aria-label="Dashboard sections">
+                <aside className={"dashboard__tabs"} role="tablist" aria-label={t("dashboard-sections")}>
                     <button
                         role="tab"
                         aria-selected={activeTab === "main"}
@@ -630,7 +635,7 @@ export default function StudentDashboard(): ReactElement {
                             <span className={"dash-stat__label"}>{t("dashboard-exercises-completed")}</span>
                             <FontAwesomeIcon icon={faCheck} className={"dash-stat__icon"} />
                             <span className={"dash-stat__value"}>{stats.exercisesCompleted}</span>
-                            <span className={"dash-stat__sub"}>{stats.exercisesDelta}</span>
+                            <span className={"dash-stat__sub"}>{t("dashboard-exercises-delta", { count: stats.exercisesDelta })}</span>
                         </div>
                         <div className={"dash-stat"}>
                             <span className={"dash-stat__label"}>{t("dashboard-avg-accuracy")}</span>
@@ -649,63 +654,101 @@ export default function StudentDashboard(): ReactElement {
                         </div>
                     </div>
 
-                    {/* Active Missions */}
-                    <div>
-                        <div className={"dashboard__section-header dashboard__section-header--missions"}>
-                            <h2>{t("dashboard-active-missions")}</h2>
+                    {/* Active Goals */}
+                    <section className={"goals-section"} aria-labelledby={"goals-active-title"}>
+                        <div className={"dashboard__section-header dashboard__section-header--active-goals"}>
+                            <h2 id={"goals-active-title"}>{t("goals-active-heading")}</h2>
                             {activeGoals.length > 0 && (
                                 <button
-                                    className={"dashboard__section-header-cta dashboard__section-header-cta--missions"}
-                                    onClick={() => setShowStudyPlan(true)}
+                                    className={"dashboard__section-header-cta dashboard__section-header-cta--active-goals"}
+                                    onClick={() => setShowGoals(true)}
                                 >
-                                    {t("dashboard-set-study-plan")}
+                                    <FontAwesomeIcon icon={faPlus} />
+                                    {t("goals-edit-cta")}
                                 </button>
                             )}
                         </div>
 
                         {activeGoals.length === 0 && (
-                            <div className={"missions-empty"}>
-                                <p>{t("dashboard-no-missions")}</p>
+                            <div className={"goals-empty"}>
+                                <FontAwesomeIcon icon={faBullseye} className={"goals-empty__icon"} />
+                                <p className={"goals-empty__text"}>{t("goals-none")}</p>
                                 <button
-                                    className={"missions-empty__cta"}
-                                    onClick={() => setShowStudyPlan(true)}
+                                    className={"goals-empty__cta"}
+                                    onClick={() => setShowGoals(true)}
                                 >
-                                    {t("dashboard-set-plan-cta")}
+                                    <FontAwesomeIcon icon={faPlus} />
+                                    {t("goals-set-cta")}
                                 </button>
                             </div>
                         )}
 
+                        {activeGoals.length > 0 && (
+                        <ul className={"goals-list"}>
                         {activeGoals.map((goal) => {
-                            const progress = getGoalProgress(goal.id, student?.id ?? "guest", totalAgency, streakDays);
+                            const progress = goalProgressMap[goal.id];
+                            const label = describeGoal(goal, translate);
+                            const current = progress?.current ?? 0;
+                            const def = getCategoryDef(goal.category);
+
                             return (
-                            <div key={goal.id} className={`mission-card mission-card--${goal.difficulty.toLowerCase()}`}>
-                                <div className={"mission-card__top"}>
-                                    <div className={"mission-card__icon"}>Σ</div>
-                                    <div className={"mission-card__info"}>
-                                        <div className={"mission-card__title"}>{t(`goals-label-${goal.id}`, goal.label)}</div>
-                                        <div className={"mission-card__desc"}>{t(`goals-difficulty-${goal.difficulty.toLowerCase()}`, goal.difficulty)}</div>
-                                    </div>
-                                    <div className={"mission-card__actions"}>
-                                        <span className={"mission-card__badge mission-card__badge--active"}>{t("dashboard-mission-active")}</span>
-                                        <button
-                                            className={"mission-card__remove"}
-                                            title={t("dashboard-mission-remove")}
-                                            onClick={() => handleRemoveGoal(goal.id)}
+                            <li key={goal.id} className={"goal-card"}>
+                                {/* The category mark, in the same tinted chip the rest of the app
+                                    uses for a leading icon. */}
+                                <span className={"goal-card__icon"} aria-hidden>
+                                    <FontAwesomeIcon icon={def.icon} />
+                                </span>
+
+                                <div className={"goal-card__body"}>
+                                    <p className={"goal-card__label"}>{label}</p>
+                                    <div className={"goal-card__progress-row"}>
+                                        <div
+                                            className={"goal-card__track"}
+                                            role={"progressbar"}
+                                            aria-label={label}
+                                            aria-valuemin={0}
+                                            aria-valuemax={goal.target}
+                                            aria-valuenow={current}
                                         >
-                                            <FontAwesomeIcon icon={faTimes} />
-                                        </button>
+                                            <div className={"goal-card__fill"} style={{ width: `${progress?.percent ?? 0}%` }} />
+                                        </div>
+                                        {/* The number is what carries the progress to a screen
+                                            reader and to anyone who cannot see the bar, so it is
+                                            text, never a colour on its own. */}
+                                        <span className={"goal-card__value"}>
+                                            {translate("goals-progress", {
+                                                current,
+                                                target: goal.target,
+                                                unit: t(`goal-unit-${goal.metric}`),
+                                            })}
+                                        </span>
                                     </div>
+
+                                    {/* Only the goals that live in a subset of the exercise types
+                                        carry this. The other four would just be noise on every card. */}
+                                    {def.restrictionKey !== "" && (
+                                        <p className={"goal-card__note"}>
+                                            <FontAwesomeIcon icon={faCircleInfo} className={"goal-card__note-icon"} />
+                                            <span>{t(def.restrictionKey)}</span>
+                                        </p>
+                                    )}
                                 </div>
-                                <div className={"mission-card__progress-row"}>
-                                    <div className={"mission-card__progress-track"}>
-                                        <div className={"mission-card__progress-fill"} style={{ width: `${progress.percent}%` }} />
-                                    </div>
-                                    <span className={"mission-card__progress-label"}>{progress.label}</span>
-                                </div>
-                            </div>
+
+                                <button
+                                    type={"button"}
+                                    className={"goal-card__remove"}
+                                    title={t("goals-remove")}
+                                    aria-label={t("goals-remove")}
+                                    onClick={() => handleRemoveGoal(goal.id)}
+                                >
+                                    <FontAwesomeIcon icon={faTimes} />
+                                </button>
+                            </li>
                             );
                         })}
-                    </div>
+                        </ul>
+                        )}
+                    </section>
 
                     {/* Goals Completed This Week */}
                     {goalsThisWeek.length > 0 && (
@@ -724,7 +767,7 @@ export default function StudentDashboard(): ReactElement {
                             <div className={`goals-completed-list${showAllGoals ? " goals-completed-list--expanded" : ""}`}>
                                 {(showAllGoals ? goalsThisWeek : goalsThisWeek.slice(0, 3)).map((goal) => (
                                     <div key={goal.id} className={"goals-completed-list__item"}>
-                                        <span className={"goals-completed-list__icon"}>🏆</span>
+                                        <FontAwesomeIcon icon={faTrophy} className={"goals-completed-list__icon"} />
                                         <span className={"goals-completed-list__label"}>{t(`goals-label-${goal.goalId}`, goal.goalLabel)}</span>
                                     </div>
                                 ))}
@@ -739,15 +782,17 @@ export default function StudentDashboard(): ReactElement {
                     <div className={"dashboard__leaderboard-tab"}>
                         <div className={"dash-card dash-card--leaderboard"}>
                             <div className={"dashboard__leaderboard-title"}>
-                                <span>🏆</span> {t("dashboard-leaderboard")}
+                                <FontAwesomeIcon icon={faTrophy} /> {t("dashboard-leaderboard")}
                             </div>
                             {leaderboard.map((entry) => (
                                 <div
                                     key={entry.rank}
                                     className={`leaderboard-entry${entry.username === student?.username ? " leaderboard-entry--current" : ""}`}
                                 >
-                                    <span className={"leaderboard-entry__rank"}>
-                                        {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : entry.rank}
+                                    <span className={"leaderboard-entry__rank"} aria-label={`${entry.rank}`}>
+                                        {entry.rank <= 3
+                                            ? <FontAwesomeIcon icon={faMedal} className={`leaderboard-entry__medal leaderboard-entry__medal--${entry.rank}`} />
+                                            : entry.rank}
                                     </span>
                                     <span className={"leaderboard-entry__name"}>{entry.username}</span>
                                     <span className={"leaderboard-entry__xp"}>{entry.xp} XP</span>
@@ -760,20 +805,6 @@ export default function StudentDashboard(): ReactElement {
 
                     {activeTab === "analytics" && (
                     <div className={"dashboard__analytics"}>
-                        {/* Goals by difficulty */}
-                        <div className={"analytics-section"}>
-                            <div className={"analytics-section__title"}>{t("analytics-difficulty-title")}</div>
-                            <div className={"analytics-difficulty-row"}>
-                                {(["easy", "medium", "hard"] as const).map((diff) => (
-                                    <div key={diff} className={`analytics-difficulty analytics-difficulty--${diff}`}>
-                                        <span className={"analytics-difficulty__label"}>{t(`goals-difficulty-${diff}`)}</span>
-                                        <span className={"analytics-difficulty__value"}>{difficultyCounts[diff]}</span>
-                                        <span className={"analytics-difficulty__sub"}>{t("analytics-goals-completed")}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
                         <div className={"analytics-grid"}>
                             {/* Methods used (actual solving methods) */}
                             <div className={"analytics-section analytics-section--chart"}>
@@ -949,12 +980,13 @@ export default function StudentDashboard(): ReactElement {
             </div>
 
             {/* ── Modals ───────────────────────────────────────────────────── */}
-            {showStudyPlan && (
-                <SetStudyPlanModal
-                    currentGoalIds={activeGoalIds}
+            {showGoals && (
+                <SetGoalsModal
                     studentId={student?.id ?? "guest"}
-                    onSave={handleSavePlan}
-                    onClose={() => setShowStudyPlan(false)}
+                    activeGoals={activeGoals}
+                    onAdd={handleAddGoal}
+                    onRemove={handleRemoveGoal}
+                    onClose={() => setShowGoals(false)}
                 />
             )}
             {showBuddyChooser && (

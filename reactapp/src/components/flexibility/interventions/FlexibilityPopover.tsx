@@ -13,7 +13,7 @@ export function FlexibilityPopover({ children, agentType, agentExpression }: { c
 
     return (
         <React.Fragment>
-            {useAgent && <Agent type={agentType} expression={agentExpression} />}
+            {useAgent && <Agent />}
             <div className={`flexibility-popover ${useAgent ? "agent-popover" : ""}`} style={{ maxWidth: `${width}px` }}>
                 <div className={`flexibility-popover__container ${useAgent ? "agent-popover__container" : ""}`}>{children}</div>
             </div>
@@ -47,7 +47,7 @@ export function ClosableFlexibilityPopover({ children, setShowContent, agentType
 
     return (
         <React.Fragment>
-            {useAgent && <Agent type={agentType} expression={agentExpression} />}
+            {useAgent && <Agent />}
             <div className={`flexibility-popover ${useAgent ? "agent-popover" : ""}`} style={{ maxWidth: `${width}px` }} ref={contentRef}>
                 <button className={"span-button primary-button hint-popover__button"} onClick={() => setShowContent(false)}>
                     <FontAwesomeIcon icon={faXmark} />

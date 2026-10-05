@@ -1,4 +1,5 @@
 import AuthProvider from "@/contexts/AuthProvider.tsx";
+import { NudgeProvider } from "@/contexts/NudgeProvider.tsx";
 import { configure } from "axios-hooks";
 import { ErrorBoundary } from "react-error-boundary";
 import "reflect-metadata";
@@ -16,7 +17,10 @@ export default function App() {
     return (
         <ErrorBoundary key={"app-boundary"} FallbackComponent={HomeErrorFallback}>
             <AuthProvider>
-                <Routes />
+                {/* Inside AuthProvider because the nudge needs to know who the student is. */}
+                <NudgeProvider>
+                    <Routes />
+                </NudgeProvider>
             </AuthProvider>
         </ErrorBoundary>
     );

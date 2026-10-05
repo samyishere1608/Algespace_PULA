@@ -4,8 +4,8 @@ import { AgentCondition, AgentType, WorkedExampleExerciseState } from "@/types/f
 import { getRandomAgent, setPKExerciseCompleted, setFlexibilityStudyExerciseCompleted } from "@utils/storageUtils.ts";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { GameError, GameErrorType } from "@/types/shared/error.ts";
-import useFlexibilityTracker from "@hooks/useFlexibilityTracker.ts";
-import { IUser } from "@/types/studies/user.ts";
+import useFlexibilityTracker, { ANCHOR_TRACKING_BASE, STUDY_TRACKING_BASE } from "@hooks/useFlexibilityTracker.ts";
+import useTrackerIdentity from "@hooks/useTrackerIdentity.ts";
 import { FlexibilityExerciseChoicePhase, FlexibilityExercisePhase, FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
 import { OptionalExercise } from "@components/flexibility/choice/OptionalExercise.tsx";
 import { SystemIntroduction } from "@components/flexibility/workedExamples/SystemIntroduction.tsx";
@@ -37,6 +37,7 @@ export function WorkedExamples({ flexibilityExerciseId, exerciseId, condition, h
     }, []);
 
     const { user } = useAuth();
+    const { logging, owner } = useTrackerIdentity(isStudy);
     if (isStudy) {
         if (user === undefined) {
             throw new GameError(GameErrorType.AUTH_ERROR);
@@ -48,7 +49,20 @@ export function WorkedExamples({ flexibilityExerciseId, exerciseId, condition, h
     const {
         trackChoice,
         endTracking
-    } = useFlexibilityTracker(isStudy, user as IUser, studyId as number, flexibilityExerciseId, exerciseId, FlexibilityStudyExerciseType.WorkedExamples, performance.now(), condition, agentType, FlexibilityExercisePhase.EfficiencySelection);
+    } = useFlexibilityTracker(
+        // Logged-in students track too, not only study participants.
+        logging,
+        owner,
+        studyId ?? 0,
+        flexibilityExerciseId,
+        exerciseId,
+        FlexibilityStudyExerciseType.WorkedExamples,
+        performance.now(),
+        condition,
+        agentType,
+        isStudy ? STUDY_TRACKING_BASE : ANCHOR_TRACKING_BASE,
+        FlexibilityExercisePhase.EfficiencySelection
+    );
 
     const [exerciseState, setExerciseState] = useState<WorkedExampleExerciseState>(WorkedExampleExerciseState.Choice);
     const [showAllEqualization, setShowAllEqualization] = useState<boolean>(false);

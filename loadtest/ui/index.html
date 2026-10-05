@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AlgeSpace · load test</title>
+<style>
+  :root {
+    --bg: #012638;
+    --panel: #04374d;
+    --panel-2: #053f57;
+    --line: rgba(142, 202, 230, 0.22);
+    --text: #eaf6fb;
+    --muted: rgba(234, 246, 251, 0.62);
+    --accent: #8ecae6;
+    --ok: #06d6a0;
+    --warn: #ffd166;
+    --bad: #ef476f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 1.75rem 1.5rem 3rem;
+  }
+
+  h1 { font-size: 1.15rem; margin: 0 0 0.25rem; letter-spacing: 0.02em; }
+  h2 { font-size: 0.95rem; margin: 2rem 0 0.75rem; color: var(--accent); letter-spacing: 0.03em; text-transform: uppercase; }
+  p.lede { margin: 0 0 1.5rem; color: var(--muted); max-width: 70ch; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1rem 1.15rem;
+  }
+
+  /* ── Controls ─────────────────────────────────────────────────────────── */
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.85rem 1rem;
+    align-items: end;
+  }
+
+  label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.3rem; letter-spacing: 0.02em; }
+
+  input[type="number"], input[type="text"], select {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    font: inherit;
+  }
+
+  input:focus-visible, select:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+  .check input { width: auto; }
+
+  button {
+    padding: 0.6rem 1.3rem;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--accent);
+    color: #012638;
+  }
+
+  button.secondary { background: transparent; color: var(--accent); border-color: var(--line); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
+  .hint { color: var(--muted); font-size: 0.8rem; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-size: 0.78rem; padding: 0.2rem 0.6rem; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--muted);
+  }
+  .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); }
+  .dot.bad { background: var(--bad); }
+
+  /* ── Progress ─────────────────────────────────────────────────────────── */
+  #progressWrap { display: none; margin-top: 1.5rem; }
+  #progressWrap.on { display: block; }
+
+  .bar { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.4s ease; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 0.85rem; }
+  .kpi .v { font-size: 1.3rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .kpi .k { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  #stage { margin-top: 0.9rem; color: var(--accent); font-size: 0.86rem; min-height: 1.3em; }
+
+  /* ── Tables ───────────────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 0.83rem; }
+  th, td { text-align: right; padding: 0.42rem 0.6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; white-space: normal; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  tbody tr:hover { background: rgba(142, 202, 230, 0.06); }
+
+  td.pass { color: var(--ok); }
+  td.fail { color: var(--bad); font-weight: 650; }
+  td.warn { color: var(--warn); }
+
+  .scroll { max-height: 26rem; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .scroll table { border-collapse: separate; border-spacing: 0; }
+  .scroll thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+
+  /* ── Notes ────────────────────────────────────────────────────────────── */
+  .note { border-left: 3px solid var(--line); padding: 0.55rem 0 0.55rem 0.85rem; margin-bottom: 0.7rem; }
+  .note.bad { border-left-color: var(--bad); }
+  .note.warn { border-left-color: var(--warn); }
+  .note.info { border-left-color: var(--accent); }
+  .note .t { font-weight: 600; }
+  .note .d { color: var(--muted); font-size: 0.83rem; }
+
+  .verdict { margin-top: 1.5rem; padding: 0.85rem 1.1rem; border-radius: 10px; font-weight: 600; }
+  .verdict.ok { background: rgba(6, 214, 160, 0.14); color: var(--ok); }
+  .verdict.bad { background: rgba(239, 71, 111, 0.14); color: var(--bad); }
+
+  #results { display: none; }
+  #results.on { display: block; }
+  code { background: var(--panel-2); padding: 0.05rem 0.35rem; border-radius: 5px; font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<h1>AlgeSpace · student load test</h1>
+<p class="lede">
+  Simulates students using the platform at the same time — the full journey, in the order the real
+  client makes it: dashboard, exercise, decisions, self-explanation, completion, goal, reflection.
+  Afterwards it reads the database and checks that every write it made actually landed.
+</p>
+
+<div class="panel">
+  <div class="controls">
+    <div>
+      <label for="base">Backend</label>
+      <input type="text" id="base" value="http://localhost:7273" />
+    </div>
+    <div>
+      <label for="students">Students at once</label>
+      <input type="number" id="students" value="120" min="1" max="500" />
+    </div>
+    <div>
+      <label for="duration">Duration (s)</label>
+      <input type="number" id="durationSeconds" value="180" min="20" max="1800" />
+    </div>
+    <div>
+      <label for="timeScale">Think-time scale</label>
+      <select id="timeScale">
+        <option value="1">1.0 — real</option>
+        <option value="0.5">0.5 — twice as fast</option>
+        <option value="0.25">0.25 — heavy stress</option>
+      </select>
+    </div>
+    <div>
+      <label for="keep">Data</label>
+      <select id="keep">
+        <option value="0">Purge after run</option>
+        <option value="1">Keep for inspection</option>
+      </select>
+    </div>
+    <div>
+      <label for="includeAi">AI reflection</label>
+      <select id="includeAi">
+        <option value="0">Skip (no cost)</option>
+        <option value="1">Include (calls OpenAI)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="run">Run test</button>
+    <button id="probe" class="secondary">Check backend</button>
+    <span class="pill"><span class="dot" id="dot"></span><span id="targetState">unknown</span></span>
+  </div>
+
+  <p class="hint" style="margin: 0.85rem 0 0">
+    Think-time scale compresses the pauses between a student's actions. It does <strong>not</strong>
+    reduce the number of students — 120 at 0.25 is four times the traffic, useful for finding the
+    ceiling but not for answering whether 120 people fit.
+  </p>
+</div>
+
+<div id="progressWrap">
+  <h2 id="progressTitle">Running</h2>
+  <div class="bar"><div id="bar"></div></div>
+  <div id="stage"></div>
+  <div class="kpis">
+    <div class="kpi"><div class="v" id="kElapsed">0s</div><div class="k">Elapsed</div></div>
+    <div class="kpi"><div class="v" id="kStudents">0</div><div class="k">Students</div></div>
+    <div class="kpi"><div class="v" id="kSessions">0</div><div class="k">Sessions done</div></div>
+    <div class="kpi"><div class="v" id="kRequests">0</div><div class="k">Requests</div></div>
+    <div class="kpi"><div class="v" id="kExercises">0</div><div class="k">Exercises</div></div>
+    <div class="kpi"><div class="v" id="kGoals">0</div><div class="k">Goals completed</div></div>
+  </div>
+</div>
+
+<div id="results">
+  <h2>What the run did</h2>
+  <div class="kpis" id="resultKpis"></div>
+
+  <h2>Per action, slowest first</h2>
+  <div class="scroll"><table id="steps"></table></div>
+  <p class="hint">p99 is the column to read: it is where a student would notice a stall.</p>
+
+  <h2>What the run wrote</h2>
+  <div class="scroll"><table id="integrity"></table></div>
+  <p class="hint" id="integrityHint"></p>
+
+  <h2>Notes</h2>
+  <div id="notes"></div>
+
+  <div class="verdict" id="verdict"></div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const num = (id) => Number($(id).value);
+
+  let source = null;
+  let startedAt = 0;
+  let lastResult = null;
+
+  function fmt(value) {
+    if (value === 0 || value === undefined || value === null) return "0";
+    if (value < 10) return value.toFixed(1);
+    return Math.round(value).toLocaleString();
+  }
+
+  // ── Backend probe ────────────────────────────────────────────────────────
+  async function probe() {
+    $("dot").className = "dot";
+    $("targetState").textContent = "checking…";
+
+    try {
+      const response = await fetch(`/api/target?base=${encodeURIComponent($("base").value)}`);
+      const { reachable, detail } = await response.json();
+      $("dot").className = reachable ? "dot ok" : "dot bad";
+      $("targetState").textContent = reachable ? "backend reachable" : `unreachable — ${detail}`;
+    } catch (error) {
+      $("dot").className = "dot bad";
+      $("targetState").textContent = `unreachable — ${error.message}`;
+    }
+  }
+
+  // ── Live progress ────────────────────────────────────────────────────────
+  function onTick(event) {
+    const elapsed = event.elapsed ?? (Date.now() - startedAt) / 1000;
+    const duration = lastResult?.options?.durationSeconds ?? num("durationSeconds");
+
+    $("bar").style.width = `${Math.min(100, (elapsed / duration) * 100)}%`;
+    $("kElapsed").textContent = `${elapsed.toFixed(0)}s`;
+    $("kStudents").textContent = event.students ?? num("students");
+    $("kSessions").textContent = event.completedSessions ?? 0;
+    $("kRequests").textContent = (event.requests ?? 0).toLocaleString();
+    $("kExercises").textContent = event.counters?.attempts ?? 0;
+    $("kGoals").textContent = event.counters?.goalCompletions ?? 0;
+  }
+
+  function stage(message) { $("stage").textContent = message; }
+
+  // ── Results ──────────────────────────────────────────────────────────────
+  function kpi(label, value, tone) {
+    const color = tone === "bad" ? "var(--bad)" : tone === "warn" ? "var(--warn)" : tone === "ok" ? "var(--ok)" : "inherit";
+    return `<div class="kpi"><div class="v" style="color:${color}">${value}</div><div class="k">${label}</div></div>`;
+  }
+
+  function render(result) {
+    const { summary, integrity, notes, simulation } = result;
+    const classes = summary.countsByClass;
+
+    $("resultKpis").innerHTML = [
+      kpi("Requests", summary.total.toLocaleString()),
+      kpi("Achieved", `${summary.achievedRps.toFixed(1)} req/s`),
+      kpi("Sessions", simulation.completedSessions.toLocaleString()),
+      kpi("Failed", `${summary.failed} (${(summary.failureRate * 100).toFixed(2)}%)`,
+        summary.failed === 0 ? "ok" : "bad"),
+      kpi("Throttled", (classes.throttled ?? 0).toLocaleString(), (classes.throttled ?? 0) ? "warn" : null),
+      kpi("DB locked", (classes.busy ?? 0).toLocaleString(), (classes.busy ?? 0) ? "bad" : "ok"),
+      kpi("Timed out", (classes.timeout ?? 0).toLocaleString(), (classes.timeout ?? 0) ? "warn" : null),
+      kpi("Server errors", (classes.server ?? 0).toLocaleString(), (classes.server ?? 0) ? "bad" : "ok"),
+    ].join("");
+
+    const steps = summary.perStep.slice(0, 30);
+    $("steps").innerHTML =
+      "<thead><tr><th>action</th><th>req</th><th>fail</th><th>p50</th><th>p95</th><th>p99</th><th>max</th></tr></thead><tbody>" +
+      steps.map((row) => `<tr>
+        <td>${row.name}</td><td>${row.requests}</td>
+        <td class="${row.failed ? "fail" : ""}">${row.failed}</td>
+        <td>${fmt(row.p50)}</td><td>${fmt(row.p95)}</td>
+        <td>${fmt(row.p99)}</td><td>${fmt(row.max)}</td></tr>`).join("") +
+      "</tbody>";
+
+    $("integrity").innerHTML =
+      "<thead><tr><th>check</th><th>result</th><th>detail</th></tr></thead><tbody>" +
+      integrity.map((check) => `<tr>
+        <td>${check.id}</td>
+        <td class="${check.passed ? "pass" : check.regression ? "fail" : "warn"}">${
+          check.passed ? "pass" : check.regression ? "FAIL" : "pre-existing"}</td>
+        <td style="text-align:left">${check.detail}</td></tr>`).join("") +
+      "</tbody>";
+
+    const checked = integrity.filter((check) => check.id.startsWith("expect.")).length;
+    $("integrityHint").textContent = checked === 0
+      ? "No expected-count checks ran — no writes were made to verify."
+      : "The expect.* rows compare the rows in the database against what the run believes it wrote. " +
+        "A range means some requests never got a reply, so those writes may or may not have landed.";
+
+    $("notes").innerHTML = notes.length === 0
+      ? '<p class="hint">Nothing to report — no failures, no lock contention, no data problems.</p>'
+      : notes.map((note) => `<div class="note ${note.level}">
+          <div class="t">${note.title}</div><div class="d">${note.detail}</div></div>`).join("");
+
+    const verdict = $("verdict");
+    const regressions = integrity.filter((check) => check.regression);
+
+    if (regressions.length > 0) {
+      verdict.className = "verdict bad";
+      verdict.textContent = `${regressions.length} data check(s) failed — some writes did not land as expected.`;
+    } else if (result.clean) {
+      verdict.className = "verdict ok";
+      verdict.textContent = `Clean: ${result.students} students, ${simulation.completedSessions} sessions, ` +
+        `${summary.total.toLocaleString()} requests, no lost writes.`;
+    } else {
+      verdict.className = "verdict bad";
+      verdict.textContent = "Completed with problems — see the notes above.";
+    }
+
+    $("results").className = "on";
+  }
+
+  // ── Run ──────────────────────────────────────────────────────────────────
+  function finish() {
+    $("run").disabled = false;
+    $("probe").disabled = false;
+    $("bar").style.width = "100%";
+    if (source) { source.close(); source = null; }
+  }
+
+  function start() {
+    const params = new URLSearchParams({
+      base: $("base").value,
+      students: String(num("students")),
+      durationSeconds: String(num("durationSeconds")),
+      timeScale: String(Number($("timeScale").value)),
+      includeAi: $("includeAi").value,
+      keep: $("keep").value,
+      allowRemote: new URL($("base").value).hostname.match(/^(localhost|127\.0\.0\.1|\[::1\])$/) ? "0" : "1",
+    });
+
+    $("run").disabled = true;
+    $("probe").disabled = true;
+    $("results").className = "";
+    $("progressWrap").className = "on";
+    $("notes").innerHTML = "";
+    $("bar").style.width = "0";
+    startedAt = Date.now();
+
+    // Kept so the progress bar knows the duration before the result arrives.
+    lastResult = { options: { durationSeconds: num("durationSeconds") } };
+
+    source = new EventSource(`/api/run?${params}`);
+
+    source.onmessage = (message) => {
+      const event = JSON.parse(message.data);
+
+      switch (event.type) {
+        case "stage":
+          stage(event.message);
+          if (event.stage === "running") $("progressTitle").textContent = "Running — students working";
+          break;
+        case "environment":
+          lastResult.environment = event.environment;
+          break;
+        case "accounts":
+          stage(`Preparing accounts — ${event.ready} of ${event.wanted}`);
+          break;
+        case "tick":
+          onTick(event);
+          break;
+        case "session":
+          onTick(event);
+          break;
+        case "warning":
+          stage(event.message);
+          break;
+        case "result":
+          lastResult = { ...lastResult, ...event.result };
+          stage("Done");
+          render(event.result);
+          finish();
+          break;
+        case "error":
+          stage(event.message);
+          $("notes").innerHTML = `<div class="note bad"><div class="t">Run aborted</div><div class="d">${event.message}</div></div>`;
+          $("results").className = "on";
+          finish();
+          break;
+      }
+    };
+
+    source.onerror = () => {
+      // Fires on a normal close too, so only report it when no result was rendered.
+      if (!$("results").className.includes("on")) {
+        stage("The stream ended unexpectedly. Is the backend still running?");
+      }
+      finish();
+    };
+  }
+
+  $("run").addEventListener("click", start);
+  $("probe").addEventListener("click", probe);
+  probe();
+})();
+</script>
+</body>
+</html>

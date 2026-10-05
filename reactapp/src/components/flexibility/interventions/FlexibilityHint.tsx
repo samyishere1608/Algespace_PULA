@@ -58,7 +58,7 @@ export function FlexibilityHint({ hints, disabled, agentType, agentExpression, t
         <React.Fragment>
             {open && (
                 <React.Fragment>
-                    {useAgent && <Agent type={agentType} expression={agentExpression} />}
+                    {useAgent && <Agent />}
                     <div className={`flexibility-popover ${useAgent ? "agent-popover" : ""}`} style={{ maxWidth: `${width}px` }} ref={contentRef}>
                         <button className={"span-button primary-button hint-popover__button"} onClick={handleClick}>
                             <FontAwesomeIcon icon={faXmark} />

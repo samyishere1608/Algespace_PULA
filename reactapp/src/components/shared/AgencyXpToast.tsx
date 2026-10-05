@@ -1,4 +1,8 @@
 import { ReactElement, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBullseye, faLightbulb, faShieldHalved } from "@fortawesome/free-solid-svg-icons";
+import { TranslationNamespaces } from "@/i18n.ts";
 import xpSoundSrc from "@/assets/sounds/XPEarned.mp3";
 import "@styles/shared/agency-toast.scss";
 
@@ -25,19 +29,22 @@ export function showAgencyToast(type: "choice" | "insight" | "resolve", amount: 
     xpAudio.play().catch(() => {});
 }
 
-const colors: Record<string, string> = {
+// The same three colours and the same three marks the dashboard's agency pills use, so a toast reads
+// as that currency arriving rather than as its own thing.
+const colors: Record<ToastItem["type"], string> = {
     choice: "#ffd166",
     insight: "#06d6a0",
     resolve: "#ef476f",
 };
 
-const labels: Record<string, string> = {
-    choice: "Choice",
-    insight: "Insight",
-    resolve: "Resolve",
+const marks: Record<ToastItem["type"], typeof faBullseye> = {
+    choice: faBullseye,
+    insight: faLightbulb,
+    resolve: faShieldHalved,
 };
 
 export function AgencyXpToast(): ReactElement | null {
+    const { t } = useTranslation(TranslationNamespaces.Student);
     const [queue, setQueue] = useState<ToastItem[]>([]);
     const [active, setActive] = useState<ToastItem | null>(null);
 
@@ -69,11 +76,11 @@ export function AgencyXpToast(): ReactElement | null {
             style={{ "--toast-color": colors[active.type] } as React.CSSProperties}
             key={active.id}
         >
-            {/* <span className="agency-toast__icon">
-                {active.type === "choice" ? "🎯" : active.type === "insight" ? "🧠" : "💪"}
-            </span> */}
+            <span className="agency-toast__icon" aria-hidden>
+                <FontAwesomeIcon icon={marks[active.type]} />
+            </span>
             <span className="agency-toast__text">
-                +{active.amount} <strong>{labels[active.type]}</strong> XP
+                +{active.amount} <strong>{t(`agency-${active.type}`)}</strong> XP
             </span>
         </div>
     );

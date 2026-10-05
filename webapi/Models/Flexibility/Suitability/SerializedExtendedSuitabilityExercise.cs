@@ -110,10 +110,13 @@ namespace webapi.Models.Flexibility
                 SecondVariable = JsonSerializer.Deserialize<Variable>(SecondVariable) ?? throw new ArgumentException(),
                 SuitableMethods = JsonSerializer.Deserialize<List<Method>>(SuitableMethods) ?? throw new ArgumentException(),
                 ComparisonMethods = extendedComparisonMethods.Select(method => new ComparisonMethod(method, language)).ToList(),
-                AgentMessageForFirstSolution = language == Language.de ? AgentMessageForFirstSolutionDE : AgentMessageForFirstSolutionEN,
-                AgentMessageForSecondSolution = language == Language.de ? AgentMessageForSecondSolutionDE : AgentMessageForSecondSolutionEN,
-                AgentMessageForResolving = language == Language.de ? AgentMessageForComparisonDE : AgentMessageForComparisonEN,
-                AgentMessageForComparison = language == Language.de ? AgentMessageForResolvingDE : AgentMessageForResolvingEN
+                AgentMessageForFirstSolution = ExerciseContentJapanese.Pick(language, AgentMessageForFirstSolutionDE, AgentMessageForFirstSolutionEN),
+                AgentMessageForSecondSolution = ExerciseContentJapanese.Pick(language, AgentMessageForSecondSolutionDE, AgentMessageForSecondSolutionEN),
+                // NOTE: these two were previously swapped, so the comparison step displayed the
+                // resolving message and vice versa. The stored data was always correct (the
+                // serialising constructor maps straight across), so only the read side needed fixing.
+                AgentMessageForComparison = ExerciseContentJapanese.Pick(language, AgentMessageForComparisonDE, AgentMessageForComparisonEN),
+                AgentMessageForResolving = ExerciseContentJapanese.Pick(language, AgentMessageForResolvingDE, AgentMessageForResolvingEN)
             };
         }
     }

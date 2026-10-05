@@ -32,6 +32,7 @@ export class GeneralTranslations {
     static readonly NAV_EXERCISE: string = "navigation-exercise";
     static readonly NAV_GAME: string = "navigation-game";
     static readonly COMPLETED: string = "exercise-completed";
+    static readonly TODO: string = "exercise-todo";
     static readonly TUTORIAL: string = "tutorial";
     static readonly TUTORIAL_END: string = "tutorial-end";
     static readonly TUTORIAL_END_PLAIN: string = "tutorial-end-plain";
@@ -51,6 +52,7 @@ export class GeneralTranslations {
     static readonly EXIT_EXERCISE_HOME: string = "exit-exercise-home";
     static readonly EXIT_EXERCISE_VIEW: string = "exit-exercise-view";
     static readonly LOGIN_TEXT: string = "login-text";
+    static readonly BUTTON_LOGIN: string = "button-login";
     static readonly LOGIN_NAME: string = "login-name";
     static readonly LOGIN_PW: string = "login-password";
     static readonly FLEXIBILITY_STUDY: string = "flexibility-study";

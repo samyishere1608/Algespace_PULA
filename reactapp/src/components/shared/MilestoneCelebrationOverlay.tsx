@@ -1,4 +1,8 @@
 import { ReactElement, useEffect, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTrophy } from "@fortawesome/free-solid-svg-icons";
+import { TranslationNamespaces } from "@/i18n.ts";
 import "@styles/shared/milestone-celebration.scss";
 import levelUpSound from "@/assets/sounds/LevelUp.mp3";
 
@@ -8,14 +12,16 @@ interface Props {
 }
 
 export function MilestoneCelebrationOverlay({ milestone, onDismiss }: Props): ReactElement {
+    const { t } = useTranslation(TranslationNamespaces.Student);
     const [visible, setVisible] = useState(false);
 
     useEffect(() => {
-        const t = setTimeout(() => setVisible(true), 30);
+        // Named `timer`, not `t`: the old name shadowed the translation function for the whole effect.
+        const timer = setTimeout(() => setVisible(true), 30);
         const audio = new Audio(levelUpSound);
         audio.volume = 0.7;
         audio.play().catch(() => { /* autoplay blocked — ignore */ });
-        return () => clearTimeout(t);
+        return () => clearTimeout(timer);
     }, []);
 
     function handleDismiss(): void {
@@ -49,17 +55,26 @@ export function MilestoneCelebrationOverlay({ milestone, onDismiss }: Props): Re
             >
                 <div className={"milestone-cel__burst"} />
 
-                <div className={"milestone-cel__icon"}>🏆</div>
+                <div className={"milestone-cel__icon"} aria-hidden>
+                    <FontAwesomeIcon icon={faTrophy} />
+                </div>
 
-                <h2 className={"milestone-cel__title"}>Milestone Reached!</h2>
+                <h2 className={"milestone-cel__title"}>{t("milestone-title")}</h2>
                 <p className={"milestone-cel__xp"}>{milestone.toLocaleString()} XP</p>
                 <p className={"milestone-cel__sub"}>
-                    You've crossed the <strong>{milestone.toLocaleString()} XP</strong> milestone.
-                    Keep it up — next stop: <strong>{(milestone + 500).toLocaleString()} XP</strong>!
+                    <Trans
+                        i18nKey="milestone-subtitle"
+                        ns={TranslationNamespaces.Student}
+                        values={{
+                            milestone: milestone.toLocaleString(),
+                            next: (milestone + 500).toLocaleString(),
+                        }}
+                        components={{ strong: <strong /> }}
+                    />
                 </p>
 
                 <button className={"milestone-cel__btn"} onClick={handleDismiss}>
-                    Keep Going 🚀
+                    {t("milestone-continue")}
                 </button>
             </div>
         </div>

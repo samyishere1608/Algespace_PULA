@@ -118,12 +118,10 @@ namespace webapi.Models.Flexibility
                 Method = Method,
                 AlternativeSystems = JsonSerializer.Deserialize<List<MatchableSystem>>(AlternativeSystems) ?? throw new ArgumentException(),
                 SelfExplanationTask = new SelfExplanation(extendedSelfExplanationTask, language),
-                Question = language == Language.de ? QuestionDE : QuestionEN,
-                AgentMessageForSelfExplanation = language == Language.de ? AgentMessageForSelfExplanationDE :
-                                                 language == Language.ja ? SelfExplanationJapanese.Translate(AgentMessageForSelfExplanationEN) :
-                                                 AgentMessageForSelfExplanationEN,
-                AgentMessageForFirstSolution = language == Language.de ? AgentMessageForFirstSolutionDE : AgentMessageForFirstSolutionEN,
-                AgentMessageForSecondSolution = language == Language.de ? AgentMessageForSecondSolutionDE : AgentMessageForSecondSolutionEN
+                Question = ExerciseContentJapanese.Pick(language, QuestionDE, QuestionEN),
+                AgentMessageForSelfExplanation = ExerciseContentJapanese.Pick(language, AgentMessageForSelfExplanationDE, AgentMessageForSelfExplanationEN),
+                AgentMessageForFirstSolution = ExerciseContentJapanese.Pick(language, AgentMessageForFirstSolutionDE, AgentMessageForFirstSolutionEN),
+                AgentMessageForSecondSolution = ExerciseContentJapanese.Pick(language, AgentMessageForSecondSolutionDE, AgentMessageForSecondSolutionEN)
             };
         }
     }

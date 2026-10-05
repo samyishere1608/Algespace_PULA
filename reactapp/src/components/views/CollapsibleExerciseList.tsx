@@ -82,7 +82,7 @@ function ExerciseList({ route, navigateTo, completedExercises }: { route: string
                             {t(GeneralTranslations.NAV_EXERCISE)} {index + 1}
                         </p>
                         {entry.level !== null && <Level level={entry.level} />}
-                        <p className={"exercise-list__status"}>{isCompleted ? t(GeneralTranslations.COMPLETED) : "To-Do"}</p>
+                        <p className={"exercise-list__status"}>{isCompleted ? t(GeneralTranslations.COMPLETED) : t(GeneralTranslations.TODO)}</p>
                         <FontAwesomeIcon className={"exercise-font"} icon={faChevronRight} />
                     </div>
                 );

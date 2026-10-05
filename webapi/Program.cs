@@ -2,7 +2,10 @@ using Microsoft.Net.Http.Headers;
 using System.Threading.RateLimiting;
 using webapi.AuthHelpers;
 using webapi.Authorization;
+using webapi.Controllers;
 using webapi.Data.Examples;
+using webapi.Models.Anchors;
+using webapi.Models.Database;
 using webapi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,13 +50,31 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddRateLimiter(options =>
 {
+    // 6000 requests a minute — about 100/sec — as ONE budget shared by the whole application.
+    //
+    // The partition key is the Host header for every student, because these routes are anonymous:
+    // students are addressed by id in the URL rather than by a token, so `User.Identity` is empty and
+    // the value falls through to the host. This is therefore a total across all users, not a
+    // per-student allowance, and the number has to cover the whole cohort at once.
+    //
+    // Sized for about 120 students working simultaneously. One full exercise cycle — dashboard,
+    // exercise load, in-exercise tracking, completion, agency XP, goal, reflection — is roughly 25
+    // requests, and 120 students at one exercise every three minutes averages close to 1000 a minute.
+    // That was the old value, so the old limit sat exactly on the expected load and any burst was
+    // rejected. 6000 leaves roughly six times the average as headroom, which absorbs the case that
+    // actually hurts: a class starting together and every dashboard loading in the same few seconds.
+    //
+    // QueueLimit stays at 0 deliberately. The window is a minute wide, so queueing a request means
+    // holding it for up to a minute; a fast rejection the client can retry is better for a student
+    // than a request that appears to hang. There is no visible retry UI, so the burst headroom above
+    // is what keeps this from being reached in normal use.
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
             factory: partition => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,
-                PermitLimit = 1000,
+                PermitLimit = 6000,
                 QueueLimit = 0,
                 Window = TimeSpan.FromMinutes(1)
             }));
@@ -68,6 +89,10 @@ builder.Services.AddScoped<IUserService, UserService>(); // Service is only requ
 builder.Services.AddScoped<ICKStudyService, CKStudyService>();
 builder.Services.AddScoped<IFlexibilityStudyService, FlexibilityStudyService>();
 builder.Services.AddScoped<IStudentService, StudentService>();
+builder.Services.AddScoped<INlpAnalysisService, NlpAnalysisService>(); // offline research analytics
+builder.Services.AddScoped<ICurriculumContextService, CurriculumContextService>(); // lesson-content grounding
+builder.Services.AddScoped<IAnswerLeakGuard, AnswerLeakGuard>(); // answer-leak protection
+builder.Services.AddScoped<IAnchorTrackingService, AnchorTrackingService>(); // adaptive anchor capture + profile
 
 var app = builder.Build();
 
@@ -95,6 +120,24 @@ app.MapControllers();
 // Seed exercises from code on every startup so the DB always reflects current data
 using (var scope = app.Services.CreateScope())
 {
+    // WAL first, before anything opens the databases for real work. It is stored in the file, so a
+    // database created fresh on a new machine would otherwise start on the default rollback journal,
+    // where a writer excludes readers and one commit serialises the whole file. See
+    // DBSettings.EnableWriteAheadLogging for the full reasoning.
+    Console.WriteLine($"[DB] journal modes: {string.Join(", ", DBSettings.EnableWriteAheadLogging())}");
+
+    // Anchor store tables. Created once here rather than on first use: running DDL on the request
+    // path takes a write lock on the students database and would serialise every request behind it.
+    using (var anchorConnection = DBSettings.GetSQLiteConnectionForStudentsDB())
+    {
+        anchorConnection.Open();
+        AnchorStoreSettings.EnsureTables(anchorConnection);
+    }
+
+    // The same reasoning for the student-progress tables, which were the one place still doing their
+    // DDL per request. See StudentProgressController.InitializeSchema.
+    StudentProgressController.InitializeSchema();
+
     var flexService = scope.ServiceProvider.GetRequiredService<IFlexibilityExerciseService>();
     flexService.SetSuitabilityExercises(SuitabilityExamples.GetExamples());
     flexService.SetEfficiencyExercises(EfficiencyExamples.GetExamples());

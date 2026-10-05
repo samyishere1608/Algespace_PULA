@@ -12,8 +12,8 @@ import { SubstitutionMethod } from "@components/flexibility/substitution/Substit
 import { determineSecondEquation } from "@utils/utils.ts";
 import "@styles/flexibility/flexibility.scss";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
-import useFlexibilityTracker from "@hooks/useFlexibilityTracker.ts";
-import { IUser } from "@/types/studies/user.ts";
+import useFlexibilityTracker, { ANCHOR_TRACKING_BASE, STUDY_TRACKING_BASE } from "@hooks/useFlexibilityTracker.ts";
+import useTrackerIdentity from "@hooks/useTrackerIdentity.ts";
 import { FlexibilityExerciseActionPhase, FlexibilityExerciseChoicePhase, FlexibilityExercisePhase, FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
 import { getRandomAgent, setPKExerciseCompleted, setFlexibilityStudyExerciseCompleted, logFlexibilityMethodChoice } from "@utils/storageUtils.ts";
 import { OptionalExercise } from "@components/flexibility/choice/OptionalExercise.tsx";
@@ -36,6 +36,7 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
     }, []);
 
     const { user } = useAuth();
+    const { logging, owner } = useTrackerIdentity(isStudy);
     if (isStudy) {
         if (user === undefined) {
             throw new GameError(GameErrorType.AUTH_ERROR);
@@ -48,6 +49,7 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
         initializeTrackingPhase,
         trackActionInPhase,
         trackChoice,
+        reconsiderDecline,
         trackType,
         trackErrorInPhase,
         trackHintsInPhase,
@@ -56,7 +58,20 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
         endTracking,
         decideCalculationIntervention
 
-    } = useFlexibilityTracker(isStudy, user as IUser, studyId as number, flexibilityExerciseId, exercise.id, FlexibilityStudyExerciseType.TipExercise, performance.now(), condition, agentType, FlexibilityExercisePhase.EfficiencySelection);
+    } = useFlexibilityTracker(
+        // Logged-in students track too, not only study participants.
+        logging,
+        owner,
+        studyId ?? 0,
+        flexibilityExerciseId,
+        exercise.id,
+        FlexibilityStudyExerciseType.TipExercise,
+        performance.now(),
+        condition,
+        agentType,
+        isStudy ? STUDY_TRACKING_BASE : ANCHOR_TRACKING_BASE,
+        FlexibilityExercisePhase.EfficiencySelection
+    );
 
 
 
@@ -149,6 +164,8 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
                     trackAction={(action: string) => trackActionInPhase(action, FlexibilityExerciseActionPhase.FirstSolutionActions)}
                     trackError={trackErrorInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
+                    reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeFirstSolution)}
                     condition={condition}
@@ -203,6 +220,8 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
                     trackAction={(action: string) => trackActionInPhase(action, FlexibilityExerciseActionPhase.SecondSolutionActions)}
                     trackError={trackErrorInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionChoice)}
+                    reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeFirstSolution)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     condition={condition}

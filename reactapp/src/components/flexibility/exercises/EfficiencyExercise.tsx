@@ -1,6 +1,4 @@
-import {Fragment, ReactElement, useMemo, useState} from "react";
-import {PippinChat} from "@components/flexibility/PippinChat.tsx";
-import {equationToString} from "@utils/equationUtils.ts";
+import {ReactElement, useMemo, useState} from "react";
 import {EfficiencyExercise as EfficiencyExerciseProps} from "@/types/flexibility/efficiencyExercise.ts";
 import {
     AgentCondition,
@@ -27,8 +25,8 @@ import {SystemTransformation} from "@components/flexibility/system/SystemTransfo
 import {determineSecondEquation} from "@utils/utils.ts";
 import "@styles/flexibility/flexibility.scss";
 import {useAuth} from "@/contexts/AuthProvider.tsx";
-import useFlexibilityTracker from "@hooks/useFlexibilityTracker.ts";
-import {IUser} from "@/types/studies/user.ts";
+import useFlexibilityTracker, { ANCHOR_TRACKING_BASE, STUDY_TRACKING_BASE } from "@hooks/useFlexibilityTracker.ts";
+import useTrackerIdentity from "@hooks/useTrackerIdentity.ts";
 import {
     FlexibilityExerciseActionPhase,
     FlexibilityExerciseChoicePhase,
@@ -55,6 +53,7 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
     }, []);
 
     const { user } = useAuth();
+    const { logging, owner } = useTrackerIdentity(isStudy);
     if (isStudy) {
         if (user === undefined) {
             throw new GameError(GameErrorType.AUTH_ERROR);
@@ -66,6 +65,7 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
     const {
         trackActionInPhase,
         trackChoice,
+        reconsiderDecline,
         trackType,
         trackErrorInPhase,
         trackHintsInPhase,
@@ -74,7 +74,20 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
         endTracking,
         decideCalculationIntervention,
         decideExplainIntervention,
-    } = useFlexibilityTracker(isStudy, user as IUser, studyId as number, flexibilityExerciseId, exercise.id, FlexibilityStudyExerciseType.Efficiency, performance.now(), condition, agentType, FlexibilityExercisePhase.EfficiencySelection);
+    } = useFlexibilityTracker(
+        // Logged-in students track too, not only study participants.
+        logging,
+        owner,
+        studyId ?? 0,
+        flexibilityExerciseId,
+        exercise.id,
+        FlexibilityStudyExerciseType.Efficiency,
+        performance.now(),
+        condition,
+        agentType,
+        isStudy ? STUDY_TRACKING_BASE : ANCHOR_TRACKING_BASE,
+        FlexibilityExercisePhase.EfficiencySelection
+    );
 
     const [exerciseState, setExerciseState] = useState<EfficiencyExerciseState>(EfficiencyExerciseState.MethodSelection);
     const [selectedMethod, setSelectedMethod] = useState<Method>();
@@ -101,6 +114,7 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
                     trackError={trackErrorInPhase}
                     trackHints={trackHintsInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SelfExplanationChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SelfExplanationChoice)}
                     trackType={(type:number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeSelfExplanation)}
                     trackChoiceIntervention={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SelfExplanationInterventionChoice)}
                     condition={condition}
@@ -257,6 +271,8 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
                     trackAction={(action: string) => trackActionInPhase(action, FlexibilityExerciseActionPhase.FirstSolutionActions)}
                     trackError={trackErrorInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
+                    reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackType={(type:number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeFirstSolution)}
                     condition={condition}
@@ -313,6 +329,8 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
                     trackAction={(action: string) => trackActionInPhase(action, FlexibilityExerciseActionPhase.SecondSolutionActions)}
                     trackError={trackErrorInPhase}
                     trackChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionChoice)}
+                    reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionChoice)}
+                    reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeSecondSolution)}
                     condition={condition}
@@ -348,25 +366,20 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
         }
     }
 
-    // Build context string for Pippin AI
-    const pippinContext = [
-        `Exercise type: Efficiency`,
-        `Current step: ${EfficiencyExerciseState[exerciseState]}`,
-        `Equation 1: ${equationToString(exercise.firstEquation)}`,
-        `Equation 2: ${equationToString(exercise.secondEquation)}`,
-        `Variables: ${exercise.firstVariable.name} and ${exercise.secondVariable.name}`,
-        selectedMethod ? `Selected method: ${Method[selectedMethod]}` : null,
-    ].filter(Boolean).join("\n");
-
-    return (
-        <Fragment>
-            {content}
-            <PippinChat exerciseContext={pippinContext} />
-        </Fragment>
-    );
+    // The free-text Pippin chat was removed. In-exercise agency now runs through the decision
+    // anchors, which are recorded and feed the avoidance profile.
+    return content;
 
     function handleSelection(method: Method, selfExplain: boolean): void {
         setSelectedMethod(method);
+
+        // Efficiency asks the student to pick a method, exactly as Suitability and Plain do, so the
+        // choice is recorded the same way they record it. This was missing here, which left every
+        // Efficiency attempt with no method against its name — invisible to a "practise Elimination"
+        // goal even though the student had just chosen Elimination. `trackActionInPhase` with this
+        // phase is what the backend turns into `FlexibilityAttempt.SelectedMethod`.
+        trackActionInPhase(`${Method[method]}`, FlexibilityExerciseActionPhase.SelectedMethod);
+
         if (selfExplain) {
             setNextTrackingPhase(FlexibilityExercisePhase.SelfExplanation);
             setExerciseState(EfficiencyExerciseState.SelfExplanation);

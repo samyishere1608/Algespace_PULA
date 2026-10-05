@@ -42,7 +42,10 @@
 // ── Trophy ────────────────────────────────────────────────────────────────────
 .goal-celebration__trophy {
     font-size: 3.5rem;
+    line-height: 1;
+    color: #ffd166;
     margin-bottom: 0.5rem;
+    filter: drop-shadow(0 0 18px rgba(255, 209, 102, 0.45));
     animation: goal-bounce 0.8s ease 0.3s both;
 }
 
@@ -81,7 +84,8 @@
 }
 
 .goal-celebration__goal-icon {
-    font-size: 1.1rem;
+    font-size: 1rem;
+    color: #8ecae6;
     flex-shrink: 0;
 }
 
@@ -129,15 +133,22 @@
     font-weight: 700;
     cursor: pointer;
     letter-spacing: 0.04em;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
 
+    &:focus-visible {
+        outline: 2px solid #8ecae6;
+        outline-offset: 2px;
+    }
+
+    // Brightens rather than lifts: the button spans the whole card, so a transform would move a
+    // large surface under the pointer and read as the card twitching.
     &:hover {
-        transform: translateY(-2px);
+        filter: brightness(1.12);
         box-shadow: 0 6px 20px rgba(33, 158, 188, 0.5);
     }
 
     &:active {
-        transform: translateY(0);
+        filter: brightness(0.96);
     }
 }
 

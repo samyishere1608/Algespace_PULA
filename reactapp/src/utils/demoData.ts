@@ -1,5 +1,5 @@
 import axios from "axios";
-import { addAccuracyEntry } from "./goalUtils";
+import { addAccuracyEntry } from "./progressUtils";
 
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
@@ -46,15 +46,15 @@ export async function seedDemoData(studentId: number): Promise<void> {
     await post(`${BACKEND}/student-progress/log-agency-xp`, { studentId, xpType: "insight", amount: 90, source: "demo" });
     await post(`${BACKEND}/student-progress/log-agency-xp`, { studentId, xpType: "resolve", amount: 70, source: "demo" });
 
-    // ── 3. Goals completed this week (varied difficulties) ─────────────────
+    // ── 3. Goals completed this week ───────────────────────────────────────
+    // goalId is the category, so the dashboard can map a completion back to a goal type.
     const goals: Array<{ goalId: string; goalLabel: string; xpEarned: number; exerciseType: string }> = [
-        { goalId: "try-suitability",   goalLabel: "Try a Suitability Exercise", xpEarned: 20, exerciseType: "Suitability" },
-        { goalId: "try-efficiency",    goalLabel: "Try an Efficiency Exercise", xpEarned: 20, exerciseType: "Efficiency" },
-        { goalId: "choose-solo-once",  goalLabel: "Go Solo Once",               xpEarned: 25, exerciseType: "Suitability" },
-        { goalId: "hint-free-run",     goalLabel: "Hint-Free Run",              xpEarned: 30, exerciseType: "Efficiency" },
-        { goalId: "method-explorer",   goalLabel: "Method Explorer",            xpEarned: 35, exerciseType: "Matching" },
-        { goalId: "master-matching",   goalLabel: "Master Matching",            xpEarned: 50, exerciseType: "Matching" },
-        { goalId: "face-your-weakness", goalLabel: "Face Your Weakness",        xpEarned: 55, exerciseType: "Substitution" },
+        { goalId: "method",         goalLabel: "5 Elimination exercises",         xpEarned: 5, exerciseType: "Suitability" },
+        { goalId: "exerciseType",   goalLabel: "3 Suitability exercises",         xpEarned: 5, exerciseType: "Suitability" },
+        { goalId: "solveOnOwn",     goalLabel: "Work out 3 solutions yourself",  xpEarned: 5, exerciseType: "Efficiency" },
+        { goalId: "selfExplanation", goalLabel: "Explain your own reasoning 3 times", xpEarned: 5, exerciseType: "Efficiency" },
+        { goalId: "methodComparison", goalLabel: "Compare methods 3 times",       xpEarned: 5, exerciseType: "Matching" },
+        { goalId: "hintsAndErrors", goalLabel: "3 exercises with at most 1 hint", xpEarned: 5, exerciseType: "Matching" },
     ];
     for (const g of goals) {
         await post(`${BACKEND}/student-progress/log-goal`, {
@@ -65,7 +65,6 @@ export async function seedDemoData(studentId: number): Promise<void> {
             exerciseType: g.exerciseType,
             totalErrors: 1,
             totalHints: 1,
-            pippinMessages: 0,
         });
     }
 

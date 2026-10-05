@@ -25,7 +25,16 @@ namespace webapi.Models.Student
     {
         public long Id { get; set; }
         public long StudentId { get; set; }
+        /// <summary>
+        /// One of the six goal categories: method | exerciseType | selfExplanation |
+        /// methodComparison | solveOnOwn | hintsAndErrors. Stable, so historical rows stay readable.
+        /// </summary>
         public string GoalId { get; set; } = "";
+        /// <summary>
+        /// The goal as the student saw it, e.g. "5 Elimination exercises". Stored verbatim because the
+        /// goal's numbers are part of its identity — "5 exercises" and "3 exercises" are different
+        /// goals, and the label is the only place that survives.
+        /// </summary>
         public string GoalLabel { get; set; } = "";
         public int XpEarned { get; set; }
         public string ExerciseType { get; set; } = "";
@@ -40,13 +49,75 @@ namespace webapi.Models.Student
     public class LogGoalRequest
     {
         public long StudentId { get; set; }
+        /// <summary>One of the six goal categories. The client owns the goal model.</summary>
         public string GoalId { get; set; } = "";
         public string GoalLabel { get; set; } = "";
+        /// <summary>Resolve XP awarded for following through on the goal.</summary>
         public int XpEarned { get; set; }
         public string ExerciseType { get; set; } = "";
         public int TotalErrors { get; set; }
         public int TotalHints { get; set; }
-        public int PippinMessages { get; set; }
+    }
+
+    /// <summary>
+    /// One goal the student is working on. Mirrors `StudyGoal` on the client field for field, so a
+    /// mismatch shows up as a compile-time contract break rather than as a goal that silently stops
+    /// counting.
+    /// </summary>
+    public class ActiveGoalRecord
+    {
+        /// <summary>Instance id. Two goals can share a category, so the category is not an identity.</summary>
+        public string Id { get; set; } = "";
+
+        public long StudentId { get; set; }
+
+        /// <summary>One of the six categories. Opaque here — the client owns the catalogue.</summary>
+        public string Category { get; set; } = "";
+
+        /// <summary>The method or exercise type the goal is about. Empty means "any".</summary>
+        public string Focus { get; set; } = "";
+
+        public string Metric { get; set; } = "exercises";
+
+        public double Target { get; set; }
+
+        /// <summary>hintsAndErrors only: "hints" or "errors". Empty for the other five.</summary>
+        public string Quality { get; set; } = "";
+
+        /// <summary>hintsAndErrors only: the per-exercise limit the student must stay within.</summary>
+        public int MaxPerExercise { get; set; }
+
+        /// <summary>
+        /// When the goal was set, as "yyyy-MM-ddTHH:mm:ssZ".
+        ///
+        /// The trailing Z is load-bearing. The client parses this with `new Date(...)`, and without a
+        /// zone marker that is read as LOCAL time, shifting the goal's start by the browser's offset;
+        /// every exercise in that window would then count towards a goal that did not exist yet.
+        /// The other stamps in this schema are compared as strings and so need no zone — this one is
+        /// read as an instant, so it does.
+        /// </summary>
+        public string CreatedAt { get; set; } = "";
+    }
+
+    /// <summary>Request to set (add, or replace by id) one active goal.</summary>
+    public class SetActiveGoalRequest
+    {
+        public long StudentId { get; set; }
+        public string Id { get; set; } = "";
+        public string Category { get; set; } = "";
+        public string? Focus { get; set; }
+        public string? Metric { get; set; }
+        public double Target { get; set; }
+        public string? Quality { get; set; }
+        public int MaxPerExercise { get; set; }
+        public string CreatedAt { get; set; } = "";
+    }
+
+    /// <summary>Request to clear several goals at once — what happens when they complete together.</summary>
+    public class RemoveActiveGoalsRequest
+    {
+        public long StudentId { get; set; }
+        public List<string> GoalIds { get; set; } = [];
     }
 
     public class LogExerciseRequest
@@ -55,6 +126,17 @@ namespace webapi.Models.Student
         public string ExerciseType { get; set; } = "";
         public int Errors { get; set; }
         public int Hints { get; set; }
+
+        /// <summary>
+        /// What the student decided during the exercise, e.g. "SolveOnOwn=Declined".
+        ///
+        /// Errors and hints cannot distinguish "I found this easy" from "this was easy because I
+        /// asked to be shown the answer". A student who took the help has nothing recorded that
+        /// disagrees with them, so without this the reflection scores their self-assessment against
+        /// evidence that the help itself produced. Empty when they never reached a decision point,
+        /// which must be read as "unknown" rather than "engaged".
+        /// </summary>
+        public string Decisions { get; set; } = "";
     }
 
     public class SpendXpRequest
@@ -147,6 +229,17 @@ namespace webapi.Models.Student
         public int PippinMessages { get; set; }
         /// <summary>Exercise type or solving method for this item.</summary>
         public string Method { get; set; } = "";
+
+        /// <summary>
+        /// What the student decided on this exercise, e.g. "SolveOnOwn=Declined".
+        ///
+        /// Stored as a snapshot, like the error and hint counts beside it, because the reflection is
+        /// graded against how the exercise went — and how it went includes what the student chose,
+        /// not only what they got wrong. Empty on rows written before this column existed and on
+        /// exercises with no decision points.
+        /// </summary>
+        public string Decisions { get; set; } = "";
+
         public string CompletedAt { get; set; } = "";
     }
 
@@ -184,6 +277,12 @@ namespace webapi.Models.Student
         public int InsightXp { get; set; }
         /// <summary>Concrete next step (filled for the final question).</summary>
         public string NextStep { get; set; } = "";
+        /// <summary>
+        /// True when the answer was unusable — unrelated to the exercise — and the student should be
+        /// asked to write it again. The turn is NOT persisted and no Insight XP is awarded, so the
+        /// student is neither rewarded nor credited with a reflection they did not actually make.
+        /// </summary>
+        public bool NeedsRetry { get; set; }
     }
 
     /// <summary>Marks a reflection item complete and persists its chat history.</summary>
@@ -226,6 +325,11 @@ namespace webapi.Models.Student
         public int InsightXP { get; set; }
         public int ResolveXP { get; set; }
         public int LifetimeAgencyXP { get; set; }
+        /// <summary>
+        /// Goals completed in the current calendar week, for the "recently completed" list.
+        /// Week-scoped on purpose here — this is a "what have you done lately" panel, and saying so
+        /// is the difference between a useful nudge and reading like the history was wiped.
+        /// </summary>
         public List<GoalCompletionRecord> GoalsThisWeek { get; set; } = [];
         public List<MethodCount> MethodCounts { get; set; } = [];
         /// <summary>Actual solving methods used (Elimination, Equalization, Substitution) from ExerciseCompletions.</summary>
@@ -354,6 +458,32 @@ namespace webapi.Models.Student
             "PippinMessages INTEGER NOT NULL, " +
             "CompletedAt TEXT NOT NULL";
 
+        /// <summary>
+        /// The goals the student is currently working on.
+        ///
+        /// A goal is a commitment, and its progress is measured against history this server holds.
+        /// Kept in the browser, the two could disagree: clearing storage erased the commitment while
+        /// every exercise that counted towards it stayed, and the same student on a second device saw
+        /// no goals at all while their progress towards them was still being counted. So the goal
+        /// itself is a record, not a preference.
+        ///
+        /// The CATALOGUE stays on the client — what a goal means, how it is counted, which exercise
+        /// types can advance it. This table stores only the choice the student made, which is why a
+        /// category can be renamed or a metric dropped without a migration here.
+        /// </summary>
+        public const string ActiveGoalsTable = "ActiveGoals";
+        public const string ActiveGoalsScheme =
+            "StudentId INTEGER NOT NULL, " +
+            "Id TEXT NOT NULL, " +
+            "Category TEXT NOT NULL, " +
+            "Focus TEXT NOT NULL DEFAULT '', " +
+            "Metric TEXT NOT NULL DEFAULT 'exercises', " +
+            "Target REAL NOT NULL DEFAULT 0, " +
+            "Quality TEXT NOT NULL DEFAULT '', " +
+            "MaxPerExercise INTEGER NOT NULL DEFAULT 0, " +
+            "CreatedAt TEXT NOT NULL, " +
+            "PRIMARY KEY (StudentId, Id)";
+
         public const string ExerciseLogTable = "ExerciseLog";
         public const string ExerciseLogScheme =
             "Id INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -382,6 +512,7 @@ namespace webapi.Models.Student
             "Hints INTEGER NOT NULL DEFAULT 0, " +
             "PippinMessages INTEGER NOT NULL DEFAULT 0, " +
             "Method TEXT NOT NULL DEFAULT '', " +
+            "Decisions TEXT NOT NULL DEFAULT '', " +
             "CompletedAt TEXT NOT NULL";
 
         public const string ReflectionHistoryTable = "ReflectionHistory";

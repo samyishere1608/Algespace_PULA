@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ReactElement, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
-import { requestReflection } from "@utils/goalUtils.ts";
+import { requestReflection } from "@utils/progressUtils.ts";
 
 interface Props {
     studentId: number | string;
@@ -213,7 +213,7 @@ export function DailyIntentionModal({ studentId, studentName, buddyName, buddyEm
                                             : detectedCategory === "both"
                                             ? t("daily-intention-cat-both")
                                             : detectedCategory === "no_xp"
-                                            ? t("daily-intention-cat-noxp")
+                                            ? t("daily-intention-cat-no_xp")
                                             : t("daily-intention-cat-unclear")
                                         }
                                     </div>

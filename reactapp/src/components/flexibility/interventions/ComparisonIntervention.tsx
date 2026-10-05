@@ -25,6 +25,8 @@ export function ComparisonIntervention({
     loadNextStep,
     setFirstChoice,
     setSecondChoice,
+    reconsiderDecline,
+    reconsiderInterventionDecline,
     trackType,
     compareMethods,
     comparisonMethod,
@@ -47,6 +49,13 @@ export function ComparisonIntervention({
     loadNextStep: (compliance: boolean) => void;
     setFirstChoice: (firstChoice: boolean) => void;
     setSecondChoice: (firstChoice: boolean) => void;
+    /**
+     * Offers the one nudge before a decline takes effect; resolves true if the student takes it.
+     * Optional because a study run has no nudge — the study module has no counterpart for it.
+     */
+    reconsiderDecline?: () => Promise<boolean>;
+    /** The same, for the second prompt the personal agent routes through. */
+    reconsiderInterventionDecline?: () => Promise<boolean>;
     trackType: (type: number) => void;
     compareMethods: boolean;
     comparisonMethod: Method;
@@ -159,19 +168,21 @@ export function ComparisonIntervention({
                     loadNextStep(true);
                 }
             }}
-            handleNo={() => {
-                setFirstChoice(false);
-                if(condition == AgentCondition.PersonalMotivationalAgent){
-                    if(decision){
+            reconsider={reconsiderDecline}
+            handleNo={(engaged) => {
+                // `engaged` is true when the nudge turned the decline into a retry, so they compare
+                // after all. Where an answer leads differs only when the personal agent intervenes.
+                const goNext = (engaged: boolean): void => {
+                    if (condition == AgentCondition.PersonalMotivationalAgent && (engaged ? !decision : decision)) {
                         setShowSecondPrompt(true);
                     }
-                    else{
-                        loadNextStep(false);
+                    else {
+                        loadNextStep(engaged);
                     }
-                }
-                else{
-                    loadNextStep(false)
-                }
+                };
+
+                setFirstChoice(engaged);
+                goNext(engaged);
             }}
             agentType={agentType}
             agentExpression={AgentExpression.Smiling}
@@ -246,9 +257,10 @@ export function ComparisonIntervention({
                 setSecondChoice(true);
                 loadNextStep(true);
             }}
-            handleNo={() => {
-                setSecondChoice(false);
-                loadNextStep(false);
+            reconsider={reconsiderInterventionDecline}
+            handleNo={(engaged) => {
+                setSecondChoice(engaged);
+                loadNextStep(engaged);
             }}
             agentType={agentType}
             agentExpression={AgentExpression.Thinking}

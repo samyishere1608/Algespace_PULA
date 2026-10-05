@@ -1,0 +1,54 @@
+// The nudge: the one question asked when a student declines something they habitually decline.
+//
+// It no longer draws a card of its own. It is an Intervention — the same popover, agent and pair of
+// yes/no buttons as every other prompt in the exercise — so all that is styled here is the text
+// inside it. That is the point of the redesign: the question arrives in the dialog the student is
+// already looking at, instead of replacing the exercise with a screen of its own.
+//
+// Deliberately calm. A nudge that looks like a warning or a punishment for saying no would make the
+// "no" answer meaningless, and the whole feature depends on that answer being honest. The buttons
+// come from the shared popover, so they are already identical in size and weight.
+
+.nudge__body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: center;
+
+    p {
+        margin: 0;
+    }
+}
+
+// There is nothing here to position. The nudge is not a layer that sits above the dialog it came
+// from: `Intervention` swaps this body in for its own children, so the card, the agent and the
+// buttons are the ones that were already on screen and nothing moves.
+
+// The behaviour itself, named the same way the goal picker names it.
+.nudge__label {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--primary-blue);
+}
+
+// The question. Plain, so it reads as an offer rather than an instruction.
+.nudge__ask {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #023047;
+}
+
+// Why the behaviour is worth doing. The argument, not a second version of the ask.
+.nudge__benefit {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: rgba(2, 48, 71, 0.88);
+}
+
+// Their own record, not an assertion about them.
+.nudge__evidence {
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: rgba(2, 48, 71, 0.7);
+}

@@ -11,7 +11,7 @@ import {SolutionInputField} from "@components/flexibility/solution/SolutionInput
 import {VariableSolution} from "@components/flexibility/solution/VariableSolution.tsx";
 import {StepNextIntervention} from "@components/flexibility/interventions/StepIntervention.tsx";
 
-export function VariableComputation({ variable, loadNextStep, agentType, additionalMessage, trackAction, trackError, trackChoice, trackType, trackInterventionChoice, isSecondSolution = false, condition, decideCalculationIntervention}: {
+export function VariableComputation({ variable, loadNextStep, agentType, additionalMessage, trackAction, trackError, trackChoice, trackType, trackInterventionChoice, reconsiderDecline, reconsiderInterventionDecline, isSecondSolution = false, condition, decideCalculationIntervention}: {
     variable: Variable;
     loadNextStep: () => void;
     agentType?: AgentType;
@@ -21,6 +21,13 @@ export function VariableComputation({ variable, loadNextStep, agentType, additio
     trackChoice: (choice: string) => void;
     trackType: (type: number) => void;
     trackInterventionChoice: (choice: string) => void;
+    /**
+     * Offers the one nudge before a decline takes effect; resolves true if the student takes it.
+     * Optional because a study run has no nudge — the study module has no counterpart for it.
+     */
+    reconsiderDecline?: () => Promise<boolean>;
+    /** The same, for the second prompt the personal agent routes through. */
+    reconsiderInterventionDecline?: () => Promise<boolean>;
     isSecondSolution?: boolean
     condition: AgentCondition,
     decideCalculationIntervention: () =>Promise<{ trigger: boolean; messageType: number }>;
@@ -84,19 +91,21 @@ export function VariableComputation({ variable, loadNextStep, agentType, additio
                             setExerciseState(FirstSolutionState.ManualComputation);
                         }
                     }}
-                    handleNo={() => {
-                        trackChoice("No");
-                        if (condition == AgentCondition.PersonalMotivationalAgent) {
-                            if(decision){
+                    reconsider={reconsiderDecline}
+                    handleNo={(engaged) => {
+                        // `engaged` is true when the nudge turned the decline into a retry, so they work
+                        // it out after all instead of seeing the answer.
+                        const goNext = (engaged: boolean): void => {
+                            if (condition == AgentCondition.PersonalMotivationalAgent && (engaged ? !decision : decision)) {
                                 setExerciseState(FirstSolutionState.SecondIntervention);
                             }
                             else {
-                                setExerciseState(FirstSolutionState.ResultAuto);
+                                setExerciseState(engaged ? FirstSolutionState.ManualComputation : FirstSolutionState.ResultAuto);
                             }
-                        }
-                        else{
-                            setExerciseState(FirstSolutionState.ResultAuto);
-                        }
+                        };
+
+                        trackChoice(engaged ? "Yes" : "No");
+                        goNext(engaged);
                     }}
                     agentType={agentType} agentExpression={AgentExpression.Smiling} additionalMessage={additionalMessage}
                 >
@@ -131,9 +140,10 @@ export function VariableComputation({ variable, loadNextStep, agentType, additio
                         trackInterventionChoice("Yes");
                         setExerciseState(FirstSolutionState.ManualComputation);
                     }}
-                    handleNo={() => {
-                        trackInterventionChoice("No");
-                        setExerciseState(FirstSolutionState.ResultAuto);
+                    reconsider={reconsiderInterventionDecline}
+                    handleNo={(engaged) => {
+                        trackInterventionChoice(engaged ? "Yes" : "No");
+                        setExerciseState(engaged ? FirstSolutionState.ManualComputation : FirstSolutionState.ResultAuto);
                     }}
                     agentType={agentType} agentExpression={AgentExpression.Thinking} additionalMessage={standardMessage}
                 >

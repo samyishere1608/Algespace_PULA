@@ -67,7 +67,11 @@ i18n.use(Backend)
             lookupLocalStorage: "i18nextLng",
             caches: ["localStorage"]
         },
-        fallbackLng: Language.DE,
+        // English first, German second. This used to be German alone, which meant a Japanese student
+        // saw GERMAN for any key missing from ja — the fallback walked straight past English to a
+        // language Japanese schools do not teach. English is the better second choice, and German
+        // stays last so a German-specific key still resolves.
+        fallbackLng: [Language.EN, Language.DE],
         defaultNS: TranslationNamespaces.General,
         keySeparator: false,
         interpolation: {

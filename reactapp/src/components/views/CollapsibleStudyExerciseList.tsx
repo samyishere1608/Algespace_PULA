@@ -34,7 +34,7 @@ function ExerciseList({ navigateTo, exercises, tutorialCompleted }: { navigateTo
                         <p className={"exercise-font"}>
                             {t(GeneralTranslations.NAV_EXERCISE)} {index + 1}
                         </p>
-                        <p className={"exercise-list__status"}>{exercise.completed ? t(GeneralTranslations.COMPLETED) : "To-Do"}</p>
+                        <p className={"exercise-list__status"}>{exercise.completed ? t(GeneralTranslations.COMPLETED) : t(GeneralTranslations.TODO)}</p>
                         <FontAwesomeIcon className={"exercise-font"} style={{ color: exercise.completed ? "transparent" : "" }} icon={faChevronRight} />
                     </div>
                 );

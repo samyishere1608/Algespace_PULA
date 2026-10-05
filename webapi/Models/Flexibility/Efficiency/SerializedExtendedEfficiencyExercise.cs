@@ -119,12 +119,10 @@ namespace webapi.Models.Flexibility
                 SecondVariable = JsonSerializer.Deserialize<Variable>(SecondVariable) ?? throw new ArgumentException(),
                 EfficientMethods = JsonSerializer.Deserialize<List<Method>>(EfficientMethods) ?? throw new ArgumentException(),
                 SelfExplanationTasks = extendedSelfExplanationTasks.Select(task => new SelfExplanation(task, language)).ToList(),
-                Question = language == Language.de ? QuestionDE : QuestionEN,
-                AgentMessageForSelfExplanation = language == Language.de ? AgentMessageForSelfExplanationDE :
-                                                 language == Language.ja ? SelfExplanationJapanese.Translate(AgentMessageForSelfExplanationEN) :
-                                                 AgentMessageForSelfExplanationEN,
-                AgentMessageForFirstSolution = language == Language.de ? AgentMessageForFirstSolutionDE : AgentMessageForFirstSolutionEN,
-                AgentMessageForSecondSolution = language == Language.de ? AgentMessageForSecondSolutionDE : AgentMessageForSecondSolutionEN
+                Question = ExerciseContentJapanese.Pick(language, QuestionDE, QuestionEN),
+                AgentMessageForSelfExplanation = ExerciseContentJapanese.Pick(language, AgentMessageForSelfExplanationDE, AgentMessageForSelfExplanationEN),
+                AgentMessageForFirstSolution = ExerciseContentJapanese.Pick(language, AgentMessageForFirstSolutionDE, AgentMessageForFirstSolutionEN),
+                AgentMessageForSecondSolution = ExerciseContentJapanese.Pick(language, AgentMessageForSecondSolutionDE, AgentMessageForSecondSolutionEN)
             };
         }
     }

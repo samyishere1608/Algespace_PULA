@@ -33,11 +33,11 @@ namespace webapi.Models.Flexibility
         public Option(ExtendedOption extendedOption, Language language)
         {
             Text = language == Language.de ? extendedOption.TextDE :
-                   language == Language.ja ? SelfExplanationJapanese.Translate(extendedOption.TextEN) :
+                   language == Language.ja ? ExerciseContentJapanese.Translate(extendedOption.TextEN) :
                    extendedOption.TextEN;
             IsSolution = extendedOption.IsSolution;
             Reason = language == Language.de ? extendedOption.ReasonDE :
-                     language == Language.ja ? SelfExplanationJapanese.Translate(extendedOption.ReasonEN) :
+                     language == Language.ja ? ExerciseContentJapanese.Translate(extendedOption.ReasonEN) :
                      extendedOption.ReasonEN;
         }
     }
