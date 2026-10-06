@@ -64,7 +64,7 @@ namespace webapi.Controllers
                 new { role = "system", content = BuildSystemPrompt(request.BuddyName, request.Language) }
             };
 
-            // Add conversation history (Gemini's "model" maps to OpenAI's "assistant")
+            // Stored history uses the legacy "model" role; a chat-completions API expects "assistant".
             foreach (var msg in trimmedHistory)
             {
                 messages.Add(new
@@ -94,13 +94,14 @@ namespace webapi.Controllers
 
             messages.Add(new { role = "user", content = userText });
 
-            var payload = new
+            var payload = new Dictionary<string, object>
             {
-                model = "gpt-4o-mini",
-                messages,
-                temperature = 0.4,
-                max_tokens = 200  // short hints only
+                ["model"] = AiProvider.Model(_configuration),
+                ["messages"] = messages,
+                ["temperature"] = 0.4,
+                ["max_tokens"] = 200  // short hints only
             };
+            AiProvider.ApplyThinkingFlag(payload, _configuration);
 
             var json = JsonSerializer.Serialize(payload);
             var httpClient = _httpClientFactory.CreateClient();
@@ -110,12 +111,12 @@ namespace webapi.Controllers
             try
             {
                 response = await httpClient.PostAsync(
-                    "https://api.openai.com/v1/chat/completions",
+                    AiProvider.ChatCompletionsUrl(_configuration),
                     new StringContent(json, Encoding.UTF8, "application/json"));
             }
             catch (Exception ex)
             {
-                return StatusCode(502, $"Failed to reach OpenAI API: {ex.Message}");
+                return StatusCode(502, $"Failed to reach the AI provider: {ex.Message}");
             }
 
             if (!response.IsSuccessStatusCode)
@@ -163,7 +164,7 @@ namespace webapi.Controllers
                 // student with nothing, which is what made the tutor feel over-guarded. Ask for the
                 // same idea with the answer removed instead; only use the canned message if that
                 // fails or leaks again.
-                var revised = await RewriteWithoutAnswer(httpClient, messages, cleanedReply);
+                var revised = await RewriteWithoutAnswer(httpClient, _configuration, messages, cleanedReply);
                 if (revised is not null
                     && !_answerLeakGuard.Inspect(revised, request.ExerciseType, request.ExerciseId).Leaked)
                 {
@@ -192,6 +193,7 @@ namespace webapi.Controllers
         /// </summary>
         private static async Task<string?> RewriteWithoutAnswer(
             HttpClient httpClient,
+            IConfiguration configuration,
             List<object> messages,
             string offendingReply)
         {
@@ -212,16 +214,17 @@ namespace webapi.Controllers
                     }
                 };
 
-                var payload = new
+                var payload = new Dictionary<string, object>
                 {
-                    model = "gpt-4o-mini",
-                    messages = correction,
-                    temperature = 0.4,
-                    max_tokens = 200
+                    ["model"] = AiProvider.Model(configuration),
+                    ["messages"] = correction,
+                    ["temperature"] = 0.4,
+                    ["max_tokens"] = 200
                 };
+                AiProvider.ApplyThinkingFlag(payload, configuration);
 
                 var response = await httpClient.PostAsync(
-                    "https://api.openai.com/v1/chat/completions",
+                    AiProvider.ChatCompletionsUrl(configuration),
                     new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
 
                 if (!response.IsSuccessStatusCode) return null;

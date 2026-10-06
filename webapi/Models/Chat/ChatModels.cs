@@ -46,7 +46,7 @@ namespace webapi.Models.Chat
         /// <summary>The student's latest message.</summary>
         public string UserMessage { get; set; } = string.Empty;
 
-        /// <summary>Prior turns in this session so Gemini can maintain continuity.</summary>
+        /// <summary>Prior turns in this session so the model can maintain continuity.</summary>
         public List<ChatMessage> History { get; set; } = [];
 
         /// <summary>The display name of the active buddy character (e.g. "Master Zen").</summary>

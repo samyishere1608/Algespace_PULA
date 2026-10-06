@@ -960,7 +960,7 @@ Respond ONLY in this JSON:
         // ── POST /student-progress/reflect-on-stats/{studentId} ──────────────
         /// <summary>
         /// Student writes a free-text reflection about their performance.
-        /// Gemini compares it against their actual data and gives honest feedback.
+        /// The model compares it against their actual data and gives honest feedback.
         /// NO XP is awarded — this is purely informational feedback.
         /// For demo user "demo1", synthetic data is generated if no real data exists.
         /// </summary>
@@ -1003,7 +1003,7 @@ Respond ONLY in this JSON:
                 };
             }
 
-            // Build stats summary for Gemini
+            // Build stats summary for the model
             var stats = new System.Text.StringBuilder();
             if (progress != null)
             {
@@ -1099,7 +1099,7 @@ Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"","
 
         // ── POST /student-progress/suggest-goals/{studentId} ─────────────────
         /// <summary>
-        /// Uses Gemini to suggest 3 goals from the predefined catalogue based on
+        /// Uses the model to suggest 3 goals from the predefined catalogue based on
         /// the student's performance data. Each suggestion includes a one-line reason.
         /// For demo user "demo1", synthetic data is generated if no real data exists.
         ///
@@ -2038,34 +2038,65 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
 
         private async Task<string?> CallOpenAI(string apiKey, string systemPrompt, string userPrompt)
         {
-            var payload = new
+            var payload = new Dictionary<string, object>
             {
-                model = "gpt-4o-mini",
-                messages = new[]
+                ["model"] = AiProvider.Model(_configuration),
+                ["messages"] = new[]
                 {
                     new { role = "system", content = systemPrompt },
                     new { role = "user", content = userPrompt }
                 },
-                temperature = 0.3,
-                max_tokens = 500
+                ["temperature"] = 0.3,
+                ["max_tokens"] = 500
             };
+            AiProvider.ApplyThinkingFlag(payload, _configuration);
 
             var json = JsonSerializer.Serialize(payload);
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
+            var response = await httpClient.PostAsync(AiProvider.ChatCompletionsUrl(_configuration), content);
 
-            if (!response.IsSuccessStatusCode) return null;
+            // Log the failure rather than silently returning null. A null here is indistinguishable at
+            // the call site from "the model had nothing to say", and that ambiguity is exactly what made
+            // a provider swap look like an unreachable server: the request had succeeded with 200, but
+            // an empty `content` (a reasoning model that ran out of budget while thinking) came back as
+            // a null and every caller quietly used its fallback.
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                Console.WriteLine(
+                    $"[AI] {(int)response.StatusCode} from {AiProvider.BaseUrl(_configuration)} " +
+                    $"(model={AiProvider.Model(_configuration)}) — {errorBody[..Math.Min(300, errorBody.Length)]}");
+                return null;
+            }
 
             var responseBody = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(responseBody);
-            return doc.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
+
+            var message = doc.RootElement.GetProperty("choices")[0].GetProperty("message");
+            var text = message.GetProperty("content").GetString();
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                var finish = doc.RootElement.GetProperty("choices")[0].TryGetProperty("finish_reason", out var f)
+                    ? f.GetString()
+                    : "?";
+                var reasoningChars = message.TryGetProperty("reasoning", out var reasoning)
+                                     && reasoning.ValueKind == JsonValueKind.String
+                    ? reasoning.GetString()!.Length
+                    : 0;
+
+                Console.WriteLine(
+                    $"[AI] empty content — finish_reason={finish}, reasoning={reasoningChars} chars. " +
+                    (reasoningChars > 0
+                        ? "The model is a reasoning model and spent the whole token budget thinking; " +
+                          "set OpenAI:DisableThinking=true or raise max_tokens."
+                        : "The model returned no text."));
+            }
+
+            return text;
         }
 
         /// <summary>

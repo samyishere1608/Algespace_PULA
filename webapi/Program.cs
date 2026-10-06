@@ -126,6 +126,11 @@ using (var scope = app.Services.CreateScope())
     // DBSettings.EnableWriteAheadLogging for the full reasoning.
     Console.WriteLine($"[DB] journal modes: {string.Join(", ", DBSettings.EnableWriteAheadLogging())}");
 
+    // Names the AI provider and model, and whether a key is present — never the key itself. Without
+    // this, "AI features do not work in production" is indistinguishable from "the key was never set"
+    // or "this provider does not serve that model".
+    Console.WriteLine($"[AI] {AiProvider.Describe(app.Configuration)}");
+
     // Anchor store tables. Created once here rather than on first use: running DDL on the request
     // path takes a write lock on the students database and would serialise every request behind it.
     using (var anchorConnection = DBSettings.GetSQLiteConnectionForStudentsDB())
