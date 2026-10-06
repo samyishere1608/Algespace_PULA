@@ -57,17 +57,18 @@ export function FlexibilityHint({ hints, disabled, agentType, agentExpression, t
     return (
         <React.Fragment>
             {open && (
-                <React.Fragment>
+                <div className={`flexibility-popover ${useAgent ? "agent-popover" : ""}`} style={{ maxWidth: `${width}px` }} ref={contentRef}>
+                    {/* Inside the popover so it is positioned relative to the dialog — see FlexibilityPopover.tsx.
+                        As a sibling it could only use a fixed `left`, which left the character overlapping the
+                        dialog at some window widths and hundreds of pixels away from it at others. */}
                     {useAgent && <Agent />}
-                    <div className={`flexibility-popover ${useAgent ? "agent-popover" : ""}`} style={{ maxWidth: `${width}px` }} ref={contentRef}>
-                        <button className={"span-button primary-button hint-popover__button"} onClick={handleClick}>
-                            <FontAwesomeIcon icon={faXmark} />
-                        </button>
-                        <div className={`hint-popover__container ${useAgent ? "agent-popover__container" : ""}`}>
-                            <p>{t(hints[currentIndex])}</p>
-                        </div>
+                    <button className={"span-button primary-button hint-popover__button"} onClick={handleClick}>
+                        <FontAwesomeIcon icon={faXmark} />
+                    </button>
+                    <div className={`hint-popover__container ${useAgent ? "agent-popover__container" : ""}`}>
+                        <p>{t(hints[currentIndex])}</p>
                     </div>
-                </React.Fragment>
+                </div>
             )}
             <button className={"button primary-button help-button flexibility-hint-button"} onClick={handleClick} ref={hintButtonRef} disabled={disabled}>
                 <FontAwesomeIcon icon={faQuestion} />

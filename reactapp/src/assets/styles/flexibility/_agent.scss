@@ -1,12 +1,25 @@
 @use "../mixins" as *;
 
 .agent-image__container {
+    // Anchored to the popover it belongs to — it is a child of `.flexibility-popover`, whose absolute
+    // positioning supplies the containing block — rather than to the page.
+    //
+    // This has to be relative to the dialog, because the dialog is horizontally CENTRED in
+    // `.flexibility-view__contents` while its width is computed in JS (`getFlexibilityFeedbackOrHintWidth`),
+    // so its left edge slides with the window size. With a fixed `left` the gap between character and
+    // dialog was whatever those two independent calculations happened to produce: measured at -23px
+    // (character overlapping the dialog) at 1024px, -20px at 1280px, +41px at 1440px and +281px at
+    // 1920px. Anchoring here makes the gap `1.25rem` at every width instead.
+    //
+    // `bottom: -2rem` cancels the popover's own 2rem lift (see `.agent-popover` further down) so the
+    // character still rests on the same baseline it did before — the popover's bottom edge is 2rem
+    // above the viewport bottom, and the character should stay at the viewport bottom.
     position: absolute;
-    bottom: 0;
+    right: calc(100% + 1.25rem);
+    bottom: -2rem;
     @include flex-center-content(column, flex-end);
     height: 12rem;
     width: 8.75rem;
-    z-index: 999;
 
     > img {
         object-fit: contain;
@@ -26,17 +39,5 @@
         > img {
             width: 8rem;
         }
-    }
-}
-
-@media only screen and (max-width: 1200px) {
-    .agent-image__container {
-        left: 1rem;
-    }
-}
-
-@media only screen and (min-width: 1201px) {
-    .agent-image__container {
-        left: 10rem;
     }
 }

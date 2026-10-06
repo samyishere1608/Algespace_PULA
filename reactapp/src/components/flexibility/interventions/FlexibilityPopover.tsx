@@ -1,6 +1,6 @@
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import React, { ReactElement, useCallback, useEffect, useRef } from "react";
+import { ReactElement, useCallback, useEffect, useRef } from "react";
 import { AgentExpression, AgentType } from "@/types/flexibility/enums.ts";
 import { Agent } from "@components/flexibility/interventions/Agent.tsx";
 import useWindowDimensions from "@hooks/useWindowDimensions.ts";
@@ -12,12 +12,15 @@ export function FlexibilityPopover({ children, agentType, agentExpression }: { c
     const width = getFlexibilityFeedbackOrHintWidth(windowWidth, useAgent);
 
     return (
-        <React.Fragment>
+        <div className={`flexibility-popover ${useAgent ? "agent-popover" : ""}`} style={{ maxWidth: `${width}px` }}>
+            {/* The character is rendered INSIDE the popover so it can be positioned relative to the
+                dialog. As a sibling it could only use a fixed `left`, and because the dialog is
+                horizontally centred in `.flexibility-view__contents` while its width is computed in
+                JS, the two drifted apart by hundreds of pixels — or overlapped — depending purely on
+                window width. */}
             {useAgent && <Agent />}
-            <div className={`flexibility-popover ${useAgent ? "agent-popover" : ""}`} style={{ maxWidth: `${width}px` }}>
-                <div className={`flexibility-popover__container ${useAgent ? "agent-popover__container" : ""}`}>{children}</div>
-            </div>
-        </React.Fragment>
+            <div className={`flexibility-popover__container ${useAgent ? "agent-popover__container" : ""}`}>{children}</div>
+        </div>
     );
 }
 
@@ -46,14 +49,16 @@ export function ClosableFlexibilityPopover({ children, setShowContent, agentType
     }, [handleClickOutside]);
 
     return (
-        <React.Fragment>
+        <div className={`flexibility-popover ${useAgent ? "agent-popover" : ""}`} style={{ maxWidth: `${width}px` }} ref={contentRef}>
+            {/* Inside the popover so it is positioned relative to the dialog — see FlexibilityPopover.
+                A side effect: with an agent present, clicking the character no longer counts as
+                clicking OUTSIDE and so will not dismiss the popover. That reads better than the
+                character being a dead zone that closes the hint you are reading. */}
             {useAgent && <Agent />}
-            <div className={`flexibility-popover ${useAgent ? "agent-popover" : ""}`} style={{ maxWidth: `${width}px` }} ref={contentRef}>
-                <button className={"span-button primary-button hint-popover__button"} onClick={() => setShowContent(false)}>
-                    <FontAwesomeIcon icon={faXmark} />
-                </button>
-                <div className={`flexibility-popover__container ${useAgent ? "agent-popover__container" : ""}`}>{children}</div>
-            </div>
-        </React.Fragment>
+            <button className={"span-button primary-button hint-popover__button"} onClick={() => setShowContent(false)}>
+                <FontAwesomeIcon icon={faXmark} />
+            </button>
+            <div className={`flexibility-popover__container ${useAgent ? "agent-popover__container" : ""}`}>{children}</div>
+        </div>
     );
 }

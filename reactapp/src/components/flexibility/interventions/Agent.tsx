@@ -2,6 +2,7 @@ import { ReactElement } from "react";
 import pippinImg from "@images/Character/Pipin_de.png";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { getActiveBuddyId, getEquippedOutfitId } from "@utils/wardrobeUtils.ts";
+import { resolveChatfaceSrc } from "@utils/chatfaceUtils.ts";
 import { CHARACTER_CATALOGUE, resolveOutfitSrc } from "@views/student/dashboard/CharacterShopModal.tsx";
 import { BUDDIES } from "@views/student/dashboard/ChooseBuddyModal.tsx";
 import "@styles/flexibility/flexibility.scss";
@@ -13,9 +14,10 @@ import "@styles/flexibility/flexibility.scss";
  * now shows the student's own chosen character, so hints appear to come from the character they
  * picked rather than from an anonymous agent.
  *
- * The image resolves the same way it does everywhere else in the app — equipped outfit first, then
- * the character's base image, then the default — so the character looks identical here to how it
- * looks on the dashboard.
+ * Chatface art is preferred here over the full-body portrait, because this slot is a small portrait
+ * beside a speech popover — which is the reason the chatface art exists. A character with no
+ * chatface art yet falls back to the full-body image (equipped outfit, then base), so the slot
+ * always shows something correct rather than a broken image.
  */
 export function Agent(): ReactElement {
     const { student } = useAuth();
@@ -26,7 +28,11 @@ export function Agent(): ReactElement {
 
     const equippedId = getEquippedOutfitId(studentId, buddyId);
     const equippedSrc = equippedId ? resolveOutfitSrc(buddyId, equippedId) : undefined;
-    const imageSrc = equippedSrc ?? CHARACTER_CATALOGUE.find((c) => c.id === buddyId)?.baseSrc ?? pippinImg;
+    const imageSrc =
+        resolveChatfaceSrc(buddyId, equippedId)
+        ?? equippedSrc
+        ?? CHARACTER_CATALOGUE.find((c) => c.id === buddyId)?.baseSrc
+        ?? pippinImg;
 
     return (
         <div className="agent-image__container agent-image__container--large">

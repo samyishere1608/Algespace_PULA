@@ -143,7 +143,13 @@ export function numberOrFractionIsOne(input: number | Fraction): boolean {
 
 export function getFlexibilityFeedbackOrHintWidth(windowWidth: number, useAgent: boolean): number {
     if (useAgent) {
-        return windowWidth <= 1200 ? windowWidth - 16.25 * 16 : windowWidth - 35 * 16;
+        // The character portrait stands to the LEFT of the dialog, and the dialog is horizontally
+        // CENTRED — so the space this reserve leaves is split evenly between the two sides of the
+        // dialog, while the portrait only uses the left one. The reserve therefore has to be at least
+        // twice the room the portrait actually needs (8.75rem wide + 1.25rem gap = 10rem = 160px).
+        // 16.25rem (260px) gave it only 130px a side, so below ~1080px the portrait was pushed past
+        // the left edge of the viewport and clipped. 21rem covers it with a small margin to spare.
+        return windowWidth <= 1200 ? windowWidth - 21 * 16 : windowWidth - 35 * 16;
     } else {
         return windowWidth <= 1200 ? windowWidth - 10 * 16 : windowWidth - 27.5 * 16;
     }
