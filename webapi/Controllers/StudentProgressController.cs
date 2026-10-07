@@ -794,10 +794,16 @@ namespace webapi.Controllers
         // ── GET /student-progress/analyze-session/{studentId} ───────────────
         /// <summary>
         /// Auto-analyzes today's session: strengths, improvement area, action steps.
-        /// Used by Anchor 5.1 End-Session Reflection.
+        /// Used by the end-session reflection.
+        ///
+        /// Grounded in the CURRENT goal model — the six goal categories and the three agency
+        /// currencies. It used to ask the model to reason about the retired Solo/Pippin split, but
+        /// nothing writes those agency sources any more (`picked-solo` / `picked-pippin` appear
+        /// nowhere in the client), so both counts were permanently zero and the advice was built on a
+        /// distinction that no longer exists.
         /// </summary>
         [HttpGet("analyze-session/{studentId}")]
-        public async Task<ActionResult<SessionAnalysisResponse>> AnalyzeSession(long studentId)
+        public async Task<ActionResult<SessionAnalysisResponse>> AnalyzeSession(long studentId, [FromQuery] string? language = null)
         {
             using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
             conn.Open();
@@ -832,40 +838,68 @@ namespace webapi.Controllers
                     progress = new StudentProgressRecord { StudentId = 1, ExercisesCompleted = 3, StreakDays = 2, ChoiceXP = 10, InsightXP = 15, ResolveXP = 20 };
             }
 
-            int soloPicks = agencyLog.Count(a => a.Source == "picked-solo");
-            int pippinPicks = agencyLog.Count(a => a.Source == "picked-pippin");
             int choiceXpToday = agencyLog.Where(a => a.XpType == "choice").Sum(a => a.Amount);
             int insightXpToday = agencyLog.Where(a => a.XpType == "insight").Sum(a => a.Amount);
             int resolveXpToday = agencyLog.Where(a => a.XpType == "resolve").Sum(a => a.Amount);
             var exerciseTypes = todayExercises.GroupBy(e => e.ExerciseType).ToDictionary(g => g.Key, g => g.Count());
+            int hintsToday = todayGoals.Sum(g => g.TotalHints);
+            int errorsToday = todayGoals.Sum(g => g.TotalErrors);
 
             var stats = new StringBuilder();
             stats.AppendLine($"Today's session ({today}):");
             stats.AppendLine($"- Exercises completed: {todayExercises.Count}");
-            stats.AppendLine($"- Goals achieved: {todayGoals.Count}");
-            if (todayGoals.Count > 0)
-                stats.AppendLine($"- Goals: {string.Join(", ", todayGoals.Select(g => g.GoalLabel))}");
-            stats.AppendLine($"- Solo vs Pippin: {soloPicks} solo / {pippinPicks} with AI");
-            stats.AppendLine($"- Choice XP: {choiceXpToday}, Insight XP: {insightXpToday}, Resolve XP: {resolveXpToday}");
-            stats.AppendLine($"- Exercise types: {string.Join(", ", exerciseTypes.Select(kv => $"{kv.Key}×{kv.Value}"))}");
-            stats.AppendLine($"- Total streak: {progress?.StreakDays ?? 0} days");
+            if (todayExercises.Count == 0 && todayGoals.Count == 0)
+                stats.AppendLine("- NOTE: nothing has been logged today. Say that plainly and suggest a way to start — do not describe or imply any activity that the data does not show.");
+            stats.AppendLine(exerciseTypes.Count > 0
+                ? $"- Exercise types practised: {string.Join(", ", exerciseTypes.Select(kv => $"{kv.Key}×{kv.Value}"))}"
+                : "- Exercise types practised: none");
+            stats.AppendLine($"- Goals completed: {todayGoals.Count}");
+            foreach (var goal in todayGoals)
+                stats.AppendLine($"    - \"{goal.GoalLabel}\" (category: {goal.GoalId})");
+            stats.AppendLine($"- Hints used: {hintsToday}, errors made: {errorsToday}");
+            stats.AppendLine($"- Agency earned today — Choice (deciding): {choiceXpToday}, Insight (facing something avoided): {insightXpToday}, Resolve (following through): {resolveXpToday}");
+            stats.AppendLine($"- Current streak: {progress?.StreakDays ?? 0} days");
+
+            // The end-session advice is the longest AI output a student reads, so it has to come back in
+            // the language they are working in rather than always in English.
+            var lang = GoalSuggestionText.Resolve(language);
+            var responseLanguage = lang switch
+            {
+                GoalSuggestionText.Lang.Ja => "Japanese",
+                GoalSuggestionText.Lang.De => "German",
+                _ => "English"
+            };
 
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (!string.IsNullOrWhiteSpace(apiKey))
             {
                 try
                 {
-                    var prompt = $@"You are a supportive math tutor. Analyze this student's session and provide:
+                    var prompt = $@"You are a supportive math tutor. Analyse this student's session and give feedback in three parts.
 
-1. STRENGTHS: What did they do well today? Be specific and encouraging. (1-2 sentences)
-2. IMPROVEMENT: What's one area they could grow? Frame it positively. (1 sentence)
-3. ACTION STEPS: 2-3 concrete, actionable things they can try next session.
+1. STRENGTHS: what they actually did well today. Refer to the concrete things in the data below — the exercise types they practised, the goals they followed through on, the agency they earned. 1-2 sentences.
+2. IMPROVEMENT: one area to grow, framed positively. 1 sentence.
+3. ACTION STEPS: 2-3 concrete things to try next session.
+
+The app's goal system has SIX categories. Suggest next steps using these, and prefer a category the student has NOT just used:
+- method — practise a specific solving method (Elimination, Substitution or Equalization)
+- exerciseType — do more of one exercise type (Suitability, Efficiency or Matching)
+- selfExplanation — put your reasoning into words
+- methodComparison — compare two methods on the same system
+- solveOnOwn — work through an exercise without help
+- hintsAndErrors — aim for fewer hints, or fewer errors
+
+The app tracks THREE agency currencies. Describe what they represent, never the numbers:
+- Choice — deciding rather than doing (opting into a reflection, setting your own goal)
+- Insight — facing something you tend to avoid
+- Resolve — following through on something you committed to
 
 Rules:
-- Use plain English, warm tone (like a coach, not a robot).
-- Don't mention XP numbers directly — talk about what the XP represents (e.g. 'stuck with solo mode' instead of 'earned 15 resolve XP').
-- If they used mostly Pippin, encourage trying solo next time — gently.
-- If they did all solo, celebrate that independence!
+- Warm tone, like a coach rather than a robot.
+- Never mention XP numbers; describe the behaviour instead.
+- The category names listed above (method, exerciseType, selfExplanation, methodComparison, solveOnOwn, hintsAndErrors) are internal codes. NEVER print them or anything that looks like a code. Name the action in plain words a student would use.
+- Base everything on the session data below. If very little happened today, say so kindly rather than inventing detail.
+- Write your whole response in {responseLanguage}.
 
 Session data:
 {stats}
@@ -874,7 +908,7 @@ Respond ONLY in this JSON:
 {{""strengths"":""..."",""improvement"":""..."",""actionSteps"":[""step 1"",""step 2"",""step 3""]}}";
 
                     var raw = await CallOpenAI(apiKey,
-                        "You are a supportive math coach. Analyze student sessions and give encouraging, actionable feedback. Always output valid JSON.",
+                        $"You are a supportive math coach. Analyse a student's study session and give encouraging, actionable feedback. Anchor every point in the session data you are given. Write your whole response in {responseLanguage}. Always output valid JSON.",
                         prompt);
 
                     if (raw != null)
@@ -898,29 +932,27 @@ Respond ONLY in this JSON:
                 catch { /* fall through to rule-based fallback */ }
             }
 
-            // Rule-based fallback
+            // Rule-based fallback, worded in the student's language — see ReflectionText. This is what a
+            // student sees when the model is unreachable, so English here means English inside an
+            // otherwise Japanese screen.
             var fallback = new SessionAnalysisResponse
             {
                 Summary = $"Today you completed {todayExercises.Count} exercise(s) and achieved {todayGoals.Count} goal(s).",
                 IsAiGenerated = false
             };
 
-            if (soloPicks > pippinPicks)
-                fallback.Strengths = "You showed great independence today by choosing to solve on your own! That takes courage and builds real skill.";
+            if (todayGoals.Count > 0)
+                fallback.Strengths = ReflectionText.StrengthsGoals(lang, todayGoals.Count);
             else if (todayExercises.Count > 0)
-                fallback.Strengths = "You showed up and put in the work today — consistency is the foundation of growth!";
-
-            if (resolveXpToday > 0)
-                fallback.ImprovementArea = "You're building follow-through muscle. Next time, try sticking with solo mode for the full session — you might surprise yourself!";
+                fallback.Strengths = ReflectionText.StrengthsPractised(lang);
             else
-                fallback.ImprovementArea = "Try setting a specific goal next session — having a target helps you stay focused and see your progress clearly.";
+                fallback.Strengths = ReflectionText.StrengthsNothing(lang);
 
-            fallback.ActionSteps = new List<string>
-            {
-                soloPicks <= pippinPicks ? "Try one exercise completely on your own — no hints, just you!" : "Keep up the solo streak — you're building real independence!",
-                todayGoals.Count == 0 ? "Set at least one concrete goal before starting your next session." : "Review which goal challenged you most and try a similar one next time.",
-                "Take 30 seconds after each exercise to think: 'What did I learn just now?'"
-            };
+            fallback.Improvement = todayGoals.Count > 0
+                ? ReflectionText.ImprovementGoals(lang)
+                : ReflectionText.ImprovementNoGoal(lang);
+
+            fallback.ActionSteps = ReflectionText.ActionSteps(lang);
 
             PopulateVisualizationData(fallback, todayExercises, todayGoals, agencyLog);
             return Ok(fallback);
@@ -940,21 +972,12 @@ Respond ONLY in this JSON:
             result.GoalsCompletedToday = todayGoals.Select(g => g.GoalLabel).ToList();
             result.ActiveGoalsCount = 0; // Set by frontend
 
-            // Solo vs Pippin stats — approximate from agency log
-            int soloCount = agencyLog.Count(a => a.Source == "solo-followed-through" || a.Source == "solo-partial-effort" || a.Source == "solo-quick-surrender");
-            int pippinCount = agencyLog.Count(a => a.Source == "pippin-unused-help") + todayExercises.Count - soloCount;
-            if (pippinCount < 0) pippinCount = 0;
-            result.SoloCount = soloCount;
-            result.PippinCount = pippinCount;
-
-            // Solo avg errors/hints from goal completions
-            var soloGoals = todayGoals.Where(g => g.PippinMessages == 0).ToList();
-            result.SoloAvgErrors = soloGoals.Count > 0 ? Math.Round(soloGoals.Average(g => g.TotalErrors), 1) : 0;
-            result.SoloAvgHints = soloGoals.Count > 0 ? Math.Round(soloGoals.Average(g => g.TotalHints), 1) : 0;
-
-            var pippinGoals = todayGoals.Where(g => g.PippinMessages > 0).ToList();
-            result.PippinAvgErrors = pippinGoals.Count > 0 ? Math.Round(pippinGoals.Average(g => g.TotalErrors), 1) : 0;
-            result.PippinAvgHints = pippinGoals.Count > 0 ? Math.Round(pippinGoals.Average(g => g.TotalHints), 1) : 0;
+            // The session's hint and error totals — the two tracked quality dimensions that remain.
+            // The old Solo/Pippin averages went with the Solo/Pippin split: nothing has written
+            // `PippinMessages` since the free-text chat was removed, so every row held 0 and the
+            // comparison could never mean anything.
+            result.TotalHintsToday = todayGoals.Sum(g => g.TotalHints);
+            result.TotalErrorsToday = todayGoals.Sum(g => g.TotalErrors);
         }
 
         // ── POST /student-progress/reflect-on-stats/{studentId} ──────────────
@@ -971,11 +994,13 @@ Respond ONLY in this JSON:
             if (string.IsNullOrWhiteSpace(request.StudentReflection))
                 return BadRequest("Reflection text is required.");
 
+            var lang = GoalSuggestionText.Resolve(request.Language);
+
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
                 return Ok(new ReflectOnStatsResponse
                 {
-                    Feedback = "Self-reflection is a powerful habit! 💭 Right now I can't compare your thoughts to your stats, but take a look at your dashboard — do the numbers match how you feel about your weak areas?",
+                    Feedback = ReflectionText.ReflectionNoApiKey(lang),
                     Category = "unclear"
                 });
 
@@ -1020,6 +1045,13 @@ Respond ONLY in this JSON:
             if (typeCounts.Count == 0)
                 stats.AppendLine("  (No exercises completed yet)");
 
+            var responseLanguage = lang switch
+            {
+                GoalSuggestionText.Lang.Ja => "Japanese",
+                GoalSuggestionText.Lang.De => "German",
+                _ => "English"
+            };
+
             var prompt = $@"You are a supportive study coach. A student has written a reflection about what they think their weak area is. Your job:
 
 1. FIRST, AFFIRM the student. Always validate what they say — never bluntly correct or dismiss them. Even if the data doesn't perfectly match, find something to agree with. Start your feedback with acknowledgement.
@@ -1030,8 +1062,10 @@ Respond ONLY in this JSON:
 
 4. Keep feedback to 2-3 friendly sentences. Use emojis sparingly (max 1).
 
+5. Write your whole response in {responseLanguage}.
+
 CATEGORY RULES (pick exactly one):
-- 'goal' — text is about goals, missions, achievements (e.g. ""I want to finish Master Suitability"", ""my weak area is completing goals"")
+- 'goal' — text is about goals, targets or commitments (e.g. ""I want to finish my 5 Elimination exercises"", ""my weak area is completing the goals I set"")
 - 'practice' — text is about doing exercises, practicing methods (e.g. ""I'm bad at elimination"", ""I struggle with matching exercises"", ""I need more practice with substitution"")
 - 'both' — text mentions BOTH goal-related AND practice-related things
 - 'no_xp' — gibberish, off-topic, not related to math/learning/motivation/this platform at all (use rarely)
@@ -1043,19 +1077,23 @@ STUDENT STATS:
 STUDENT REFLECTION:
 {request.StudentReflection}
 
-Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"",""feedback"":""2-3 sentences, affirmation first, gentle suggestion second""}}";
+Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"",""feedback"":""2-3 sentences, affirmation first, gentle suggestion second""}}
+
+IMPORTANT — two different languages in one reply:
+- The ""category"" value MUST stay exactly one of the English codes above.
+- The ""feedback"" value MUST be written entirely in {responseLanguage}, however much English appears elsewhere in these instructions.";
 
             try
             {
                 var rawText = await CallOpenAI(apiKey,
-                    "You are a supportive study coach. Always affirm the student's self-assessment first, then gently suggest additional areas from their stats. Never bluntly correct them. For gibberish/off-topic, warmly ask them to try again. Classify into: goal, practice, both, unclear, or no_xp. Always output valid JSON.",
+                    $"You are a supportive study coach. Always affirm the student's self-assessment first, then gently suggest additional areas from their stats. Never bluntly correct them. For gibberish/off-topic, warmly ask them to try again. Classify into: goal, practice, both, unclear, or no_xp. Write your whole response in {responseLanguage}. Always output valid JSON.",
                     prompt);
 
                 if (rawText == null)
                 {
                     return Ok(new ReflectOnStatsResponse
                     {
-                        Feedback = "Hmm, I couldn't reach my thinking partner right now! 😅 But don't let that stop you — take a look at your dashboard stats and see if they match how you feel. Want to try again in a moment?",
+                        Feedback = ReflectionText.ReflectionUnreachable(lang),
                         Category = "unclear"
                     });
                 }
@@ -1091,7 +1129,7 @@ Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"","
             {
                 return Ok(new ReflectOnStatsResponse
                 {
-                    Feedback = "I couldn't analyze your reflection right now. But keep at it — comparing your thoughts to your actual stats is a great way to grow!",
+                    Feedback = ReflectionText.ReflectionFailed(lang),
                     Category = CategoryDetector.DetectCategoryFromText(request.StudentReflection)
                 });
             }

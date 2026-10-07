@@ -21,6 +21,7 @@ AGENCY_ANCHORS_PROPOSAL.md
 DECISION_ANCHORS_PROPOSAL.md
 ADAPTIVE_ANCHORS_PROPOSAL.md
 NLP_GOLDEN_SET_PROPOSAL.md
+REFLECTION_DESIGN_PROPOSAL.md
 
 # SQLite write-ahead-log sidecars. These appear as soon as a database is opened in WAL mode and
 # vanish when it is checkpointed, so they are transient by nature. Committing one without its

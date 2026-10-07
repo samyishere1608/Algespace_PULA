@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ReactElement, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
+import i18n from "@/i18n.ts";
 import { requestReflection } from "@utils/progressUtils.ts";
 import { awardChoiceForDayReflection } from "@utils/choiceAwards.ts";
 import axios from "axios";
@@ -40,7 +41,7 @@ export function EndSessionModal({ studentId, onEndSession, onClose }: Props): Re
         setAiFeedback("");
         setShowGibberishRetry(false);
         try {
-            const result = await requestReflection(typeof studentId === "number" ? studentId : 1, customText.trim());
+            const result = await requestReflection(typeof studentId === "number" ? studentId : 1, customText.trim(), i18n.language?.slice(0, 2) ?? "en");
             setAiFeedback(result.feedback);
             setFeedbackCategory(result.category ?? "unclear");
             if (result.category === "no_xp") setShowGibberishRetry(true);
@@ -61,7 +62,7 @@ export function EndSessionModal({ studentId, onEndSession, onClose }: Props): Re
     async function handleAiAnalyze(): Promise<void> {
         setAiLoading(true);
         try {
-            const { data } = await axios.get<AnalysisResult>(`${BACKEND}/student-progress/analyze-session/${studentId}`);
+            const { data } = await axios.get<AnalysisResult>(`${BACKEND}/student-progress/analyze-session/${studentId}?language=${i18n.language?.slice(0, 2) ?? "en"}`);
             setAnalysis(data);
         } catch {
             setAnalysis({

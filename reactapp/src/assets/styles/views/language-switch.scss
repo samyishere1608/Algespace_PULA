@@ -8,6 +8,14 @@
 .language-switch__image {
     width: auto;
     height: 1.25rem;
+    // A flag needs a visible edge. The Japanese flag is a WHITE field with a red circle, so against
+    // the light header it read as a floating red dot — the flag's own boundary was invisible. Applied
+    // to all three rather than to Japan alone so the three stay identical in shape; DE and EN are
+    // full-colour and simply gain the same hairline the others need.
+    border: 1px solid rgba(2, 48, 71, 0.28);
+    border-radius: 2px;
+    // Without this the border box would grow past the 1.25rem the header row is sized around.
+    box-sizing: border-box;
 }
 
 select {

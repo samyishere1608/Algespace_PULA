@@ -224,11 +224,11 @@ export interface ReflectionResponse {
  * Falls back to a fixed encouraging line rather than surfacing the failure. Reflection is the point
  * of the interaction; an error message about a model being unreachable would undercut it.
  */
-export async function requestReflection(studentId: number, reflectionText: string): Promise<ReflectionResponse> {
+export async function requestReflection(studentId: number, reflectionText: string, language = "en"): Promise<ReflectionResponse> {
     try {
         const response = await axios.post<ReflectionResponse>(
             `${BACKEND}/student-progress/reflect-on-stats/${studentId}`,
-            { studentReflection: reflectionText }
+            { studentReflection: reflectionText, language }
         );
         return response.data ?? { feedback: "", category: "unclear" };
     } catch {

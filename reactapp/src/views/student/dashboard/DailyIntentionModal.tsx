@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ReactElement, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
+import i18n from "@/i18n.ts";
 import { requestReflection } from "@utils/progressUtils.ts";
 
 interface Props {
@@ -43,7 +44,7 @@ export function DailyIntentionModal({ studentId, studentName, buddyName, buddyEm
         setAiFeedback("");
         setShowGibberishRetry(false);
         try {
-            const result = await requestReflection(typeof studentId === "number" ? studentId : 1, customText.trim());
+            const result = await requestReflection(typeof studentId === "number" ? studentId : 1, customText.trim(), i18n.language?.slice(0, 2) ?? "en");
             setAiFeedback(result.feedback);
             setDetectedCategory(result.category ?? "unclear");
 
