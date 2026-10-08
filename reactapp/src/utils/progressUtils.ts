@@ -190,6 +190,11 @@ export interface StudentProgressData {
     streakDays: number;
     methodCounts: { method: string; value: number }[];
     solvingMethodCounts: { method: string; value: number }[];
+    /**
+     * Goals completed per category, all time. Keyed by the same six category names the goal
+     * catalogue uses. A category with no completions is simply absent, not sent as zero.
+     */
+    goalCountsByCategory: { category: string; count: number }[];
     dailyXp: { day: string; xp: number }[];
     goalsThisWeek: {
         id: number;

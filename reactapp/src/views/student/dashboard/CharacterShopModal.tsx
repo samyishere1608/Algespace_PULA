@@ -333,9 +333,11 @@ export default function CharacterShopModal({
                     <FontAwesomeIcon icon={faTimes} />
                 </button>
 
-                {/* Wardrobe viewport */}
+                {/* Wardrobe viewport. Tagged for the onboarding walkthrough, which opens this real
+                    shop read-only to explain how outfits unlock. */}
                 <div
                     className={"char-shop__viewport"}
+                    data-tour={"outfits"}
                     style={{ backgroundImage: `url(${shopBg})` }}
                 >
                     {isCharacterLocked && (

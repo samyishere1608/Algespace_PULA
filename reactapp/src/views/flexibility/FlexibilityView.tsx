@@ -15,6 +15,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { Collapsible } from "@components/views/CollapsibleExerciseList.tsx";
 import { FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
+import { TourHost } from "@components/shared/TourHost.tsx";
 
 export default function FlexibilityView(): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.General);
@@ -25,13 +26,23 @@ export default function FlexibilityView(): ReactElement {
     const exerciseList: ReactElement = <ExerciseList completedExercises={getCompletedPKExercises("flexibility-training")} />;
     const contents: ReactElement = (
         <React.Fragment>
-            <p>{t(GeneralTranslations.FLEXIBILITY_TRAINING_INFO)}</p>
+            <p data-tour={"flex-info"}>{t(GeneralTranslations.FLEXIBILITY_TRAINING_INFO)}</p>
             <Collapsible text={t(GeneralTranslations.HEADER_FLEXIBILITY_TRAINING)} children={exerciseList} isOpen={true}
                          handleClick={(isOpen: boolean) => setCollapsibleState(flexibility, storageKey, isOpen)} />
         </React.Fragment>
     );
 
-    return <ViewLayout title={GeneralTranslations.FLEXIBILITY_TRAINING} children={contents} />;
+    return (
+        <React.Fragment>
+            <ViewLayout title={GeneralTranslations.FLEXIBILITY_TRAINING} children={contents} />
+            {/*
+             * The walkthrough walks the student onto this page, and a component mounted inside the
+             * router is unmounted the moment it navigates. Without this the overlay would disappear
+             * exactly when it arrived. Renders nothing unless a tour is running.
+             */}
+            <TourHost />
+        </React.Fragment>
+    );
 }
 
 function ExerciseList({ completedExercises }: { completedExercises?: (number | string)[] }): ReactElement {
@@ -49,7 +60,7 @@ function ExerciseList({ completedExercises }: { completedExercises?: (number | s
     const exerciseList: FlexibilityExerciseResponse[] = data as FlexibilityExerciseResponse[];
     const exerciseIds: number[] = exerciseList.map((entry: FlexibilityExerciseResponse) => entry.id);
     return (
-        <div className={"exercise-list"}>
+        <div className={"exercise-list"} data-tour={"flex-list"}>
             {exerciseList.map((entry: FlexibilityExerciseResponse, index) => {
                 const isCompleted: boolean = isExerciseCompleted(entry.id, completedExercises);
                 return (

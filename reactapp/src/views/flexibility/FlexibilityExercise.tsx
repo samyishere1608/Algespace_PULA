@@ -159,7 +159,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                         {isStudyExample ?
                             <ExampleExercise concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId}
                                              flexibilityId={id} navigateBackTo={Paths.FlexibilityStudyExamplesPath} /> :
-                            <Exercise concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId} flexibilityId={id}
+                            <ExerciseRouter concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId} flexibilityId={id}
                                       navigateBackTo={Paths.FlexibilityPath} buildHandleEnd={buildHandleEnd} />
                         }
                     </div>
@@ -183,7 +183,14 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
     );
 }
 
-function Exercise({ concreteExerciseType, concreteExerciseId, flexibilityId, navigateBackTo, buildHandleEnd }: {
+/**
+ * Routes a concrete exercise type to its component.
+ *
+ * Exported because the walkthrough renders the REAL exercise rather than a copy of it, on its own
+ * route, with a no-op `buildHandleEnd` and with tracking switched off by `PreviewContext`. Sharing
+ * this switch is what keeps the two from drifting apart.
+ */
+export function ExerciseRouter({ concreteExerciseType, concreteExerciseId, flexibilityId, navigateBackTo, buildHandleEnd }: {
     concreteExerciseType: FlexibilityStudyExerciseType,
     concreteExerciseId: number;
     flexibilityId: number;

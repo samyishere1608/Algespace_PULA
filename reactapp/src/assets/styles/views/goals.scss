@@ -9,7 +9,7 @@
 // A mixin rather than three hand-written copies, because the size, radius and tint of the mark are
 // the thing that makes the picker, the goal cards and the method cards read as one interface. Three
 // copies drift the moment one of them is touched.
-@mixin goal-icon-chip($size: 2.25rem, $glyph: 1rem) {
+@mixin goal-icon-chip($size: 2.4rem, $glyph: 1.15rem) {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
@@ -29,7 +29,11 @@
     // four or five lines each and the whole thing read as a wall of text. Width is the cheapest fix
     // — every line gets shorter without a single word being cut. `max-width` on `.dash-modal` still
     // keeps it inside a narrow window.
-    width: 660px;
+    //
+    // Raised again with the larger type: the availability panel added a paragraph per exercise type,
+    // and at 660px each one wrapped to three lines, which pushed the Add button below the fold on a
+    // short window. The extra width buys those lines back as height, which is the scarce direction.
+    width: 760px;
 
     // Tighter frame than the shared modal, to give the body the room instead. The space between the
     // cards is what should feel generous, not the margin around the panel.
@@ -60,66 +64,13 @@
     }
 }
 
-// ── Already-chosen goals ──────────────────────────────────────────────────────
-
-.setgoals__active {
-    // A hairline under the goals they already have. This block is a different kind of content from
-    // the step below it — what you chose versus what you are choosing — and without the break the two
-    // ran together into one long column.
-    margin-bottom: 1.15rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.setgoals__section-title {
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: rgba(255, 255, 255, 0.55);
-    margin-bottom: 0.5rem;
-}
-
-.setgoals__active-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.5rem 0.6rem;
-    border-radius: 0.5rem;
-    background-color: rgba(33, 158, 188, 0.09);
-    border: 1px solid rgba(33, 158, 188, 0.22);
-    margin-bottom: 0.5rem;
-}
-
-.setgoals__active-icon {
-    color: #8ecae6;
-    font-size: 0.9rem;
-    line-height: 1;
-    flex-shrink: 0;
-}
-
-.setgoals__active-label {
-    flex: 1 1 auto;
-    font-size: 0.78rem;
-    color: #e8f6fb;
-    line-height: 1.3;
-}
-
-.setgoals__remove {
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.35);
-    cursor: pointer;
-    font-size: 0.8rem;
-    padding: 0.2rem 0.35rem;
-    border-radius: 0.35rem;
-    transition: color 0.15s, background-color 0.15s;
-
-    &:hover {
-        color: #ef476f;
-        background-color: rgba(239, 71, 111, 0.12);
-    }
+// The framing sentence under the title. The shared subtitle is 0.75rem at 40% white, which reads as
+// a caption rather than as the sentence that tells the student what this step is for. Scoped to this
+// modal so the other modals, which have their own copy of that style, are untouched.
+.dash-modal.setgoals .dash-modal__subtitle {
+    font-size: 0.95rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.6);
 }
 
 // ── Category chooser ──────────────────────────────────────────────────────────
@@ -163,7 +114,7 @@
 }
 
 .setgoals__category-icon {
-    @include goal-icon-chip(1.9rem, 0.85rem);
+    @include goal-icon-chip(2.05rem, 0.95rem);
 }
 
 .setgoals__category-body {
@@ -174,13 +125,13 @@
 }
 
 .setgoals__category-label {
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: #fff;
 }
 
 .setgoals__category-desc {
-    font-size: 0.68rem;
+    font-size: 0.88rem;
     line-height: 1.4;
     // 45% white over this surface is about 4:1 — under the 4.5:1 floor for body text.
     color: rgba(255, 255, 255, 0.55);
@@ -202,7 +153,7 @@
     background: none;
     border: none;
     color: rgba(255, 255, 255, 0.5);
-    font-size: 0.72rem;
+    font-size: 0.95rem;
     cursor: pointer;
     padding: 0.2rem 0;
 
@@ -215,18 +166,18 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.85rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: #fff;
 }
 
 .setgoals__builder-icon {
     color: #8ecae6;
-    font-size: 0.9rem;
+    font-size: 1.1rem;
 }
 
 .setgoals__builder-desc {
-    font-size: 0.7rem;
+    font-size: 0.92rem;
     line-height: 1.4;
     color: rgba(255, 255, 255, 0.55);
     margin-bottom: 1.15rem;
@@ -248,7 +199,7 @@
 }
 
 .setgoals__where-label {
-    font-size: 0.66rem;
+    font-size: 0.85rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.6px;
@@ -262,7 +213,7 @@
 }
 
 .setgoals__where-type {
-    font-size: 0.7rem;
+    font-size: 0.92rem;
     font-weight: 600;
     color: #8ecae6;
     background-color: rgba(33, 158, 188, 0.18);
@@ -272,9 +223,37 @@
 }
 
 .setgoals__where-note {
-    font-size: 0.7rem;
+    font-size: 0.92rem;
     line-height: 1.45;
     color: rgba(255, 255, 255, 0.62);
+}
+
+// One exercise type, or a group of types that behave the same, plus what the student has to do inside
+// it. Separated by a hairline rather than by a box, because these are all the same kind of thing and
+// boxing each one would read as three separate warnings.
+.setgoals__where-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(33, 158, 188, 0.16);
+
+    &:first-of-type {
+        padding-top: 0;
+        border-top: none;
+    }
+}
+
+// The narrowed-method rider on a row above it. Accent-coloured and indented on a bar so it reads as
+// part of that exercise type rather than as another exercise type: it is always the same type, seen
+// through the one method the student picked. Warmer than the rest of the panel because it is the line
+// that answers the question the student actually had when they narrowed the goal.
+.setgoals__where-focus {
+    padding-left: 0.55rem;
+    border-left: 2px solid rgba(255, 183, 3, 0.5);
+    font-size: 0.92rem;
+    line-height: 1.45;
+    color: rgba(255, 213, 128, 0.86);
 }
 
 .setgoals__field {
@@ -283,7 +262,7 @@
 
 .setgoals__field-label {
     display: block;
-    font-size: 0.66rem;
+    font-size: 0.85rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.6px;
@@ -303,7 +282,7 @@
     background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: rgba(255, 255, 255, 0.75);
-    font-size: 0.72rem;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s;
@@ -328,7 +307,7 @@
     border: none;
     background: linear-gradient(135deg, #219ebc 0%, #126782 100%);
     color: #fff;
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     font-weight: 700;
     cursor: pointer;
     transition: filter 0.15s;
@@ -358,17 +337,17 @@
 
 .setgoals__plan-icon {
     color: #ffd166;
-    font-size: 0.85rem;
+    font-size: 1.05rem;
 }
 
 .setgoals__plan-title {
-    font-size: 0.82rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: #ffe3a3;
 }
 
 .setgoals__plan-narrative {
-    font-size: 0.72rem;
+    font-size: 0.95rem;
     line-height: 1.45;
     color: rgba(255, 255, 255, 0.6);
     margin-bottom: 0.6rem;
@@ -389,7 +368,7 @@
 
 .setgoals__plan-row-label {
     display: block;
-    font-size: 0.76rem;
+    font-size: 1rem;
     font-weight: 600;
     color: #fff;
     line-height: 1.3;
@@ -397,7 +376,7 @@
 
 .setgoals__plan-row-reason {
     display: block;
-    font-size: 0.68rem;
+    font-size: 0.9rem;
     line-height: 1.4;
     color: rgba(255, 255, 255, 0.55);
     margin-top: 0.1rem;
@@ -411,7 +390,7 @@
     border: 1px solid rgba(33, 158, 188, 0.5);
     background-color: rgba(33, 158, 188, 0.16);
     color: #8ecae6;
-    font-size: 0.7rem;
+    font-size: 0.95rem;
     cursor: pointer;
     transition: background-color 0.15s, color 0.15s;
 
@@ -486,13 +465,13 @@
 }
 
 .setgoals__method-label {
-    font-size: 0.85rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: #fff;
 }
 
 .setgoals__method-desc {
-    font-size: 0.7rem;
+    font-size: 0.92rem;
     line-height: 1.4;
     color: rgba(255, 255, 255, 0.55);
 }
@@ -519,7 +498,7 @@
     gap: 0.75rem;
     padding: 1.5rem 1rem;
     text-align: center;
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     line-height: 1.5;
     color: rgba(255, 255, 255, 0.62);
 
@@ -533,7 +512,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.75rem;
+    font-size: 0.98rem;
     font-weight: 600;
     color: #ffd166;
     background-color: rgba(255, 209, 102, 0.08);
@@ -560,7 +539,7 @@
     background-color: transparent;
     border: 1px solid rgba(255, 255, 255, 0.18);
     color: rgba(255, 255, 255, 0.85);
-    font-size: 0.82rem;
+    font-size: 1.05rem;
     font-weight: 700;
     border-radius: 0.6rem;
     padding: 0.6rem;
@@ -575,7 +554,7 @@
 }
 
 .dash-modal.setgoals .dash-modal__default-note {
-    font-size: 0.7rem;
+    font-size: 0.92rem;
     line-height: 1.4;
     text-align: center;
     color: rgba(255, 255, 255, 0.55);
@@ -591,6 +570,7 @@
 // One visible focus ring for everything this feature adds. The dashboard removes the default outline
 // in places, and a keyboard user has to be able to see which control they are on — including inside
 // the modal, where the trap makes it easy to get lost.
+.goal-card__practise,
 .goal-card__remove,
 .goals-empty__cta,
 .setgoals__method,
@@ -598,7 +578,6 @@
 .setgoals__option,
 .setgoals__confirm,
 .setgoals__back,
-.setgoals__remove,
 .setgoals__plan-take,
 .setgoals__retry,
 .dash-modal.setgoals .dash-modal__action-btn,
@@ -652,7 +631,7 @@
 }
 
 .goal-card__label {
-    font-size: 0.84rem;
+    font-size: 1.05rem;
     font-weight: 600;
     color: #fff;
     line-height: 1.35;
@@ -685,7 +664,7 @@
 .goal-card__value {
     flex-shrink: 0;
     white-space: nowrap;
-    font-size: 0.72rem;
+    font-size: 0.95rem;
     font-variant-numeric: tabular-nums;
     color: rgba(255, 255, 255, 0.72);
 }
@@ -698,14 +677,41 @@
     align-items: center;
     gap: 0.35rem;
     margin-top: 0.45rem;
-    font-size: 0.68rem;
+    font-size: 0.9rem;
     line-height: 1.4;
     color: rgba(255, 255, 255, 0.62);
 
     svg {
         flex-shrink: 0;
-        font-size: 0.7rem;
+        font-size: 0.9rem;
         color: #8ecae6;
+    }
+}
+
+// The way from the goal to the work. Sits at the end of the card, before the remove control, and is
+// the loudest thing on a goal that has not been started yet — which is exactly when a student needs
+// pointing at the exercises rather than at their own empty progress bar.
+.goal-card__practise {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.95rem;
+    border: 1px solid rgba(33, 158, 188, 0.5);
+    border-radius: 999px;
+    background-color: rgba(33, 158, 188, 0.16);
+    color: #8ecae6;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+
+    &:hover {
+        background-color: rgba(33, 158, 188, 0.3);
+        border-color: #8ecae6;
+        color: #fff;
     }
 }
 
@@ -716,13 +722,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2rem;
-    height: 2rem;
+    width: 2.2rem;
+    height: 2.2rem;
     background: none;
     border: none;
     border-radius: 0.5rem;
     color: rgba(255, 255, 255, 0.5);
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     cursor: pointer;
     transition: color 0.15s, background-color 0.15s;
 

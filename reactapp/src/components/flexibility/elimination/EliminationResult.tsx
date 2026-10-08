@@ -1,5 +1,5 @@
 import { TranslationNamespaces } from "@/i18n.ts";
-import { faArrowLeft, faArrowRight, faQuestion } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faArrowRight } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Fraction } from "mathjs";
 import React, {ReactElement, useLayoutEffect, useRef, useState} from "react";
@@ -16,6 +16,8 @@ import { FlexibilityPopover } from "@components/flexibility/interventions/Flexib
 import { FlexibilityEquation } from "@components/math/procedural-knowledge/FlexibilityEquation.tsx";
 import { MultipliedLinearSystem } from "@components/flexibility/elimination/MultipliedLinearSystem.tsx";
 import {Intervention} from "@components/flexibility/interventions/Intervention.tsx";
+import { useAuth } from "@/contexts/AuthProvider.tsx";
+import { getActiveBuddyAvatarSrc, getActiveBuddyName } from "@utils/buddyUtils.ts";
 
 
 export function EliminationResult(
@@ -62,6 +64,14 @@ export function EliminationResult(
     }
 ): ReactElement {
     const { t } = useTranslation([TranslationNamespaces.Flexibility, TranslationNamespaces.General]);
+    const { student } = useAuth();
+
+    // This button is the hint button's parking spot, kept warm while the real one is not rendered
+    // (see EliminationMethod). It has to carry the same portrait and label as the live button, or the
+    // layout would jump sideways the moment one replaced the other.
+    const studentId = student?.id ?? "guest";
+    const buddyName = getActiveBuddyName(studentId);
+    const buddyAvatarSrc = getActiveBuddyAvatarSrc(studentId);
 
     const containsFirst: boolean = equationContainsVariable(resultingEquation, firstVariable.name);
     const containsSecond: boolean = equationContainsVariable(resultingEquation, secondVariable.name);
@@ -206,7 +216,10 @@ export function EliminationResult(
                 </p>
             )}
             <button className={"button primary-button help-button flexibility-hint-button"} disabled={true}>
-                <FontAwesomeIcon icon={faQuestion}/>
+                <span className={"flexibility-hint-button__avatar"} aria-hidden={true}>
+                    <img src={buddyAvatarSrc} alt={""}/>
+                </span>
+                <span className={"flexibility-hint-button__label"}>{t(FlexibilityTranslations.HINT_BUTTON_ASK, { buddy: buddyName })}</span>
             </button>
             <div style={{ minHeight: "9rem", minWidth: "1rem" }}></div>
         </React.Fragment>

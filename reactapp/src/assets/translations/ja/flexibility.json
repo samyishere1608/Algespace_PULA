@@ -10,6 +10,7 @@
   "button-add": "足す",
   "button-subtract": "引く",
   "button-try-again": "もう一度試す",
+  "hint-button-ask": "{{buddy}}に聞く",
   "system-introduction": "次の連立一次方程式（LSE）を見てみましょう：",
   "solving-system-instruction": "次の連立一次方程式（LSE）を<strong>{{method}}</strong>で解きましょう：",
   "solving-system-instruction-past": "この問題では、次の連立一次方程式（LSE）を<strong>{{method}}</strong>で解く必要があります：",

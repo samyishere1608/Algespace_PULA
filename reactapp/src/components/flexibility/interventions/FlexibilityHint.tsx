@@ -1,18 +1,29 @@
 import { TranslationNamespaces } from "@/i18n.ts";
-import { faQuestion, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import React, { ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { AgentExpression, AgentType } from "@/types/flexibility/enums.ts";
+import { FlexibilityTranslations } from "@/types/flexibility/flexibilityTranslations.ts";
 import { Agent } from "@components/flexibility/interventions/Agent.tsx";
 import useWindowDimensions from "@hooks/useWindowDimensions.ts";
+import { getActiveBuddyAvatarSrc, getActiveBuddyName } from "@utils/buddyUtils.ts";
 import { getFlexibilityFeedbackOrHintWidth } from "@utils/utils.ts";
 import "@styles/shared/popover.scss";
 
 export function FlexibilityHint({ hints, disabled, agentType, agentExpression, trackHint }: { hints: string[]; disabled: boolean; agentType?: AgentType; agentExpression?: AgentExpression, trackHint?: () => void }): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Flexibility);
     const { windowWidth } = useWindowDimensions();
+    const { student } = useAuth();
     const useAgent = agentType !== undefined && agentExpression !== undefined;
+
+    // The button wears the companion's own portrait, so it is obvious at a glance who is about to
+    // answer, and the label says what pressing it does. Same face as the popover will show, because
+    // both read it from the same resolver.
+    const studentId = student?.id ?? "guest";
+    const buddyName = getActiveBuddyName(studentId);
+    const buddyAvatarSrc = getActiveBuddyAvatarSrc(studentId);
 
     const [open, setOpen] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -71,7 +82,10 @@ export function FlexibilityHint({ hints, disabled, agentType, agentExpression, t
                 </div>
             )}
             <button className={"button primary-button help-button flexibility-hint-button"} onClick={handleClick} ref={hintButtonRef} disabled={disabled}>
-                <FontAwesomeIcon icon={faQuestion} />
+                <span className={"flexibility-hint-button__avatar"} aria-hidden={true}>
+                    <img src={buddyAvatarSrc} alt={""} />
+                </span>
+                <span className={"flexibility-hint-button__label"}>{t(FlexibilityTranslations.HINT_BUTTON_ASK, { buddy: buddyName })}</span>
             </button>
         </React.Fragment>
     );

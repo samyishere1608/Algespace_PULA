@@ -117,7 +117,9 @@ export default function ChooseBuddyModal({ currentBuddyId, wallets, onSelect, on
                 </div>
                 <p className={"dash-modal__subtitle"}>{t("buddy-subtitle")}</p>
 
-                <div className={"buddy-chooser"}>
+                {/* Tagged for the onboarding walkthrough, which opens this real modal read-only to
+                    explain how companions unlock. A data attribute, so nothing here changes. */}
+                <div className={"buddy-chooser"} data-tour={"characters"}>
                     {BUDDIES.map((buddy) => {
                         const walletXp = getWalletXp(wallets, buddy.unlockWallet);
                         const walletLevel = getAgencyLevel(walletXp);

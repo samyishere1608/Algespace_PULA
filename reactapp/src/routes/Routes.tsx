@@ -28,6 +28,7 @@ import SubstitutionView from "@views/substitution/SubstitutionView.tsx";
 import StudentLoginView from "@views/student/StudentLoginView.tsx";
 import StudentRegisterView from "@views/student/StudentRegisterView.tsx";
 import StudentDashboard from "@views/student/StudentDashboard.tsx";
+import FlexibilityPreview from "@views/student/dashboard/FlexibilityPreview.tsx";
 import OnboardingBarteringExercise from "@views/student/onboarding/OnboardingBarteringExercise.tsx";
 import OnboardingEqualizationExercise from "@views/student/onboarding/OnboardingEqualizationExercise.tsx";
 import OnboardingEliminationExercise from "@views/student/onboarding/OnboardingEliminationExercise.tsx";
@@ -156,6 +157,13 @@ export default function Routes(): ReactElement {
                 {
                     path: Paths.StudentDashboardPath,
                     element: <StudentDashboard />
+                },
+                // A read-only stand-in for a flexibility exercise, used only by the walkthrough. It is
+                // a sibling of the dashboard rather than a child of it, because it is its own screen
+                // with its own shell — see FlexibilityPreview.tsx for why a real one cannot be used.
+                {
+                    path: Paths.TourFlexibilityPreviewPath,
+                    element: <FlexibilityPreview />
                 },
                 {
                     path: Paths.OnboardingResumePath,

@@ -312,6 +312,20 @@ namespace webapi.Models.Student
         public int Value { get; set; }
     }
 
+    /// <summary>
+    /// How many goals of one category a student has completed, all time.
+    ///
+    /// Keyed by the SAME six category names the client uses (method | exerciseType | selfExplanation |
+    /// methodComparison | solveOnOwn | hintsAndErrors), so the client can look each one up in its own
+    /// catalogue without a translation layer. Categories with no completions are simply absent, so the
+    /// client renders a zero for them rather than the server inventing rows.
+    /// </summary>
+    public class GoalCategoryCount
+    {
+        public string Category { get; set; } = "";
+        public int Count { get; set; }
+    }
+
     public class DailyXp
     {
         public string Day { get; set; } = "";
@@ -333,6 +347,15 @@ namespace webapi.Models.Student
         /// is the difference between a useful nudge and reading like the history was wiped.
         /// </summary>
         public List<GoalCompletionRecord> GoalsThisWeek { get; set; } = [];
+        /// <summary>
+        /// Goals completed per category, ALL TIME.
+        ///
+        /// Deliberately lifetime rather than week-scoped, unlike <see cref="GoalsThisWeek"/>: this
+        /// panel answers "what am I actually working on", and a weekly filter would show a student
+        /// their history resetting every Monday. It replaces the removed goals-by-difficulty panel,
+        /// which was also kept lifetime for the same reason.
+        /// </summary>
+        public List<GoalCategoryCount> GoalCountsByCategory { get; set; } = [];
         public List<MethodCount> MethodCounts { get; set; } = [];
         /// <summary>Actual solving methods used (Elimination, Equalization, Substitution) from ExerciseCompletions.</summary>
         public List<MethodCount> SolvingMethodCounts { get; set; } = [];

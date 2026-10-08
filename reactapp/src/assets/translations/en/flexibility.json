@@ -10,6 +10,7 @@
   "button-add": "Add",
   "button-subtract": "Subtract",
   "button-try-again": "Try again",
+  "hint-button-ask": "Ask {{buddy}}",
   "system-introduction": "Have a look at the following system of linear equations (LSE):",
   "solving-system-instruction": "Solve the following system of linear equations (LSE) with the <strong>{{method}}</strong>:",
   "solving-system-instruction-past": "In this exercise you have to solve the following system of linear equations (LSE) with the <strong>{{method}}</strong>:",

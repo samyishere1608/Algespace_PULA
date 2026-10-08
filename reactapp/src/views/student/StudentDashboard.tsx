@@ -1,9 +1,11 @@
 import {
+    faArrowRight,
     faBell,
     faBullseye,
     faChartBar,
     faCheck,
     faCircleInfo,
+    faCircleQuestion,
     faFire,
     faGaugeHigh,
     faHome,
@@ -18,7 +20,7 @@ import {
     faUserCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { ReactElement, useEffect, useState } from "react";
+import { ReactElement, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -58,6 +60,10 @@ import { GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef } from "@uti
 import { claimCompletedGoals, computeProgress, earliestGoalStart, fetchGoalEvents } from "@utils/goalProgress.ts";
 import { awardChoiceForSettingAGoal } from "@utils/choiceAwards.ts";
 import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addInsightXP, addChoiceXP } from "@utils/agencyUtils.ts";
+import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
+import { getOnboardingStep } from "@utils/storageUtils.ts";
+import { OnboardingTour } from "@components/shared/OnboardingTour.tsx";
+import { TOUR_STEPS, isTourActive, shouldAutoStartTour, startTour, type TourStep } from "@utils/onboardingTour.ts";
 import { seedDemoData } from "@utils/demoData.ts";
 import { fetchReflectionQueue, completeReflection, ReflectionQueueItem } from "@utils/reflectionUtils.ts";
 import { MilestoneCelebrationOverlay } from "@components/shared/MilestoneCelebrationOverlay.tsx";
@@ -92,6 +98,14 @@ const PLACEHOLDER_LEADERBOARD: LeaderboardEntry[] = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The id of the unsaved goal the walkthrough draws on the dashboard.
+ *
+ * Module scope because two places have to agree on it: the code that invents the goal, and the code
+ * that decides not to offer it for removal.
+ */
+const TOUR_SAMPLE_GOAL_ID = "tour-sample-goal";
+
 // Every 500 XP = one level. Tier names change every 2 levels.
 const TIER_NAMES = [
     "Beginner",    // levels 1–2   (0 – 999 XP)
@@ -120,6 +134,7 @@ export default function StudentDashboard(): ReactElement {
     const [showAllGoals, setShowAllGoals] = useState(false);
     const [streakDays, setStreakDays] = useState(0);
     const [goalsThisWeek, setGoalsThisWeek] = useState<StudentProgressData["goalsThisWeek"]>([]);
+    const [goalCountsByCategory, setGoalCountsByCategory] = useState<StudentProgressData["goalCountsByCategory"]>([]);
     const [solvingMethodCounts, setSolvingMethodCounts] = useState<{ method: string; value: number }[]>([]);
     const [pendingMilestone, setPendingMilestone] = useState<number | null>(null);
 
@@ -131,6 +146,18 @@ export default function StudentDashboard(): ReactElement {
 
     // ── Daily Intention Check-In ──────────────────────────────────────────────
     const [showDailyIntention, setShowDailyIntention] = useState(false);
+    // A tour can already be running on arrival. The walkthrough navigates away from the dashboard and
+    // back, which unmounts and re-mounts this page; reading the flag instead of starting at `false`
+    // is what stops the overlay vanishing the moment the student presses Back.
+    const [showTour, setShowTour] = useState(() => isTourActive());
+    /**
+     * Which step the overlay is on, or null when no tour is running.
+     *
+     * The overlay owns the step and this page only reacts to it, because a step decides what has to
+     * be visible BEHIND it — the goal picker, which of the picker's three screens, and whether the
+     * sample goal card is showing yet.
+     */
+    const [tourStep, setTourStep] = useState<TourStep | null>(null);
 
     // ── End Session Reflection (Anchor 5.1) ───────────────────────────────────
     const [showEndSession, setShowEndSession] = useState(false);
@@ -163,6 +190,7 @@ export default function StudentDashboard(): ReactElement {
                     setExercisesCompleted(data.exercisesCompleted ?? 0);
                     setStreakDays(data.streakDays ?? 0);
                     setGoalsThisWeek(data.goalsThisWeek ?? []);
+                    setGoalCountsByCategory(data.goalCountsByCategory ?? []);
                     setSolvingMethodCounts(data.solvingMethodCounts ?? []);
 
                     // ── Follow-through check for daily intention ──────────
@@ -190,6 +218,18 @@ export default function StudentDashboard(): ReactElement {
                     setShowReflectionPrompt(true);
                 }
             }).catch(() => { /* no reflection prompt */ });
+
+            // The dashboard tour runs once, the first time a student reaches the dashboard after the
+            // concept onboarding is finished. It takes priority over the daily intention: both want
+            // this same moment, and the tour is the one that only ever happens once — the intention
+            // is re-checked when the tour closes, below.
+            if (shouldAutoStartTour(student.id, getOnboardingStep(student.id))) {
+                // `startTour` records that a tour is running, so the pages the walkthrough navigates to
+                // know to resume it. The state here only decides whether THIS page mounts the overlay.
+                startTour(student.id);
+                setShowTour(true);
+                return;
+            }
 
             // Show daily intention popup if not already set today
             const existing = getDailyIntention(student.id);
@@ -259,6 +299,16 @@ export default function StudentDashboard(): ReactElement {
         return { method: label, value: found?.value ?? 0 };
     });
 
+    // Goals completed per category, all time. Driven off the goal catalogue so this panel cannot
+    // drift from the picker: the label and the mark come from the same definition the student chose
+    // from. Categories with no completions still render, at zero — "I have never done this one" is
+    // exactly what is worth seeing, so dropping empty cards would hide the useful half.
+    const goalCategoryRows = GOAL_CATEGORIES.map((def) => {
+        const found = goalCountsByCategory.find((row) => row.category === def.category);
+        return { category: def.category, labelKey: def.labelKey, icon: def.icon, count: found?.count ?? 0 };
+    });
+    const goalCategoryTotal = goalCategoryRows.reduce((sum, row) => sum + row.count, 0);
+
     // Chart-friendly data + colors
     const METHOD_COLORS: Record<string, string> = {
         Elimination: "#219ebc",
@@ -309,6 +359,60 @@ export default function StudentDashboard(): ReactElement {
             : undefined) ?? activeCatalogue?.baseSrc;
 
     const translate = asTranslate(t);
+
+    // ── The walkthrough ────────────────────────────────────────────────
+    // Everything below is derived from the current tour step rather than from the student's taps,
+    // because during a step the student cannot tap anything. The picker is the REAL one — it is just
+    // handed no-op handlers, so a demonstration cannot save a goal or award any XP.
+    const handleTourStep = useCallback((step: TourStep | null): void => {
+        setTourStep(step);
+    }, []);
+
+    const tourPickerStep = tourStep?.picker ?? null;
+    const isDemoPicker = tourPickerStep !== null;
+
+    // The walkthrough also opens the real character chooser and wardrobe. Read-only for the same
+    // reason the picker is: no-op handlers are passed below in place of the real ones, so a
+    // demonstration cannot change the student's companion or equip anything on them.
+    const tourBuddyModal = tourStep?.buddyModal ?? null;
+    const isDemoChooser = tourBuddyModal === "chooser";
+    const isDemoShop = tourBuddyModal === "shop";
+
+    /**
+     * The goal the walkthrough pretends was just created.
+     *
+     * The arc it is showing ends with that goal appearing on the dashboard, and it must end with the
+     * student seeing it — but nothing was saved. So the card is drawn from this instead, and only
+     * from the step that describes it onwards.
+     */
+    const tourSampleGoal: StudyGoal | null = tourStep?.showSampleGoal
+        ? {
+            id: TOUR_SAMPLE_GOAL_ID,
+            category: "method",
+            focus: null,
+            metric: "exercises",
+            target: 5,
+            createdAt: new Date().toISOString(),
+        }
+        : null;
+
+    const displayedGoals: StudyGoal[] = tourSampleGoal === null ? activeGoals : [...activeGoals, tourSampleGoal];
+
+    function noopAddGoal(): void { /* the walkthrough saves nothing */ }
+    function noopSelectBuddy(): void { /* the walkthrough changes nothing */ }
+    function noopEquipOutfit(): void { /* the walkthrough changes nothing */ }
+
+    /**
+     * Leaves the goal picker for the exercise list.
+     *
+     * The picker's job is finished the moment a goal is saved, and the list is otherwise several
+     * taps away through the navigation. This is the same destination the daily intention sends a
+     * student to when they choose to practise.
+     */
+    function handleGoToExercises(): void {
+        setShowGoals(false);
+        navigate(Paths.FlexibilityPath);
+    }
 
     /**
      * Repoints every active goal at the student's own history: refreshes the progress bars, claims
@@ -471,7 +575,7 @@ export default function StudentDashboard(): ReactElement {
                     <img src={logo} alt="AlgeSPACE Logo" />
                 </span>
 
-                <div className={"dashboard__nav-xp"}>
+                <div className={"dashboard__nav-xp"} data-tour={"nav-agency"}>
                     <span className={"dashboard__nav-xp-label"}>
                         {t("dashboard-agency-progress")}
                         <button
@@ -543,6 +647,20 @@ export default function StudentDashboard(): ReactElement {
                 </div>
 
                 <button
+                    className={"dashboard__tour-pill"}
+                    title={t("tour-replay-btn")}
+                    aria-label={t("tour-replay-btn")}
+                    onClick={() => {
+                        // `startTour` clears the "already seen" flag AND reopens at step one, so the
+                        // replay button and the automatic first run produce identical state.
+                        startTour(student?.id ?? "guest");
+                        setShowTour(true);
+                    }}
+                >
+                    <FontAwesomeIcon icon={faCircleQuestion} />
+                </button>
+
+                <button
                     className="dashboard__end-session-pill"
                     title={t("end-session-dash-btn")}
                     onClick={() => setShowEndSession(true)}
@@ -586,7 +704,7 @@ export default function StudentDashboard(): ReactElement {
             {/* ── Body ────────────────────────────────────────────────────── */}
             <div className={"dashboard__body"}>
                 {/* ── Side tab navigation ─────────────────────────────────── */}
-                <aside className={"dashboard__tabs"} role="tablist" aria-label={t("dashboard-sections")}>
+                <aside className={"dashboard__tabs"} role="tablist" aria-label={t("dashboard-sections")} data-tour={"tabs"}>
                     <button
                         role="tab"
                         aria-selected={activeTab === "main"}
@@ -630,7 +748,7 @@ export default function StudentDashboard(): ReactElement {
                     {activeTab === "main" && (
                     <div className={"dashboard__main"}>
                     {/* Stats row */}
-                    <div className={"dashboard__stats-row"}>
+                    <div className={"dashboard__stats-row"} data-tour={"stats"}>
                         <div className={"dash-stat"}>
                             <span className={"dash-stat__label"}>{t("dashboard-exercises-completed")}</span>
                             <FontAwesomeIcon icon={faCheck} className={"dash-stat__icon"} />
@@ -655,26 +773,28 @@ export default function StudentDashboard(): ReactElement {
                     </div>
 
                     {/* Active Goals */}
-                    <section className={"goals-section"} aria-labelledby={"goals-active-title"}>
+                    <section className={"goals-section"} aria-labelledby={"goals-active-title"} data-tour={"goals-panel"}>
                         <div className={"dashboard__section-header dashboard__section-header--active-goals"}>
                             <h2 id={"goals-active-title"}>{t("goals-active-heading")}</h2>
-                            {activeGoals.length > 0 && (
+                            {displayedGoals.length > 0 && (
                                 <button
                                     className={"dashboard__section-header-cta dashboard__section-header-cta--active-goals"}
+                                    data-tour={"goals-cta"}
                                     onClick={() => setShowGoals(true)}
                                 >
                                     <FontAwesomeIcon icon={faPlus} />
-                                    {t("goals-edit-cta")}
+                                    {t("goals-add-cta")}
                                 </button>
                             )}
                         </div>
 
-                        {activeGoals.length === 0 && (
+                        {displayedGoals.length === 0 && (
                             <div className={"goals-empty"}>
                                 <FontAwesomeIcon icon={faBullseye} className={"goals-empty__icon"} />
                                 <p className={"goals-empty__text"}>{t("goals-none")}</p>
                                 <button
                                     className={"goals-empty__cta"}
+                                    data-tour={"goals-cta"}
                                     onClick={() => setShowGoals(true)}
                                 >
                                     <FontAwesomeIcon icon={faPlus} />
@@ -683,9 +803,9 @@ export default function StudentDashboard(): ReactElement {
                             </div>
                         )}
 
-                        {activeGoals.length > 0 && (
+                        {displayedGoals.length > 0 && (
                         <ul className={"goals-list"}>
-                        {activeGoals.map((goal) => {
+                        {displayedGoals.map((goal) => {
                             const progress = goalProgressMap[goal.id];
                             const label = describeGoal(goal, translate);
                             const current = progress?.current ?? 0;
@@ -734,15 +854,38 @@ export default function StudentDashboard(): ReactElement {
                                     )}
                                 </div>
 
-                                <button
-                                    type={"button"}
-                                    className={"goal-card__remove"}
-                                    title={t("goals-remove")}
-                                    aria-label={t("goals-remove")}
-                                    onClick={() => handleRemoveGoal(goal.id)}
-                                >
-                                    <FontAwesomeIcon icon={faTimes} />
-                                </button>
+                                {/* The way from the goal to the work itself. A goal is a target, and
+                                    the exercises that move it are otherwise three taps away through
+                                    the navigation, which is a long way to go from a card that is
+                                    already telling you what to do next.
+
+                                    Not on the walkthrough's sample goal, for the same reason it
+                                    has no remove button: that goal does not exist. */}
+                                {goal.id !== TOUR_SAMPLE_GOAL_ID && (
+                                    <button
+                                        type={"button"}
+                                        className={"goal-card__practise"}
+                                        onClick={handleGoToExercises}
+                                    >
+                                        <FontAwesomeIcon icon={faArrowRight} />
+                                        {t("goals-go-to-exercises")}
+                                    </button>
+                                )}
+
+                                {/* The walkthrough's sample goal was never saved, so it is not offered
+                                    for removal — an honest screen does not offer to delete something
+                                    that does not exist. */}
+                                {goal.id !== TOUR_SAMPLE_GOAL_ID && (
+                                    <button
+                                        type={"button"}
+                                        className={"goal-card__remove"}
+                                        title={t("goals-remove")}
+                                        aria-label={t("goals-remove")}
+                                        onClick={() => handleRemoveGoal(goal.id)}
+                                    >
+                                        <FontAwesomeIcon icon={faTimes} />
+                                    </button>
+                                )}
                             </li>
                             );
                         })}
@@ -806,17 +949,37 @@ export default function StudentDashboard(): ReactElement {
                     {activeTab === "analytics" && (
                     <div className={"dashboard__analytics"}>
                         <div className={"analytics-grid"}>
+                            {/* Goals completed per category, all time. First in the grid on purpose: it
+                                answers "what am I actually working on", which is the question this tab
+                                gets opened with. Being full-width it needs no explicit row placement —
+                                as the first item it takes row 1, and the charts flow in below it. */}
+                            <div className={"analytics-section analytics-section--full"}>
+                                <div className={"analytics-section__title"}>{t("analytics-category-title")}</div>
+                                <div className={"analytics-category-row"}>
+                                    {goalCategoryRows.map((row) => (
+                                        <div key={row.category} className={`analytics-category${row.count > 0 ? " analytics-category--active" : ""}`}>
+                                            <span className={"analytics-category__icon"}><FontAwesomeIcon icon={row.icon} /></span>
+                                            <span className={"analytics-category__value"}>{row.count}</span>
+                                            <span className={"analytics-category__label"}>{t(row.labelKey)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                {goalCategoryTotal === 0 && (
+                                    <p className={"analytics-empty"}>{t("analytics-category-empty")}</p>
+                                )}
+                            </div>
+
                             {/* Methods used (actual solving methods) */}
                             <div className={"analytics-section analytics-section--chart"}>
                                 <div className={"analytics-section__title"}>{t("analytics-method-title")}</div>
                                 <ResponsiveContainer width="100%" height={210}>
                                     <BarChart data={solvingMethodsChartData} margin={{ top: 16, right: 4, left: -20, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" vertical={false} />
-                                        <XAxis dataKey="method" tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                                        <YAxis allowDecimals={false} tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                                        <XAxis dataKey="method" tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 13 }} axisLine={false} tickLine={false} />
+                                        <YAxis allowDecimals={false} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 12 }} axisLine={false} tickLine={false} />
                                         <Tooltip
                                             cursor={{ fill: "rgba(255,255,255,0.04)" }}
-                                            contentStyle={{ backgroundColor: "#012638", border: "1px solid rgba(33,158,188,0.35)", borderRadius: "0.5rem", fontSize: "0.75rem" }}
+                                            contentStyle={{ backgroundColor: "#012638", border: "1px solid rgba(33,158,188,0.35)", borderRadius: "0.5rem", fontSize: "0.9rem" }}
                                             labelStyle={{ color: "#fff" }}
                                             itemStyle={{ color: "#8ecae6" }}
                                         />
@@ -824,7 +987,7 @@ export default function StudentDashboard(): ReactElement {
                                             {solvingMethodsChartData.map((entry) => (
                                                 <Cell key={entry.method} fill={entry.fill} />
                                             ))}
-                                            <LabelList dataKey="value" position="top" fill="#fff" fontSize={12} fontWeight={700} />
+                                            <LabelList dataKey="value" position="top" fill="#fff" fontSize={14} fontWeight={700} />
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -855,7 +1018,7 @@ export default function StudentDashboard(): ReactElement {
                                                     ))}
                                                 </Pie>
                                                 <Tooltip
-                                                    contentStyle={{ backgroundColor: "#012638", border: "1px solid rgba(33,158,188,0.35)", borderRadius: "0.5rem", fontSize: "0.75rem" }}
+                                                    contentStyle={{ backgroundColor: "#012638", border: "1px solid rgba(33,158,188,0.35)", borderRadius: "0.5rem", fontSize: "0.9rem" }}
                                                     labelStyle={{ color: "#fff" }}
                                                     itemStyle={{ color: "#8ecae6" }}
                                                 />
@@ -928,7 +1091,7 @@ export default function StudentDashboard(): ReactElement {
             </div>
 
             {/* ── Buddy widget ─────────────────────────────────────────────── */}
-            <div className={"dashboard__buddy"}>
+            <div className={"dashboard__buddy"} data-tour={"buddy-widget"}>
                 {showReflectionPrompt && reflectionQueue.length > 0 && (
                     <div className={"buddy-reflection-bubble"}>
                         <div className={"buddy-reflection-bubble__head"}>
@@ -980,29 +1143,32 @@ export default function StudentDashboard(): ReactElement {
             </div>
 
             {/* ── Modals ───────────────────────────────────────────────────── */}
-            {showGoals && (
+            {/* The walkthrough opens the REAL picker rather than a copy of it, because a copy would
+                drift from the picker the moment the picker changed. It is read-only: nothing is
+                saved, because no-op handlers are passed in place of the real ones. */}
+            {(showGoals || isDemoPicker) && (
                 <SetGoalsModal
                     studentId={student?.id ?? "guest"}
-                    activeGoals={activeGoals}
-                    onAdd={handleAddGoal}
-                    onRemove={handleRemoveGoal}
+                    demo={isDemoPicker}
+                    demoStep={tourPickerStep ?? undefined}
+                    onAdd={isDemoPicker ? noopAddGoal : handleAddGoal}
                     onClose={() => setShowGoals(false)}
                 />
             )}
-            {showBuddyChooser && (
+            {(showBuddyChooser || isDemoChooser) && (
                 <ChooseBuddyModal
                     currentBuddyId={activeBuddyId}
                     wallets={agencyWallets}
-                    onSelect={handleSelectBuddy}
+                    onSelect={isDemoChooser ? noopSelectBuddy : handleSelectBuddy}
                     onClose={() => setShowBuddyChooser(false)}
                 />
             )}
-            {showShop && (
+            {(showShop || isDemoShop) && (
                 <CharacterShopModal
                     characterId={activeBuddyId}
                     wallets={agencyWallets}
                     equippedOutfitId={equippedOutfitIds[activeBuddyId]}
-                    onEquip={handleEquip}
+                    onEquip={isDemoShop ? noopEquipOutfit : handleEquip}
                     onClose={() => setShowShop(false)}
                 />
             )}
@@ -1030,6 +1196,29 @@ export default function StudentDashboard(): ReactElement {
                     onClose={() => {
                         setShowReflectionModal(false);
                         setReflectionQueue([]);
+                    }}
+                />
+            )}
+            {showTour && student && (
+                <OnboardingTour
+                    studentId={student.id}
+                    steps={TOUR_STEPS}
+                    onStepChange={handleTourStep}
+                    // The opening steps introduce the student's own buddy and draw their real growth
+                    // tree, so the overlay needs to know who they have and what they have earned.
+                    buddyName={activeBuddy.name}
+                    buddyImage={buddyImgSrc}
+                    wallets={agencyWallets}
+                    onClose={() => {
+                        setShowTour(false);
+                        // The overlay unmounts without another callback, so the step is cleared here —
+                        // otherwise the read-only picker it opened would be left on screen.
+                        setTourStep(null);
+                        // The tour deferred the daily intention so the two would not fight over the
+                        // same moment. Now that it is out of the way, ask again if it is still unset.
+                        if (!getDailyIntention(student.id)) {
+                            setShowDailyIntention(true);
+                        }
                     }}
                 />
             )}

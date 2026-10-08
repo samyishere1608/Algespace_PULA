@@ -195,6 +195,24 @@ namespace webapi.Controllers
                 "WHERE StudentId = @StudentId GROUP BY ExerciseType",
                 new { StudentId = studentId }).ToList();
 
+            // Goals completed per category, ALL TIME. `GoalId` already holds the category, so this is
+            // a straight GROUP BY — the same six names the client's goal catalogue uses.
+            //
+            // Rows are then filtered to the SIX CURRENT categories, because `GoalId` is not reliably a
+            // category in older data: the previous goal catalogue wrote ids like `no-hints`,
+            // `master-substitution` and `complete-any-exercise`, and student 1 has 34 such rows. None of
+            // those map onto a current category, and guessing a mapping would attribute goals to
+            // categories the student never chose. They are dropped instead — the panel is about the
+            // current goal model, and a wrong number is worse than a missing one.
+            var goalCountsByCategory = conn.Query<GoalCategoryCount>(
+                $"SELECT GoalId AS Category, COUNT(*) AS Count " +
+                $"FROM {StudentProgressDBSettings.GoalsTable} " +
+                "WHERE StudentId = @StudentId AND GoalId <> '' " +
+                "GROUP BY GoalId",
+                new { StudentId = studentId })
+                .Where(row => GoalCatalogue.IsCategory(row.Category))
+                .ToList();
+
             // Actual solving-method counts (Elimination / Equalization / Substitution) from ExerciseCompletions
             var solvingMethodCounts = conn.Query<MethodCount>(
                 $"SELECT ExerciseKey AS Method, COUNT(*) AS Value " +
@@ -224,6 +242,7 @@ namespace webapi.Controllers
                 ResolveXP = progress?.ResolveXP ?? 0,
                 LifetimeAgencyXP = progress?.LifetimeAgencyXP ?? 0,
                 GoalsThisWeek = goalsThisWeek,
+                GoalCountsByCategory = goalCountsByCategory,
                 MethodCounts = methodCounts,
                 SolvingMethodCounts = solvingMethodCounts,
                 DailyXp = dailyXp

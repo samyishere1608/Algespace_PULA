@@ -1,4 +1,5 @@
 import { useAuth } from "@/contexts/AuthProvider.tsx";
+import { usePreviewMode } from "@/contexts/previewContext.ts";
 import type { TrackerUser } from "@/types/studies/user.ts";
 
 /**
@@ -25,7 +26,19 @@ export default function useTrackerIdentity(isStudy: boolean): {
     owner: TrackerUser | undefined;
 } {
     const { user, student } = useAuth();
+    const preview = usePreviewMode();
     const owner: TrackerUser | undefined = user ?? student;
 
-    return { logging: isStudy || owner !== undefined, owner };
+    /**
+     * A DEMONSTRATION records nothing.
+     *
+     * The walkthrough shows a real exercise, so a student who is only looking at it must not end up
+     * with an attempt in their history — that would move their goals against work they never did,
+     * and would put a row nobody sat into the research data.
+     *
+     * Returning false here is enough on its own. Every write in `useFlexibilityTracker` is already
+     * gated on this decision: the mount effect that issues the attempt id is skipped, and with no
+     * attempt id every later write has no destination. Details in `previewContext.ts`.
+     */
+    return { logging: !preview && (isStudy || owner !== undefined), owner };
 }

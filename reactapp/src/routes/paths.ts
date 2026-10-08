@@ -36,6 +36,14 @@ export class Paths {
     static readonly StudentLoginPath: string = "/student/login";
     static readonly StudentRegisterPath: string = "/student/register";
     static readonly StudentDashboardPath: string = "/student/dashboard";
+    /**
+     * A read-only stand-in for a flexibility exercise, used by the walkthrough.
+     *
+     * A real exercise cannot be opened by URL: `FlexibilityExercise` reads the exercise type and id
+     * from `location.state` and shows an error screen without them. It also records an attempt the
+     * moment it mounts. So the walkthrough gets its own screen instead of a live one.
+     */
+    static readonly TourFlexibilityPreviewPath: string = "/student/dashboard/tour/flexibility";
     static readonly OnboardingResumePath: string = "/student/onboarding/resume";
     static readonly OnboardingBarteringGamePath: string = "/onboarding/bartering/";
     static readonly OnboardingBarteringGameExercisePath: string = "/onboarding/bartering/exercises/:exerciseId";

@@ -1,11 +1,12 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faCheck, faLightbulb, faPlus, faRotateRight, faSliders, faSpinner, faTimes, faTrash } from "@fortawesome/free-solid-svg-icons";
-import { ReactElement, useMemo, useState } from "react";
+import { faArrowLeft, faCheck, faLightbulb, faPlus, faRotateRight, faSliders, faSpinner, faTimes } from "@fortawesome/free-solid-svg-icons";
+import { ReactElement, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import type { GoalCategory, GoalMetric, QualityDimension, StudyGoal } from "@/types/student/goal.ts";
-import { GOAL_CATEGORIES, GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef, newGoalId } from "@utils/goalCatalog.ts";
+import { GOAL_CATEGORIES, GOAL_RESOLVE_XP, METHOD_FOCUS_NOTES, asTranslate, describeGoal, getCategoryDef, groupInExercise, newGoalId } from "@utils/goalCatalog.ts";
 import { fetchGoalSuggestions, suggestionToGoal, type GoalPlan } from "@utils/goalSuggestions.ts";
+import type { TourPickerStep } from "@utils/onboardingTour.ts";
 import "@styles/views/goals.scss";
 
 /**
@@ -18,12 +19,21 @@ export type GoalOrigin = "student" | "assistant";
 
 interface Props {
     studentId: number | string;
-    activeGoals: StudyGoal[];
     /** Opens straight into this category's builder, skipping the method step. */
     initialCategory?: GoalCategory | null;
     onAdd: (goal: StudyGoal, origin: GoalOrigin) => void;
-    onRemove: (goalId: string) => void;
     onClose: () => void;
+    /**
+     * Runs the picker as a DEMONSTRATION.
+     *
+     * Nothing is saved — the caller passes no-op handlers — and the screen on show is dictated by
+     * the walkthrough rather than by the student's taps, because the student cannot tap anything.
+     * This exists so the tour can point at the REAL picker instead of at a copy of it that would
+     * drift the moment the picker changed.
+     */
+    demo?: boolean;
+    /** Which of the picker's screens to show while `demo` is set. */
+    demoStep?: TourPickerStep;
 }
 
 /**
@@ -45,11 +55,28 @@ type GoalStep = "choose" | "own" | "ai";
  * teaches that goals are decorative. Every option here is checkable against what the anchor store
  * already records, so a student is never able to set something the system cannot see.
  */
-export default function SetGoalsModal({ studentId, activeGoals, initialCategory = null, onAdd, onRemove, onClose }: Props): ReactElement {
+/**
+ * The category the demonstration opens the builder on.
+ *
+ * "method" because it is the one category that shows every part of the builder — a focus row, a
+ * choice of metric, and the note about which exercises can move it. A category without focuses would
+ * demonstrate a shorter form than most students will actually meet.
+ */
+const DEMO_CATEGORY: GoalCategory = "method";
+
+function demoStepToStep(demoStep: TourPickerStep | undefined): GoalStep {
+    return demoStep === "choose" || demoStep === undefined ? "choose" : "own";
+}
+
+export default function SetGoalsModal({ studentId, initialCategory = null, demo = false, demoStep, onAdd, onClose }: Props): ReactElement {
     const { t, i18n } = useTranslation(TranslationNamespaces.Student);
 
-    const [category, setCategory] = useState<GoalCategory | null>(initialCategory);
-    const [step, setStep] = useState<GoalStep>(initialCategory ? "own" : "choose");
+    // In a demonstration the screen is not the student's to choose, so it starts from the walkthrough's
+    // step — and the effect below keeps it there as the walkthrough moves on.
+    const [category, setCategory] = useState<GoalCategory | null>(
+        demo ? (demoStep === "builder" ? DEMO_CATEGORY : null) : initialCategory);
+    const [step, setStep] = useState<GoalStep>(
+        demo ? demoStepToStep(demoStep) : (initialCategory ? "own" : "choose"));
 
     // ── Suggestions ──────────────────────────────────────────────────────────
     const [plan, setPlan] = useState<GoalPlan | null>(null);
@@ -57,7 +84,18 @@ export default function SetGoalsModal({ studentId, activeGoals, initialCategory 
     const [askFailed, setAskFailed] = useState(false);
     const [taken, setTaken] = useState<Set<number>>(new Set());
 
+    // The walkthrough moves through the picker's three screens without anyone pressing anything, so
+    // the component follows the step it is TOLD to be on rather than the taps it receives.
+    useEffect(() => {
+        if (!demo) return;
+        setStep(demoStepToStep(demoStep));
+        setCategory(demoStep === "builder" ? DEMO_CATEGORY : null);
+    }, [demo, demoStep]);
+
     async function handleAsk(): Promise<void> {
+        // Never call the model during a demonstration: it would cost a request and produce an answer
+        // that only a student who is not allowed to act on it would ever see.
+        if (demo) return;
         if (typeof studentId !== "number" || studentId <= 0) return;
 
         setAsking(true);
@@ -98,28 +136,13 @@ export default function SetGoalsModal({ studentId, activeGoals, initialCategory 
                 {step === "choose" && <p className={"dash-modal__subtitle"}>{t("goals-picker-subtitle")}</p>}
 
                 <div className={"setgoals__body"}>
-                    {activeGoals.length > 0 && (
-                        <div className={"setgoals__active"}>
-                            <h4 className={"setgoals__section-title"}>{t("goals-active-heading")}</h4>
-                            {activeGoals.map((goal) => (
-                                <div key={goal.id} className={"setgoals__active-row"}>
-                                    <FontAwesomeIcon icon={getCategoryDef(goal.category).icon} className={"setgoals__active-icon"} />
-                                    <span className={"setgoals__active-label"}>
-                                        {describeGoal(goal, translate)}
-                                    </span>
-                                    <button
-                                        type={"button"}
-                                        className={"setgoals__remove"}
-                                        title={t("goals-remove")}
-                                        aria-label={t("goals-remove")}
-                                        onClick={() => onRemove(goal.id)}
-                                    >
-                                        <FontAwesomeIcon icon={faTrash} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    {/* No list of the student's existing goals here, and no delete buttons.
+
+                        This panel is for ADDING. Deleting already lives on the dashboard cards,
+                        where the goal is actually visible with its progress, so repeating it here
+                        gave the same job two homes and made the picker look like a management
+                        screen. A student who opened it to add a goal met a list they did not ask
+                        for. */}
 
                     {step === "choose" && (
                         <MethodChooser
@@ -234,7 +257,7 @@ function MethodChooser({ onPick }: { onPick: (step: "own" | "ai") => void }): Re
     const { t } = useTranslation(TranslationNamespaces.Student);
 
     return (
-        <div className={"setgoals__methods"}>
+        <div className={"setgoals__methods"} data-tour={"goals-choose"}>
             <button type={"button"} className={"setgoals__method setgoals__method--ai"} onClick={() => onPick("ai")}>
                 <span className={"setgoals__method-icon"} aria-hidden>
                     <FontAwesomeIcon icon={faLightbulb} />
@@ -267,7 +290,7 @@ function CategoryChooser({ onPick, onBack }: { onPick: (category: GoalCategory) 
                 <FontAwesomeIcon icon={faArrowLeft} /> {t("goals-method-back")}
             </button>
 
-            <div className={"setgoals__categories"}>
+            <div className={"setgoals__categories"} data-tour={"goals-categories"}>
                 {GOAL_CATEGORIES.map((def) => (
                     <button
                         key={def.category}
@@ -311,6 +334,22 @@ function GoalBuilder({ category, onBack, onConfirm }: BuilderProps): ReactElemen
     const [quality, setQuality] = useState<QualityDimension>(def.qualities?.[0] ?? "hints");
     const [limit, setLimit] = useState<number>(def.qualityLimits?.[1] ?? 0);
 
+    const whereRows = useMemo(() => groupInExercise(def), [def]);
+
+    // The focus notes describe how ONE named method is reached, so they are meaningless while the
+    // goal is still about all three: "Any method" shows none of them.
+    const focusLabelKey = def.category === "method" && focus !== null
+        ? def.focuses.find((option) => option.value === focus)?.labelKey ?? null
+        : null;
+
+    // Looked up rather than indexed because two categories share an exercise-type constant, and only
+    // the method goal has focus notes at all.
+    const focusNoteKeys = useMemo(() => {
+        const map = new Map<string, string>();
+        if (def.category === "method") for (const note of METHOD_FOCUS_NOTES) map.set(note.type, note.key);
+        return map;
+    }, [def]);
+
     // Targets differ per metric, so a swing from exercises to minutes has to move the selection to
     // something that exists — otherwise the builder would be holding a target the student cannot see.
     function changeMetric(next: GoalMetric): void {
@@ -332,7 +371,7 @@ function GoalBuilder({ category, onBack, onConfirm }: BuilderProps): ReactElemen
     }
 
     return (
-        <div className={"setgoals__builder"}>
+        <div className={"setgoals__builder"} data-tour={"goals-builder"}>
             <div className={"setgoals__builder-head"}>
                 <button type={"button"} className={"setgoals__back"} onClick={onBack}>
                     <FontAwesomeIcon icon={faArrowLeft} /> {t("goals-back")}
@@ -343,20 +382,6 @@ function GoalBuilder({ category, onBack, onConfirm }: BuilderProps): ReactElemen
                 </span>
             </div>
             <p className={"setgoals__builder-desc"}>{t(def.descriptionKey)}</p>
-
-            {/* Which exercises actually move this goal. The compare-two-methods step exists only in
-                Suitability and the explain-your-reasoning step only in Efficiency and Matching, and
-                none of that is visible from the picker. Without saying so, a student sets "compare
-                methods five times", practises Matching, and concludes the goal is broken. */}
-            <div className={"setgoals__where"}>
-                <span className={"setgoals__where-label"}>{t("goals-where-label")}</span>
-                <span className={"setgoals__where-types"}>
-                    {def.availableIn.map((type) => (
-                        <span key={type.value} className={"setgoals__where-type"}>{t(type.labelKey)}</span>
-                    ))}
-                </span>
-                <p className={"setgoals__where-note"}>{t(def.whereKey)}</p>
-            </div>
 
             {def.focuses.length > 0 && (
                 <Field label={t("goals-focus-label")}>
@@ -370,6 +395,48 @@ function GoalBuilder({ category, onBack, onConfirm }: BuilderProps): ReactElemen
                     />
                 </Field>
             )}
+
+            {/* Which exercises actually move this goal, and what the student has to do inside each one.
+
+                The compare-two-methods step exists only in Suitability and the explain-your-reasoning
+                step only in Efficiency and Matching, and none of that is visible from the picker.
+                Without saying so, a student sets "compare methods five times", practises Matching,
+                and concludes the goal is broken.
+
+                The per-type notes go a step further, because "this goal can be worked on here" is not
+                the same as "you get to act here". The method goal is the case that matters: Suitability
+                hands the student all three methods, Efficiency accepts only the one that fits the
+                system, and Matching names the method and asks about the system instead. That sits
+                AFTER the focus row on purpose, so narrowing to a method updates the guidance the
+                student is reading rather than pushing it off screen. */}
+            <div className={"setgoals__where"} data-tour={"goals-where"}>
+                <span className={"setgoals__where-label"}>{t("goals-where-label")}</span>
+                <p className={"setgoals__where-note"}>{t(def.whereKey)}</p>
+
+                {whereRows.map((row) => {
+                    // A narrowed method goal only reaches the focus notes for Efficiency and Matching;
+                    // Suitability needs none, because the student picks the method there themselves.
+                    const focusKey = focusLabelKey === null
+                        ? undefined
+                        : row.types.map((type) => focusNoteKeys.get(type.value)).find((key) => key !== undefined);
+
+                    return (
+                        <div key={row.key} className={"setgoals__where-row"}>
+                            <span className={"setgoals__where-types"}>
+                                {row.types.map((type) => (
+                                    <span key={type.value} className={"setgoals__where-type"}>{t(type.labelKey)}</span>
+                                ))}
+                            </span>
+                            <p className={"setgoals__where-note"}>{t(row.key)}</p>
+                            {focusKey !== undefined && (
+                                <p className={"setgoals__where-focus"}>
+                                    {t(focusKey, { method: t(focusLabelKey as string) })}
+                                </p>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
 
             {def.metrics.length > 1 && (
                 <Field label={t("goals-metric-label")}>
@@ -411,7 +478,7 @@ function GoalBuilder({ category, onBack, onConfirm }: BuilderProps): ReactElemen
                 />
             </Field>
 
-            <button type={"button"} className={"setgoals__confirm"} onClick={confirm}>
+            <button type={"button"} className={"setgoals__confirm"} data-tour={"goals-confirm"} onClick={confirm}>
                 <FontAwesomeIcon icon={faPlus} /> {t("goals-add")}
             </button>
         </div>

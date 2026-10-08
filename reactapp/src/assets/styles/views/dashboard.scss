@@ -76,7 +76,7 @@
     position: relative;
 
     &-label {
-        font-size: 0.65rem;
+        font-size: 0.82rem;
         letter-spacing: 1px;
         text-transform: uppercase;
         color: rgba(255, 255, 255, 0.5);
@@ -86,7 +86,7 @@
     }
 
     &-values {
-        font-size: 0.8rem;
+        font-size: 1rem;
         font-weight: 700;
         color: var(--primary-blue);
     }
@@ -99,7 +99,7 @@
     color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     padding: 0.25rem;
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     line-height: 1;
     border-radius: 50%;
     display: inline-flex;
@@ -132,7 +132,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        font-size: 0.75rem;
+        font-size: 0.95rem;
         font-weight: 800;
         letter-spacing: 0.5px;
         text-transform: uppercase;
@@ -144,7 +144,7 @@
             border: none;
             color: rgba(255, 255, 255, 0.5);
             cursor: pointer;
-            font-size: 0.75rem;
+            font-size: 0.9rem;
             padding: 0.2rem;
             border-radius: 0.25rem;
             transition: color 0.15s;
@@ -178,13 +178,13 @@
     &__body {
         strong {
             display: block;
-            font-size: 0.8rem;
+            font-size: 1rem;
             color: #fff;
             margin-bottom: 0.15rem;
         }
 
         p {
-            font-size: 0.7rem;
+            font-size: 0.9rem;
             line-height: 1.4;
             color: rgba(255, 255, 255, 0.7);
         }
@@ -233,7 +233,7 @@
 }
 
 .dashboard__nav-agency-label {
-    font-size: 0.68rem;
+    font-size: 0.85rem;
     font-weight: 600;
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -241,7 +241,7 @@
 }
 
 .dashboard__nav-agency-value {
-    font-size: 0.75rem;
+    font-size: 0.95rem;
     font-weight: 700;
     color: rgba(255, 255, 255, 0.8);
 }
@@ -267,6 +267,31 @@
     }
 }
 
+// Replays the dashboard tour. Same treatment as the bell — an icon-only nav button — so a student
+// who skipped the tour can find it again without it competing with "End Today's Session".
+.dashboard__tour-pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.15rem;
+    cursor: pointer;
+    padding: 0.3rem;
+    transition: color 0.15s;
+
+    &:hover {
+        color: #fff;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #8ecae6;
+        outline-offset: 2px;
+        border-radius: 50%;
+    }
+}
+
 .dashboard__nav-user {
     display: flex;
     align-items: center;
@@ -280,13 +305,13 @@
     }
 
     &-name {
-        font-size: 0.85rem;
+        font-size: 1rem;
         font-weight: 700;
         color: #fff;
     }
 
     &-level {
-        font-size: 0.65rem;
+        font-size: 0.85rem;
         font-weight: 700;
         letter-spacing: 0.5px;
         text-transform: uppercase;
@@ -294,6 +319,9 @@
         color: #fff;
         padding: 0.1rem 0.45rem;
         border-radius: 0.75rem;
+        // The badge is a fixed-shape chip, so it must not wrap now that the type is larger:
+        // "BEGINNER" and its number on two lines made it taller than the avatar beside it.
+        white-space: nowrap;
     }
 
     &-avatar {
@@ -357,7 +385,7 @@
     -webkit-backdrop-filter: blur(8px) saturate(120%);
     color: rgba(255, 255, 255, 0.62);
     font-family: inherit;
-    font-size: 0.82rem;
+    font-size: 1rem;
     font-weight: 600;
     letter-spacing: 0.2px;
     cursor: pointer;
@@ -365,7 +393,7 @@
     transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 
     svg {
-        font-size: 0.95rem;
+        font-size: 1.1rem;
         opacity: 0.7;
         flex-shrink: 0;
     }
@@ -415,7 +443,7 @@
     -webkit-backdrop-filter: blur(8px) saturate(120%);
 
     &__title {
-        font-size: 0.68rem;
+        font-size: 0.9rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 1.2px;
@@ -426,50 +454,52 @@
     }
 }
 
-.analytics-difficulty-row {
+// Goals completed per category. There are six of them, so the row auto-fits instead of fixing a
+// column count: six across when the panel is wide, wrapping to two rows when it is not.
+.analytics-category-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: 0.6rem;
 }
 
-.analytics-difficulty {
+.analytics-category {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.25rem;
-    padding: 1.1rem 0.75rem;
+    gap: 0.3rem;
+    padding: 0.85rem 0.5rem;
     border-radius: 0.8rem;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.07);
-    transition: transform 0.2s ease-out, border-color 0.2s ease-out;
+    text-align: center;
+    // Dimmed until the student has completed at least one of these, so a glance separates the
+    // categories they actually use from the ones they have never touched.
+    opacity: 0.55;
+    transition: opacity 0.2s ease-out, border-color 0.2s ease-out;
 
-    &:hover {
-        transform: translateY(-3px);
-        border-color: rgba(255, 255, 255, 0.14);
+    &--active {
+        opacity: 1;
+        border-color: rgba(33, 158, 188, 0.35);
+        background: rgba(33, 158, 188, 0.1);
     }
 
-    &--easy   { border-top: 3px solid #4caf50; }
-    &--medium { border-top: 3px solid #ffc107; }
-    &--hard   { border-top: 3px solid #ef476f; }
-
-    &__label {
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: rgba(255, 255, 255, 0.6);
+    &__icon {
+        font-size: 1.05rem;
+        color: var(--primary-blue);
     }
 
     &__value {
-        font-size: 2.2rem;
+        font-size: 1.7rem;
         font-weight: 800;
         line-height: 1;
         color: #fff;
     }
 
-    &__sub {
-        font-size: 0.62rem;
-        color: rgba(255, 255, 255, 0.35);
+    &__label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        line-height: 1.25;
+        color: rgba(255, 255, 255, 0.6);
     }
 }
 
@@ -477,6 +507,12 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
+}
+
+// Spans both columns of the analytics grid — used by the goal-category panel, which needs the full
+// width to show six categories in one row.
+.analytics-section--full {
+    grid-column: 1 / -1;
 }
 
 .analytics-section--chart {
@@ -523,10 +559,10 @@
     }
 
     &__caption {
-        font-size: 0.58rem;
+        font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.8px;
-        color: rgba(255, 255, 255, 0.4);
+        color: rgba(255, 255, 255, 0.6);
         margin-top: 0.2rem;
     }
 
@@ -543,7 +579,7 @@
         grid-template-columns: auto 1fr auto auto;
         align-items: center;
         gap: 0.55rem;
-        font-size: 0.78rem;
+        font-size: 0.98rem;
     }
 
     &__dot {
@@ -569,7 +605,7 @@
     &__pct {
         min-width: 2.6rem;
         text-align: right;
-        font-size: 0.68rem;
+        font-size: 0.88rem;
         font-weight: 600;
         color: rgba(255, 255, 255, 0.45);
     }
@@ -587,13 +623,13 @@
 
     &__icon {
         color: var(--primary-blue);
-        font-size: 0.9rem;
+        font-size: 1.05rem;
         flex-shrink: 0;
         margin-top: 0.1rem;
     }
 
     p {
-        font-size: 0.78rem;
+        font-size: 0.95rem;
         color: rgba(255, 255, 255, 0.8);
         line-height: 1.4;
     }
@@ -635,7 +671,7 @@
     }
 
     &__label {
-        font-size: 0.62rem;
+        font-size: 0.85rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 1px;
@@ -667,7 +703,7 @@
     }
 
     &__label {
-        font-size: 0.62rem;
+        font-size: 0.85rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 1px;
@@ -684,8 +720,8 @@
 }
 
 .analytics-empty {
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.55);
     margin-top: 0.6rem;
 }
 
@@ -708,7 +744,7 @@
 
     .growing-tree__title {
         align-self: center;
-        font-size: 0.9rem;
+        font-size: 1.1rem;
         letter-spacing: 2px;
     }
 
@@ -720,8 +756,8 @@
 }
 
 .dashboard__leaderboard-hint {
-    font-size: 0.68rem;
-    color: rgba(255, 255, 255, 0.25);
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.55);
     margin-top: 0.75rem;
     text-align: center;
 }
@@ -741,7 +777,7 @@
     padding: 1.1rem 1.25rem;
 
     .dashboard__leaderboard-title {
-        font-size: 0.8rem;
+        font-size: 1rem;
         letter-spacing: 1.5px;
     }
 
@@ -844,7 +880,7 @@
     }
 
     &__label {
-        font-size: 0.65rem;
+        font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 1.2px;
         color: rgba(255, 255, 255, 0.75);
@@ -854,7 +890,7 @@
         position: absolute;
         top: 1.25rem;
         right: 1.25rem;
-        font-size: 1rem;
+        font-size: 1.15rem;
         opacity: 0.55;
         color: var(--primary-blue);
     }
@@ -867,17 +903,17 @@
     }
 
     &__sub {
-        font-size: 0.68rem;
+        font-size: 0.9rem;
         color: rgba(255, 255, 255, 0.65);
     }
 
     &__sub--positive {
         color: #4caf50;
-        font-size: 0.68rem;
+        font-size: 0.9rem;
     }
 
     &__unit {
-        font-size: 1rem;
+        font-size: 1.15rem;
         font-weight: 400;
         color: var(--primary-blue);
     }
@@ -896,7 +932,7 @@
         display: flex;
         align-items: center;
         gap: 0.4rem;
-        font-size: 0.65rem;
+        font-size: 0.85rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 1.2px;
@@ -905,7 +941,7 @@
     }
 
     &__icon {
-        font-size: 0.8rem;
+        font-size: 1rem;
         color: var(--primary-blue);
     }
 
@@ -949,7 +985,7 @@
     margin-bottom: 0.65rem;
 
     h2 {
-        font-size: 0.8rem;
+        font-size: 0.95rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 1px;
@@ -963,7 +999,7 @@
        section does not shout louder than the KPI cards above it.
        Named "--missions" until the mission system was removed. */
     &--active-goals h2 {
-        font-size: 0.8rem;
+        font-size: 0.95rem;
         font-weight: 700;
         letter-spacing: 1px;
         color: #fff;
@@ -972,7 +1008,7 @@
     }
 
     &--goals h2 {
-        font-size: 0.95rem;
+        font-size: 1.1rem;
         font-weight: 800;
         letter-spacing: 0.6px;
         color: #fff;
@@ -981,7 +1017,7 @@
     }
 
     &-cta {
-        font-size: 0.65rem;
+        font-size: 0.85rem;
         font-weight: 700;
         letter-spacing: 0.75px;
         color: #fff;
@@ -1001,7 +1037,7 @@
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        font-size: 0.72rem;
+        font-size: 0.9rem;
         font-weight: 700;
         letter-spacing: 0.6px;
         padding: 0.45rem 0.9rem;
@@ -1042,7 +1078,7 @@
     &__text {
         // 30% white on this surface is roughly 2.2:1, which is under the 4.5:1 floor for body text.
         color: rgba(255, 255, 255, 0.62);
-        font-size: 0.82rem;
+        font-size: 1rem;
         text-align: center;
     }
 
@@ -1050,7 +1086,7 @@
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        font-size: 0.78rem;
+        font-size: 1rem;
         font-weight: 700;
         letter-spacing: 0.4px;
         color: #fff;
@@ -1100,12 +1136,12 @@
 
     &__icon {
         flex-shrink: 0;
-        font-size: 0.85rem;
+        font-size: 1rem;
         color: #ffd166;
     }
 
     &__label {
-        font-size: 0.88rem;
+        font-size: 1.05rem;
         font-weight: 600;
         color: rgba(255, 255, 255, 0.82);
         flex: 1;
@@ -1160,7 +1196,7 @@
 
 /* ─── Leaderboard ────────────────────────────────────────────── */
 .dashboard__leaderboard-title {
-    font-size: 0.7rem;
+    font-size: 0.9rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1.2px;
@@ -1170,7 +1206,7 @@
     align-items: center;
     gap: 0.4rem;
 
-    svg { color: #ffd166; font-size: 0.85rem; }
+    svg { color: #ffd166; font-size: 1rem; }
 }
 
 .leaderboard-entry {
@@ -1186,7 +1222,7 @@
     &--current { background-color: rgba(33, 158, 188, 0.15); }
 
     &__rank {
-        font-size: 0.9rem;
+        font-size: 1.05rem;
         font-weight: 700;
         color: rgba(255, 255, 255, 0.5);
         width: 1.5rem;
@@ -1197,7 +1233,7 @@
     /* The top three, in metal. Tinted here rather than relying on the glyph, so the three read as a
        set with the rest of the dashboard's icons. */
     &__medal {
-        font-size: 0.95rem;
+        font-size: 1.1rem;
 
         &--1 { color: #ffd166; }
         &--2 { color: #cfd8dc; }
@@ -1208,7 +1244,7 @@
 
     &__name {
         flex: 1;
-        font-size: 0.8rem;
+        font-size: 1rem;
         font-weight: 500;
         color: rgba(255, 255, 255, 0.7);
         overflow: hidden;
@@ -1217,7 +1253,7 @@
     }
 
     &__xp {
-        font-size: 0.72rem;
+        font-size: 0.9rem;
         font-weight: 600;
         color: rgba(255, 255, 255, 0.45);
         white-space: nowrap;
@@ -2662,7 +2698,7 @@
     border: 1px solid rgba(255, 209, 102, 0.3);
     border-radius: 2rem;
     color: #ffd166;
-    font-size: 0.68rem;
+    font-size: 0.85rem;
     font-weight: 700;
     cursor: pointer;
     white-space: nowrap;
@@ -2671,7 +2707,7 @@
     flex-shrink: 0;
     animation: endSessionGlow 2.5s ease-in-out infinite;
 
-    svg { font-size: 0.65rem; }
+    svg { font-size: 0.85rem; }
 
     &:hover {
         background: rgba(255, 209, 102, 0.2);
@@ -2969,17 +3005,17 @@
     &--unclear  &-dot { background: #9e9e9e; }
 }
 
-/* ─── Pippin reflection prompt bubble ────────────────────────── */
+/* ─── Pippin reflection prompt bubble ─────────────────────────── */
 .buddy-reflection-bubble {
     position: absolute;
     right: 1.4rem;
     bottom: 15rem;
-    width: 19rem;
+    width: 21rem;
     max-width: calc(100vw - 2rem);
     background: linear-gradient(180deg, #0b3d5c, #06283b);
     border: 1px solid rgba(33, 158, 188, 0.4);
-    border-radius: 1rem 1rem 0.25rem 1rem;
-    padding: 0.9rem 1rem;
+    border-radius: 1.2rem 1.2rem 0.3rem 1.2rem;
+    padding: 1rem 1.15rem;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(33, 158, 188, 0.2);
     z-index: 210;
     animation: reflection-bubble-in 0.3s ease-out;
@@ -2991,7 +3027,7 @@
         margin-bottom: 0.6rem;
 
         strong {
-            font-size: 0.75rem;
+            font-size: 0.95rem;
             font-weight: 700;
             color: #8ecae6;
             letter-spacing: 0.3px;
@@ -2999,25 +3035,25 @@
     }
 
     &__avatar {
-        width: 2rem;
-        height: 2rem;
+        width: 2.4rem;
+        height: 2.4rem;
         border-radius: 50%;
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
         background: rgba(33, 158, 188, 0.2);
-        border: 1.5px solid rgba(33, 158, 188, 0.4);
-        font-size: 1rem;
+        border: 2px solid rgba(142, 202, 230, 0.5);
+        font-size: 1.15rem;
         overflow: hidden;
 
         img { width: 100%; height: 100%; object-fit: cover; }
     }
 
     &__text {
-        font-size: 0.82rem;
+        font-size: 1rem;
         color: rgba(255, 255, 255, 0.9);
-        line-height: 1.45;
+        line-height: 1.5;
         margin-bottom: 0.7rem;
     }
 
@@ -3029,11 +3065,11 @@
 
     &__no,
     &__yes {
-        font-size: 0.72rem;
+        font-size: 0.95rem;
         font-weight: 700;
         border: none;
         border-radius: 0.8rem;
-        padding: 0.4rem 0.85rem;
+        padding: 0.5rem 1rem;
         cursor: pointer;
         transition: transform 0.15s, box-shadow 0.15s;
 
@@ -3059,8 +3095,20 @@
 
 /* ─── Reflection modal ───────────────────────────────────────── */
 .reflection-modal {
-    max-width: 520px;
-    padding: 1.5rem 1.75rem 1.75rem;
+    // An explicit width, not just a max-width. `.modal-content` has no width of its own, so as a
+    // shrink-to-fit flex item it collapsed to whatever the textarea's content wanted and the extra
+    // headroom did nothing — the question still wrapped into a narrow column while bigger type made
+    // it taller. The max-width is what keeps it inside a small window.
+    width: 620px;
+    max-width: calc(100vw - 2rem);
+    padding: 1.6rem 1.9rem 1.9rem;
+    // Warmer and rounder than the shared modal plate, so it reads as a conversation panel rather
+    // than as a form that appeared. The teal rim is the one the buddy widget and the hint button
+    // use, which is what ties the three together as the same character.
+    background: linear-gradient(180deg, #063a54 0%, #012a3b 100%);
+    border: 1px solid rgba(33, 158, 188, 0.38);
+    border-radius: 1.25rem;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
     &__finished {
         color: rgba(255, 255, 255, 0.8);
@@ -3078,15 +3126,16 @@
     }
 
     &__avatar {
-        width: 52px;
-        height: 52px;
+        width: 64px;
+        height: 64px;
         border-radius: 50%;
         background: rgba(33, 158, 188, 0.15);
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
-        border: 2px solid rgba(33, 158, 188, 0.35);
+        border: 2px solid rgba(142, 202, 230, 0.6);
+        box-shadow: 0 0 0 4px rgba(33, 158, 188, 0.18);
         flex-shrink: 0;
 
         img {
@@ -3097,19 +3146,19 @@
     }
 
     &__emoji {
-        font-size: 1.7rem;
+        font-size: 2rem;
     }
 
     &__title {
-        font-size: 1.05rem;
+        font-size: 1.2rem;
         font-weight: 700;
         color: #fff;
         margin: 0 0 0.15rem;
     }
 
     &__item {
-        font-size: 0.72rem;
-        color: rgba(255, 255, 255, 0.45);
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.6);
         margin: 0;
     }
 
@@ -3137,13 +3186,13 @@
     }
 
     &__step-dot {
-        width: 1.9rem;
-        height: 1.9rem;
+        width: 2.1rem;
+        height: 2.1rem;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.8rem;
+        font-size: 0.95rem;
         font-weight: 700;
         color: #fff;
         background: rgba(255, 255, 255, 0.08);
@@ -3163,51 +3212,64 @@
     }
 
     &__step-label {
-        font-size: 0.6rem;
+        font-size: 0.85rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: rgba(255, 255, 255, 0.6);
+        color: rgba(255, 255, 255, 0.7);
     }
 
     &__bubble {
         display: flex;
         align-items: flex-start;
-        gap: 0.7rem;
-        border-radius: 0.9rem;
-        padding: 0.85rem 1.1rem;
-        font-size: 0.88rem;
-        line-height: 1.5;
-        margin-bottom: 1rem;
+        gap: 0.85rem;
+        border-radius: 1.1rem;
+        padding: 1rem 1.25rem;
+        font-size: 1.05rem;
+        line-height: 1.55;
+        margin-bottom: 1.1rem;
 
-        p { margin: 0; color: inherit; flex: 1; }
+        p { margin: 0; color: inherit; }
 
+        // Every turn in this dialog is the companion speaking, the question and the reply alike.
+        // There is no student bubble: the student's own words are what they typed into the box, and
+        // drawing the companion's reply with the student's styling made the answer look like
+        // something the student had said.
         &--pippin {
             background: rgba(33, 158, 188, 0.1);
             border: 1px solid rgba(33, 158, 188, 0.22);
-            border-bottom-left-radius: 0.25rem;
+            border-bottom-left-radius: 0.3rem;
             color: #fff;
-        }
-
-        &--student {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-bottom-right-radius: 0.25rem;
-            color: rgba(255, 255, 255, 0.85);
         }
     }
 
+    // Who is talking, above what they said. Without it the bubble is a panel of text beside a
+    // portrait and the student has to work out that the companion is the one asking.
+    &__speaker {
+        display: block;
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #8ecae6;
+        letter-spacing: 0.3px;
+        margin-bottom: 0.2rem;
+    }
+
+    &__bubble-body {
+        flex: 1;
+        min-width: 0;
+    }
+
     &__bubble-avatar {
-        width: 2.2rem;
-        height: 2.2rem;
+        width: 2.7rem;
+        height: 2.7rem;
         border-radius: 50%;
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
         background: rgba(33, 158, 188, 0.2);
-        border: 1.5px solid rgba(33, 158, 188, 0.35);
-        font-size: 1.1rem;
+        border: 2px solid rgba(142, 202, 230, 0.5);
+        font-size: 1.4rem;
         overflow: hidden;
 
         img { width: 100%; height: 100%; object-fit: cover; }
@@ -3223,7 +3285,7 @@
         background: rgba(6, 214, 160, 0.12);
         border: 1px solid rgba(6, 214, 160, 0.35);
         color: #06d6a0;
-        font-size: 0.72rem;
+        font-size: 0.9rem;
         font-weight: 700;
         margin-bottom: 0.75rem;
         box-shadow: 0 0 10px rgba(6, 214, 160, 0.15);
@@ -3240,7 +3302,7 @@
         background: rgba(255, 183, 3, 0.1);
         border: 1px solid rgba(255, 183, 3, 0.35);
         color: #ffd166;
-        font-size: 0.82rem;
+        font-size: 0.95rem;
         line-height: 1.45;
 
         svg { flex-shrink: 0; margin-top: 0.15rem; }
@@ -3260,7 +3322,7 @@
         border-radius: 0.75rem;
         color: #fff;
         font-family: inherit;
-        font-size: 0.9rem;
+        font-size: 1rem;
         padding: 0.8rem 1rem;
         resize: none;
         outline: none;
@@ -3301,18 +3363,18 @@
         border-radius: 0.8rem;
         margin-bottom: 1rem;
 
-        p { margin: 0.15rem 0 0; font-size: 0.85rem; color: #fff; line-height: 1.45; }
+        p { margin: 0.15rem 0 0; font-size: 1rem; color: #fff; line-height: 1.45; }
     }
 
     &__next-step-icon {
         color: #1db954;
-        font-size: 1rem;
+        font-size: 1.15rem;
         flex-shrink: 0;
         margin-top: 0.15rem;
     }
 
     &__next-step-label {
-        font-size: 0.62rem;
+        font-size: 0.85rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 1px;

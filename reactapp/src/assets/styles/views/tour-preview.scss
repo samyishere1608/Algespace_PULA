@@ -1,0 +1,38 @@
+// The walkthrough's read-only view of a real exercise.
+//
+// There is deliberately almost nothing here. The exercise, its shell and its styles are the REAL
+// ones, so anything this file styled would be a second source of truth for how an exercise looks —
+// which is the thing that made the first attempt at this screen worth throwing away.
+//
+// The one thing it owns is the way out. The walkthrough ends on this screen, so the student needs a
+// route back that does not depend on the tour still being up.
+
+.tour-preview__exit {
+    display: flex;
+    justify-content: center;
+    padding: 0 0 1.5rem;
+}
+
+.tour-preview__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.25rem;
+    border-radius: 0.6rem;
+    border: 1px solid rgba(142, 202, 230, 0.45);
+    background: rgba(33, 158, 188, 0.18);
+    font: inherit;
+    font-size: 0.9rem;
+    color: #eaf6fb;
+    cursor: pointer;
+    transition: background-color 0.15s ease-out;
+
+    &:hover {
+        background: rgba(33, 158, 188, 0.3);
+    }
+
+    &:focus-visible {
+        outline: 2px solid #8ecae6;
+        outline-offset: 2px;
+    }
+}

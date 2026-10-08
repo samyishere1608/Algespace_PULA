@@ -38,6 +38,33 @@ const Q2_KEY_BY_CATEGORY: Record<string, string> = {
 /** Exercise types whose whole point is the choice of method. */
 const DECISION_EXERCISE_TYPES = ["Suitability", "Efficiency", "Matching"];
 
+/**
+ * One turn of the conversation, spoken by the student's own companion.
+ *
+ * The portrait AND the name above the text are the whole point. Without the name this is a panel of
+ * text that happens to sit beside a small picture, and the student has to infer who is talking —
+ * which is what made the dialog read as a generic popup rather than as their companion checking in
+ * with them. Used for both turns, question and reply, because both are the companion talking.
+ */
+function BuddyBubble({ text, buddyName, buddyEmoji, buddyImgSrc }: {
+    text: string;
+    buddyName: string;
+    buddyEmoji: string;
+    buddyImgSrc?: string;
+}): ReactElement {
+    return (
+        <div className="reflection-modal__bubble reflection-modal__bubble--pippin">
+            <span className="reflection-modal__bubble-avatar">
+                {buddyImgSrc ? <img src={buddyImgSrc} alt={buddyName} /> : <span>{buddyEmoji}</span>}
+            </span>
+            <div className="reflection-modal__bubble-body">
+                <span className="reflection-modal__speaker">{buddyName}</span>
+                <p>{text}</p>
+            </div>
+        </div>
+    );
+}
+
 export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddyImgSrc, onAwardInsight, onClose }: Props): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
 
@@ -207,7 +234,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                         )}
                     </div>
                     <div>
-                        <h2 className="reflection-modal__title">{t("reflection-title")}</h2>
+                        <h2 className="reflection-modal__title">{t("reflection-title", { buddy: buddyName })}</h2>
                         <p className="reflection-modal__item">{t("reflection-completed-item", { label: item.itemLabel })}</p>
                     </div>
                 </div>
@@ -229,13 +256,8 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                     </div>
                 </div>
 
-                {/* Pippin's question bubble */}
-                <div className="reflection-modal__bubble reflection-modal__bubble--pippin">
-                    <span className="reflection-modal__bubble-avatar">
-                        {buddyImgSrc ? <img src={buddyImgSrc} alt={buddyName} /> : <span>{buddyEmoji}</span>}
-                    </span>
-                    <p>{questionText}</p>
-                </div>
+                {/* The question, in the companion's own voice. */}
+                <BuddyBubble text={questionText} buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImgSrc={buddyImgSrc} />
 
                 {/* Answering phase */}
                 {phase === "answering" && (
@@ -262,7 +284,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                 disabled={loading}
                             >
                                 {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faRobot} />}
-                                {t("reflection-pippin-tell-me")}
+                                {t("reflection-buddy-tell-me", { buddy: buddyName })}
                             </button>
                             <button
                                 className="button primary-button"
@@ -279,9 +301,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 {/* Feedback phase */}
                 {phase === "feedback" && (
                     <div className="reflection-modal__feedback">
-                        <div className="reflection-modal__bubble reflection-modal__bubble--student">
-                            <p>{feedback}</p>
-                        </div>
+                        <BuddyBubble text={feedback} buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImgSrc={buddyImgSrc} />
                         {earnedInsight > 0 && (
                             <div className="reflection-modal__insight-chip">
                                 <FontAwesomeIcon icon={faLightbulb} />

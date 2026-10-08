@@ -37,6 +37,26 @@ export interface GoalFocusOption {
     labelKey: string;
 }
 
+/**
+ * One line of "how this goal shows up in this kind of exercise".
+ *
+ * `availableIn` says WHICH exercise types can move a goal. This says what the student actually has to
+ * do once they are inside one, because the same goal is reached through a different moment in each
+ * type. The method goal is the clearest case: Suitability lets the student choose any of the three
+ * methods, Efficiency accepts only the single method that fits the system, and Matching names the
+ * method itself and asks the student to pick the system instead.
+ *
+ * Without this a student who narrowed a goal to Elimination and then practised Matching would finish
+ * the exercise, see the goal unmoved, and conclude the goal was broken. It was never reachable there
+ * in the way they assumed.
+ */
+export interface GoalExerciseNote {
+    /** Must match a `value` in the same category's `availableIn`. */
+    type: string;
+    /** Translation key describing the moment the student gets to act, in that exercise type. */
+    key: string;
+}
+
 export interface GoalCategoryDef {
     category: GoalCategory;
     /**
@@ -81,6 +101,14 @@ export interface GoalCategoryDef {
      * `ComparisonIntervention`, whose only renderer is `SuitabilityExercise`.
      */
     availableIn: GoalFocusOption[];
+
+    /**
+     * What the student has to do inside each exercise type listed in `availableIn`.
+     *
+     * Types that behave identically share one key, and `groupInExercise` folds them back into a single
+     * line, so a goal that works the same way everywhere is described once rather than three times.
+     */
+    inExercise: GoalExerciseNote[];
 
     /** One sentence saying what `availableIn` means in practice. */
     whereKey: string;
@@ -130,6 +158,11 @@ export const GOAL_CATEGORIES: GoalCategoryDef[] = [
         focuses: METHODS,
         anyFocusKey: "goals-focus-any-method",
         availableIn: EXERCISE_TYPES,
+        inExercise: [
+            { type: SUITABILITY.value, key: "goals-in-method-suitability" },
+            { type: EFFICIENCY.value, key: "goals-in-method-efficiency" },
+            { type: MATCHING.value, key: "goals-in-method-matching" },
+        ],
         whereKey: "goals-where-method",
         restrictionKey: "",
     },
@@ -143,6 +176,7 @@ export const GOAL_CATEGORIES: GoalCategoryDef[] = [
         focuses: EXERCISE_TYPES,
         anyFocusKey: "goals-focus-any-exercise-type",
         availableIn: EXERCISE_TYPES,
+        inExercise: EXERCISE_TYPES.map((type) => ({ type: type.value, key: "goals-in-exercise-type" })),
         whereKey: "goals-where-exercise-type",
         restrictionKey: "",
     },
@@ -156,6 +190,10 @@ export const GOAL_CATEGORIES: GoalCategoryDef[] = [
         focuses: [],
         anyFocusKey: "",
         availableIn: [EFFICIENCY, MATCHING],
+        inExercise: [
+            { type: EFFICIENCY.value, key: "goals-in-self-explanation-efficiency" },
+            { type: MATCHING.value, key: "goals-in-self-explanation-matching" },
+        ],
         whereKey: "goals-where-self-explanation",
         restrictionKey: "goals-only-self-explanation",
     },
@@ -169,6 +207,7 @@ export const GOAL_CATEGORIES: GoalCategoryDef[] = [
         focuses: [],
         anyFocusKey: "",
         availableIn: [SUITABILITY],
+        inExercise: [{ type: SUITABILITY.value, key: "goals-in-method-comparison" }],
         whereKey: "goals-where-method-comparison",
         restrictionKey: "goals-only-method-comparison",
     },
@@ -182,6 +221,7 @@ export const GOAL_CATEGORIES: GoalCategoryDef[] = [
         focuses: [],
         anyFocusKey: "",
         availableIn: EXERCISE_TYPES,
+        inExercise: EXERCISE_TYPES.map((type) => ({ type: type.value, key: "goals-in-solve-on-own" })),
         whereKey: "goals-where-solve-on-own",
         restrictionKey: "",
     },
@@ -197,15 +237,62 @@ export const GOAL_CATEGORIES: GoalCategoryDef[] = [
         qualities: ["hints", "errors"],
         qualityLimits: [0, 1, 2],
         availableIn: EXERCISE_TYPES,
+        inExercise: EXERCISE_TYPES.map((type) => ({ type: type.value, key: "goals-in-hints-and-errors" })),
         whereKey: "goals-where-hints-and-errors",
         restrictionKey: "",
     },
+];
+
+/**
+ * Extra line shown once a METHOD goal has been narrowed to one method.
+ *
+ * The general note for Efficiency and Matching already says that the student does not get a free
+ * choice there. That is enough to understand the exercise in general, but not enough to understand
+ * the goal they just set: "practise Elimination five times" is only reachable in an Efficiency
+ * exercise whose system fits Elimination, and in a Matching exercise that happens to use it. Both
+ * facts are properties of the individual exercise, which the student cannot see from the picker, so
+ * they are stated here rather than left to be discovered. Suitability is absent because a narrowed
+ * method goal is always reachable there: the student chooses the method themselves.
+ */
+export const METHOD_FOCUS_NOTES: GoalExerciseNote[] = [
+    { type: EFFICIENCY.value, key: "goals-focus-method-efficiency" },
+    { type: MATCHING.value, key: "goals-focus-method-matching" },
 ];
 
 export function getCategoryDef(category: GoalCategory): GoalCategoryDef {
     const found = GOAL_CATEGORIES.find((c) => c.category === category);
     if (!found) throw new Error(`Unknown goal category: ${category}`);
     return found;
+}
+
+/** One row of the "where you can do this" panel: a note, and the exercise types it applies to. */
+export interface GoalExerciseRow {
+    /** The exercise types that share this note, in the order they appear in `availableIn`. */
+    types: GoalFocusOption[];
+    /** Translation key for the note itself. */
+    key: string;
+}
+
+/**
+ * Collapses a category's `inExercise` notes into one row per distinct note.
+ *
+ * Driven by `availableIn` rather than by `inExercise` so a note can never describe an exercise type
+ * the goal cannot actually be advanced in, and so an exercise type added to `availableIn` without a
+ * note is silently skipped here instead of rendering an unlabelled row.
+ */
+export function groupInExercise(def: GoalCategoryDef): GoalExerciseRow[] {
+    const rows: GoalExerciseRow[] = [];
+
+    for (const option of def.availableIn) {
+        const note = def.inExercise.find((entry) => entry.type === option.value);
+        if (!note) continue;
+
+        const existing = rows.find((row) => row.key === note.key);
+        if (existing) existing.types.push(option);
+        else rows.push({ types: [option], key: note.key });
+    }
+
+    return rows;
 }
 
 /**

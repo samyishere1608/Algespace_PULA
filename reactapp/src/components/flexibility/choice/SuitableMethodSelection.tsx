@@ -18,7 +18,9 @@ export function SuitableMethodSelection({ firstEquation, secondEquation, questio
 
     return (
         <React.Fragment>
-            <p>{t(FlexibilityTranslations.INTRO_SYSTEM)}</p>
+            {/* Tagged for the onboarding walkthrough, which spotlights this sentence on its own route
+                through the real exercise. A data attribute, so nothing about the exercise changes. */}
+            <p data-tour={"ex-task"}>{t(FlexibilityTranslations.INTRO_SYSTEM)}</p>
             <LinearSystem firstEquation={firstEquation} secondEquation={secondEquation} />
             <div className={"method-selection"}>
                 <p>{question}</p>

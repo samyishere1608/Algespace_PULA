@@ -1,10 +1,6 @@
 import { ReactElement } from "react";
-import pippinImg from "@images/Character/Pipin_de.png";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
-import { getActiveBuddyId, getEquippedOutfitId } from "@utils/wardrobeUtils.ts";
-import { resolveChatfaceSrc } from "@utils/chatfaceUtils.ts";
-import { CHARACTER_CATALOGUE, resolveOutfitSrc } from "@views/student/dashboard/CharacterShopModal.tsx";
-import { BUDDIES } from "@views/student/dashboard/ChooseBuddyModal.tsx";
+import { getActiveBuddy, getActiveBuddyAvatarSrc } from "@utils/buddyUtils.ts";
 import "@styles/flexibility/flexibility.scss";
 
 /**
@@ -14,29 +10,17 @@ import "@styles/flexibility/flexibility.scss";
  * now shows the student's own chosen character, so hints appear to come from the character they
  * picked rather than from an anonymous agent.
  *
- * Chatface art is preferred here over the full-body portrait, because this slot is a small portrait
- * beside a speech popover — which is the reason the chatface art exists. A character with no
- * chatface art yet falls back to the full-body image (equipped outfit, then base), so the slot
- * always shows something correct rather than a broken image.
+ * The image itself comes from `getActiveBuddyAvatarSrc`, the same resolver the hint button uses, so
+ * the face the student presses is the face that answers them. Keeping one resolver here rather than
+ * a second copy in this file is what makes that hold when either side changes.
  */
 export function Agent(): ReactElement {
     const { student } = useAuth();
-
     const studentId = student?.id ?? "guest";
-    const buddyId = getActiveBuddyId(studentId);
-    const buddy = BUDDIES.find((b) => b.id === buddyId) ?? BUDDIES[0];
-
-    const equippedId = getEquippedOutfitId(studentId, buddyId);
-    const equippedSrc = equippedId ? resolveOutfitSrc(buddyId, equippedId) : undefined;
-    const imageSrc =
-        resolveChatfaceSrc(buddyId, equippedId)
-        ?? equippedSrc
-        ?? CHARACTER_CATALOGUE.find((c) => c.id === buddyId)?.baseSrc
-        ?? pippinImg;
 
     return (
         <div className="agent-image__container agent-image__container--large">
-            <img src={imageSrc} alt={buddy.name} />
+            <img src={getActiveBuddyAvatarSrc(studentId)} alt={getActiveBuddy(studentId).name} />
         </div>
     );
 }

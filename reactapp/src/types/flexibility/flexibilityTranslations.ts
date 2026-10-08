@@ -15,6 +15,12 @@ export class FlexibilityTranslations {
     static readonly BUTTON_SUBTRACT: string = "button-subtract";
     static readonly BUTTON_TRY_AGAIN: string = "button-try-again";
 
+    /**
+     * The hint button's label. A bare question mark did not say what the button does; naming the
+     * student's companion does, because the hints are the companion's.
+     */
+    static readonly HINT_BUTTON_ASK: string = "hint-button-ask";
+
     static readonly INTRO_SYSTEM: string = "system-introduction";
 
     static readonly SINGLE_EFFICIENT_INSTR: string = "single-efficient-method-instruction";
