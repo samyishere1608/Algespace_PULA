@@ -422,15 +422,19 @@ export default function StudentDashboard(): ReactElement {
     function noopEquipOutfit(): void { /* the walkthrough changes nothing */ }
 
     /**
-     * Leaves the goal picker for the exercise list.
+     * Sends the student to the exercise list.
      *
-     * The picker's job is finished the moment a goal is saved, and the list is otherwise several
-     * taps away through the navigation. This is the same destination the daily intention sends a
-     * student to when they choose to practise.
+     * The list lives on this dashboard now, so "go and practise" means opening a tab rather than
+     * leaving for another page. TWO controls mean exactly that — the goal card's button and the
+     * daily intention's "jump into exercises" — and routing both through this one function is what
+     * stops them disagreeing about where the exercises are. It used to send them to the standalone
+     * flexibility page, which made the dashboard feel like the entrance to a separate app.
      */
-    function handleGoToExercises(): void {
+    function showExercises(): void {
+        // The picker's job is over the moment its goal is saved, and it is not open at all on the
+        // daily-intention path, where this is simply already false.
         setShowGoals(false);
-        navigate(Paths.FlexibilityPath);
+        setActiveTab("exercises");
     }
 
     /**
@@ -529,7 +533,7 @@ export default function StudentDashboard(): ReactElement {
 
         // Navigate based on choice
         if (choice === "practice") {
-            navigate(Paths.FlexibilityPath);
+            showExercises();
         } else if (choice === "goal") {
             setShowGoals(true);
         } else if (choice === "review") {
@@ -538,7 +542,6 @@ export default function StudentDashboard(): ReactElement {
         }
         // "custom" — AI feedback shows inside modal, then stays on dashboard
     }
-
     function handleSkipIntention(): void {
         if (student) {
             // Persist a "skipped" marker so the popup doesn't re-appear on every reload
@@ -896,7 +899,7 @@ export default function StudentDashboard(): ReactElement {
                                     <button
                                         type={"button"}
                                         className={"goal-card__practise"}
-                                        onClick={handleGoToExercises}
+                                        onClick={showExercises}
                                     >
                                         <FontAwesomeIcon icon={faArrowRight} />
                                         {t("goals-go-to-exercises")}
