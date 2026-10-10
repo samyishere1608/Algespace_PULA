@@ -1,7 +1,7 @@
 import axios from "axios";
 
 /**
- * The student's measured behaviour across the six anchored dimensions.
+ * The student's measured behaviour across the anchored avoidance dimensions.
  *
  * This is the server's own reading of the anchor store — what a student consistently engages with
  * and what they consistently turn down. It is the evidence behind a nudge and, later, behind an

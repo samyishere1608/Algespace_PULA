@@ -75,9 +75,34 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
     const id: number = parseInt(exerciseId);
     const currentExercise: number | undefined = getExerciseNumber(id, location.state?.exercises);
 
-    /** Called by each exercise component when the student finishes. */
-    function buildHandleEnd(navigateTo: string, exerciseTypeName: string): () => void {
+    /**
+     * Where this page sends a student who is finishing, or leaving without finishing.
+     *
+     * A logged-in student is working INSIDE the dashboard. That is where their goals live, where
+     * their stats are, and where the walkthrough now tells them to practise from — the dashboard's
+     * Exercises tab opens these very exercises. Dropping them on the standalone flexibility list
+     * after they finish would put them on a page they never came from, and would make the dashboard
+     * feel like the entrance to a set of separate apps rather than the one system it is.
+     *
+     * The flexibility module is also used ON ITS OWN, by students with no account and therefore no
+     * dashboard to return to. For them nothing changes: they get the list, exactly as before.
+     *
+     * Studies keep the screen they have always had. A study participant must not be handed off to
+     * the dashboard mid-sequence, so `isStudyExample` is checked first and wins.
+     */
+    const leaveTo: string = isStudyExample
+        ? Paths.FlexibilityPath
+        : student ? Paths.StudentDashboardPath : Paths.FlexibilityPath;
+
+    /**
+     * Called by each exercise component when the student finishes.
+     *
+     * `moduleHome` is the flexibility module's own list. It is the destination when there is no
+     * account — see `leaveTo` above for why a logged-in student goes somewhere else.
+     */
+    function buildHandleEnd(moduleHome: string, exerciseTypeName: string): () => void {
         return function () {
+            const navigateTo = student ? Paths.StudentDashboardPath : moduleHome;
             const errors = getExerciseErrorCount();
             const hints = getExerciseHintCount();
             const decisions = getExerciseDecisions();
@@ -147,7 +172,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
 
     return (
         <ErrorBoundary key={location.pathname}
-                       FallbackComponent={() => <ErrorScreen text={ErrorTranslations.ERROR_RETURN} routeToReturn={Paths.FlexibilityPath} />}
+                       FallbackComponent={() => <ErrorScreen text={ErrorTranslations.ERROR_RETURN} routeToReturn={leaveTo} />}
         >
             <div className={"full-page"} style={{ background: "linear-gradient(180deg, var(--blue-background) 0%, #044a6d 100%)", paddingBottom: "1rem" }}>
                 <NavigationBar mainRoute={GeneralTranslations.FLEXIBILITY_TRAINING}
@@ -160,13 +185,12 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                             <ExampleExercise concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId}
                                              flexibilityId={id} navigateBackTo={Paths.FlexibilityStudyExamplesPath} /> :
                             <ExerciseRouter concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId} flexibilityId={id}
-                                      navigateBackTo={Paths.FlexibilityPath} buildHandleEnd={buildHandleEnd} />
-                        }
+                                      navigateBackTo={Paths.FlexibilityPath} buildHandleEnd={buildHandleEnd} />                        }
                     </div>
                 </div>
             </div>
             {!isStudyExample && exitOverlay[0] &&
-                <ExitExerciseOverlay returnToHome={exitOverlay[1]} routeToReturn={Paths.FlexibilityPath} closeOverlay={() => setExitOverlay([false, false])} />}
+                <ExitExerciseOverlay returnToHome={exitOverlay[1]} routeToReturn={leaveTo} closeOverlay={() => setExitOverlay([false, false])} />}
             <AgencyXpToast />
             {celebrationData && (
                 <GoalCelebrationOverlay

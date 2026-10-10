@@ -1,0 +1,325 @@
+/**
+ * The companion speaking, and the surfaces the two personal dialogs share.
+ *
+ * WHY THESE LIVE TOGETHER
+ * The daily intention and the post-exercise reflection are the same conversation — the same
+ * character, in the same voice, asking a student to think about what they are doing. They used to
+ * be built twice, from different pieces, and the difference was visible: one had its portrait in a
+ * header with the question stranded underneath it, the other repeated the portrait at a different
+ * size inside a bubble. A nine-year-old does not read two layouts as "Pippin twice"; they read them
+ * as two different things that happen to both have a picture of an otter on them.
+ *
+ * So the plate, the bubble and the portrait are defined ONCE here, and both dialogs compose them.
+ * Anything added to one is then automatically true of the other.
+ */
+
+/* ─── The shared plate ────────────────────────────────────────────────────────
+   Warmer and rounder than the generic modal, so these read as a conversation panel rather than as a
+   form that appeared. The teal rim is the same one the buddy widget and the hint button wear, which
+   is what ties the three together as one character's presence in the app. */
+.buddy-panel {
+    background: linear-gradient(180deg, #063a54 0%, #012a3b 100%);
+    border: 1px solid rgba(33, 158, 188, 0.38);
+    border-radius: 1.5rem;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ─── The companion, saying something ──────────────────────────────────────── */
+.buddy-says {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    animation: buddy-says-in 0.28s ease-out;
+}
+
+/* The portrait and the bubble are one object. The gap is the tail's width plus a hair, so the
+   bubble visibly grows out of the portrait rather than floating beside it. */
+.buddy-says__portrait {
+    flex-shrink: 0;
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 34%, rgba(142, 202, 230, 0.3), rgba(33, 158, 188, 0.12));
+    border: 2px solid rgba(142, 202, 230, 0.55);
+    box-shadow: 0 0 0 5px rgba(33, 158, 188, 0.14);
+    // A slow breath. It is the cheapest possible signal that this thing is alive and waiting on you,
+    // and it is applied to the portrait ONLY so nothing a student has to click ever moves.
+    animation: buddy-breathe 4.5s ease-in-out infinite;
+
+    img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+}
+
+.buddy-says__emoji {
+    font-size: 2.2rem;
+    line-height: 1;
+}
+
+.buddy-says__bubble {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    padding: 0.85rem 1.1rem 0.95rem;
+    border-radius: 1.15rem;
+    border-bottom-left-radius: 0.35rem;
+    background: rgba(33, 158, 188, 0.13);
+    border: 1px solid rgba(33, 158, 188, 0.3);
+    text-align: left;
+}
+
+/* The tail. A rotated square with only two edges shown, filled with the bubble's own colour, so it
+   reads as one shape rather than as a triangle glued on. */
+.buddy-says__bubble::after {
+    content: "";
+    position: absolute;
+    left: -6px;
+    top: 1.15rem;
+    width: 11px;
+    height: 11px;
+    background: rgba(33, 158, 188, 0.13);
+    border-left: 1px solid rgba(33, 158, 188, 0.3);
+    border-bottom: 1px solid rgba(33, 158, 188, 0.3);
+    transform: rotate(45deg);
+}
+
+/* Who is talking. Without this the bubble is a panel of text beside a picture. */
+.buddy-says__speaker {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    color: #8ecae6;
+    margin-bottom: 0.25rem;
+}
+
+/* The words. This is the largest text in either dialog, deliberately: the question is the point,
+   and it used to be the SMALLEST thing on screen with the process chrome around it louder. */
+.buddy-says__text {
+    font-size: 1.22rem;
+    line-height: 1.45;
+    font-weight: 600;
+    color: #fff;
+
+    p {
+        margin: 0;
+        color: inherit;
+    }
+
+    p + p {
+        margin-top: 0.5rem;
+    }
+}
+
+// A reply is quieter in its TEXT, but not smaller in its face. Shrinking the portrait made two
+// consecutive turns of the same character look like two different speakers at two different sizes,
+// which is the opposite of what this block exists for.
+.buddy-says--reply {
+    .buddy-says__text {
+        font-size: 1.05rem;
+        font-weight: 500;
+        line-height: 1.55;
+    }
+}
+
+@keyframes buddy-says-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes buddy-breathe {
+    0%,
+    100% { transform: scale(1); }
+    50%  { transform: scale(1.035); }
+}
+
+/* The breath is decoration, so it is the first thing to go when a student has asked for less
+   motion. The entrance fade stays — it is what stops the dialog appearing as a jump cut. */
+@media (prefers-reduced-motion: reduce) {
+    .buddy-says__portrait {
+        animation: none;
+    }
+
+    .buddy-says {
+        animation-duration: 0.01ms;
+    }
+}
+
+/* ─── A step rail ────────────────────────────────────────────────────────────
+   Three segments and one caption. It replaced a row of three big labelled dots that sat BETWEEN the
+   companion's face and their question, which broke one sentence into two halves with a progress bar
+   in the middle of it. Progress is chrome; it belongs above or below the conversation, never in it. */
+.buddy-steps {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    // The rail is chrome sitting immediately above the companion's first line. Without its own
+    // space it reads as a third element crammed into the bubble instead of as a label for the
+    // conversation below it.
+    margin-bottom: 1.3rem;
+}
+
+.buddy-steps__bar {
+    display: flex;
+    gap: 0.3rem;
+    flex-shrink: 0;
+}
+
+.buddy-steps__seg {
+    width: 2.6rem;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    transition: background 0.25s ease;
+}
+
+.buddy-steps__seg--done {
+    background: #06d6a0;
+}
+
+.buddy-steps__seg--active {
+    background: linear-gradient(90deg, #219ebc, #8ecae6);
+    box-shadow: 0 0 10px rgba(142, 202, 230, 0.45);
+}
+
+.buddy-steps__caption {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.72);
+    letter-spacing: 0.2px;
+}
+
+.buddy-steps__caption strong {
+    color: #8ecae6;
+}
+
+/* ─── The student's turn ─────────────────────────────────────────────────────
+   Labelled, because the two dialogs both ask the student to produce something and an unlabelled
+   empty box does not say whose turn it is. */
+.buddy-turn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.buddy-turn__label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.62);
+}
+
+.buddy-turn__label::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: #ffd166;
+    box-shadow: 0 0 8px rgba(255, 209, 102, 0.6);
+}
+
+/* ─── The companion's choice cards ───────────────────────────────────────────
+   Used by the daily intention. Big enough to hit with a thumb (the whole card, well past the 44px
+   floor), and with no hover lift: a card that translates can move out from under the pointer and
+   oscillate the hover state. */
+.buddy-choice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 8rem;
+    padding: 1rem 0.7rem 0.85rem;
+    border-radius: 1rem;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 3px solid var(--choice-color, #8ecae6);
+    color: #fff;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+
+    &:hover {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+        border-color: var(--choice-color, #8ecae6);
+        border-top-color: var(--choice-color, #8ecae6);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28), 0 0 14px var(--choice-glow, rgba(142, 202, 230, 0.25));
+    }
+
+    &:focus-visible {
+        outline: 2px solid #8ecae6;
+        outline-offset: 3px;
+    }
+}
+
+.buddy-choice__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.8rem;
+    background: var(--choice-tint, rgba(142, 202, 230, 0.16));
+    border: 1px solid var(--choice-glow, rgba(142, 202, 230, 0.3));
+    font-size: 1.15rem;
+    color: var(--choice-color, #8ecae6);
+}
+
+.buddy-choice__label {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.buddy-choice__hint {
+    font-size: 0.9rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.66);
+}
+
+/* The three destinations, one hue each, keyed off the card's own tone so no colour lives in the
+   component. Two of them used to be near-identical ambers, which made the choice look like two
+   options and a spare. Colour is never the only cue here: every card carries its own mark and its
+   own words. */
+.buddy-choice[data-tone="practice"] {
+    --choice-color: #8ecae6;
+    --choice-tint: rgba(142, 202, 230, 0.16);
+    --choice-glow: rgba(142, 202, 230, 0.32);
+}
+
+.buddy-choice[data-tone="goal"] {
+    --choice-color: #ffd166;
+    --choice-tint: rgba(255, 209, 102, 0.15);
+    --choice-glow: rgba(255, 209, 102, 0.32);
+}
+
+.buddy-choice[data-tone="review"] {
+    --choice-color: #c77dff;
+    --choice-tint: rgba(199, 125, 255, 0.15);
+    --choice-glow: rgba(199, 125, 255, 0.34);
+}
+
+/* Always visible, never hover-only: this app is used on tablets, where nothing that appears on
+   hover will ever appear. Hover and focus just make it brighter. */
+.buddy-choice__go {
+    margin-top: auto;
+    font-size: 0.95rem;
+    color: var(--choice-color, #8ecae6);
+    opacity: 0.55;
+    transition: opacity 0.18s ease;
+}
+
+.buddy-choice:hover .buddy-choice__go,
+.buddy-choice:focus-visible .buddy-choice__go {
+    opacity: 1;
+}

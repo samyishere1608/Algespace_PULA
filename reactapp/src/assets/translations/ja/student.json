@@ -52,9 +52,15 @@
   "dashboard-method-versatility": "解法の多様性",
   "dashboard-performance-history": "パフォーマンス履歴（XP/日）",
   "dashboard-tab-main": "ダッシュボード",
+  "dashboard-tab-exercises": "演習",
   "dashboard-tab-analytics": "分析",
   "dashboard-tab-tree": "成長ツリー",
   "dashboard-tab-leaderboard": "ランキング",
+  "dashboard-exercises-title": "柔軟性の演習",
+  "dashboard-exercises-count": "{{total}}件中{{done}}件完了",
+  "dashboard-exercises-hint": "好きな演習を選んで、自分のペースで進めましょう。終わらせるとここにチェックがつくので、どこまで進んだかがいつでもわかります。",
+  "dashboard-exercises-filter": "種類で演習を絞り込む",
+  "dashboard-exercises-filter-all": "すべて",
   "reflection-title": "{{buddy}}と振り返ろう",
   "reflection-completed-item": "振り返り中：{{label}}",
   "reflection-q1": "どうだったと思う？",
@@ -69,6 +75,7 @@
   "reflection-step-2": "振り返る",
   "reflection-step-3": "次の一歩",
   "reflection-answer-placeholder": "ここに答えを書いてね...",
+  "reflection-your-turn": "きみの番だよ",
   "reflection-buddy-tell-me": "{{buddy}}、教えて",
   "reflection-answer-myself": "自分で答える",
   "reflection-ai-unavailable": "今はAIにつながらなかったけれど、振り返ろうとした姿勢がすばらしい！このまま続けよう。",
@@ -406,8 +413,8 @@
   "tour-stats-title": "学習の状況",
   "tour-stats-body": "終えた課題の数、平均正答率（誤りとヒントの両方が入ります）、それから連続して練習した日数です。",
 
-  "tour-tabs-title": "4つの画面",
-  "tour-tabs-body": "Dashboardはこの概要です。Analyticsでは、使っている解法と取り組んでいる目標カテゴリーを詳しく見られます。Leaderboardはクラスとの比較、成長ツリーはエージェンシーXPとともに育ちます。",
+  "tour-tabs-title": "5つの画面",
+  "tour-tabs-body": "Dashboardはこの概要です。演習では、取り組む柔軟性の演習を選べます。Analyticsでは、使っている解法と取り組んでいる目標カテゴリーを詳しく見られます。Leaderboardはクラスとの比較、成長ツリーはエージェンシーXPとともに育ちます。",
 
   "tour-buddy-corner-title": "ここにバディがいます",
   "tour-buddy-corner-body": "{{name}}は、勉強中いつも画面のすみにいます。バディをタップすると、別のバディを選んだり、服のクローゼットを開いたりできます。",
@@ -446,12 +453,12 @@
   "tour-goal-set-body": "目標がダッシュボードに表示され、進捗バーは0から始まります。残りがどれだけかがわかります。終えるたびに進み、達成するとResolve XPがもらえます。",
 
   "tour-to-training-title": "次は課題です",
-  "tour-to-training-body": "目標はあくまで目印です。実際の取り組みは柔軟性の課題で行います。課題の画面へ移動して、実際の流れを見てみましょう。",
+  "tour-to-training-body": "目標はあくまで目印です。実際の取り組みは柔軟性の課題で行い、その課題はこのダッシュボードの中にあります。どんな課題か見てみましょう。",
 
   "tour-flex-list-title": "課題の一覧",
   "tour-flex-list-body": "取り組める課題が順番に並んでいます。終えたものには印がつき、何度でも繰り返せます。繰り返すことで目標を達成できることも多いです。",
 
-  "tour-flex-info-title": "このモジュールの目的",
+  "tour-flex-info-title": "この一覧の目的",
   "tour-flex-info-body": "解法を使えることは1つの力です。その連立方程式にどの解法が合うかを知っていることは、また別の力です。そして後者は、教科書ではなかなか練習できません。この課題はそのためのものです。",
 
   "tour-flex-types-title": "3種類の課題",

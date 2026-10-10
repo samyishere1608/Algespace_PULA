@@ -1,11 +1,18 @@
 /**
  * The six things a student can set a goal about.
  *
- * These are deliberately the SAME six dimensions the avoidance profile measures. A student who
- * consistently declines to compare methods is told so, and can then set a goal about comparing
- * methods — the gap and the goal name the same behaviour, which is what makes the nudge make sense
- * to them. Adding a seventh category here without adding it to the profile (or vice versa) would
- * break that correspondence, so the two lists should always be changed together.
+ * FIVE of these are the dimensions the avoidance profile measures: method, exercise type, explaining
+ * your reasoning, comparing methods and working it out yourself. A student who consistently declines
+ * to compare methods is told so, and can then set a goal about comparing methods — the gap and the
+ * goal name the same behaviour, which is what makes the nudge make sense to them.
+ *
+ * `hintsAndErrors` is the exception and is NOT an avoidance dimension. It measures accuracy rather
+ * than a decision, so it is absent from `ANCHOR_ELEMENT` below and from the server's
+ * `AnchorElement`. It is still a goal worth setting — the server proposes it from the average hints
+ * and errors — but it has no gap behind it and is never nudged.
+ *
+ * So the two lists to keep in step are the five avoidance dimensions and their five categories, NOT
+ * all six categories.
  */
 export type GoalCategory =
     | "method"
@@ -16,12 +23,15 @@ export type GoalCategory =
     | "hintsAndErrors";
 
 /**
- * The same six dimensions, under the names the server records them by.
+ * The five avoidance dimensions, under the names the server records them by.
  *
  * These strings must match `AnchorElement` in `webapi/Models/Anchors/AvoidanceProfile.cs`. They live
  * here rather than being spelled out at each use site because a typo in a string that is only ever
  * compared against server data fails silently: the lookup returns nothing and the feature simply
  * does not happen, with no error anywhere.
+ *
+ * There is no `HintsAndErrors` here on purpose. It is a goal category, not something the profile
+ * measures, so nothing can ever be recorded against it as an element.
  */
 export const ANCHOR_ELEMENT = {
     Method: "Method",
@@ -29,17 +39,21 @@ export const ANCHOR_ELEMENT = {
     SelfExplanation: "SelfExplanation",
     MethodComparison: "MethodComparison",
     SolveOnOwn: "SolveOnOwn",
-    HintsAndErrors: "HintsAndErrors",
 } as const;
 
-/** The goal category that addresses a given element. */
+/**
+ * The goal category that addresses a given avoidance element.
+ *
+ * Every element has one, and every one of them is an element, so a lookup can never miss. Only three
+ * of the five appear in `DECLINABLE` in `anchorDecisions.ts` — a student cannot decline a method or
+ * an exercise type, they simply pick another — but all five are measured by the profile.
+ */
 export const CATEGORY_FOR_ELEMENT: Record<string, GoalCategory> = {
     [ANCHOR_ELEMENT.Method]: "method",
     [ANCHOR_ELEMENT.ExerciseType]: "exerciseType",
     [ANCHOR_ELEMENT.SelfExplanation]: "selfExplanation",
     [ANCHOR_ELEMENT.MethodComparison]: "methodComparison",
     [ANCHOR_ELEMENT.SolveOnOwn]: "solveOnOwn",
-    [ANCHOR_ELEMENT.HintsAndErrors]: "hintsAndErrors",
 };
 
 /**

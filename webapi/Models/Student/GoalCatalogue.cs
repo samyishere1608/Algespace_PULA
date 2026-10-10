@@ -22,6 +22,14 @@ namespace webapi.Models.Student
         public const string SelfExplanation = "selfExplanation";
         public const string MethodComparison = "methodComparison";
         public const string SolveOnOwn = "solveOnOwn";
+        /// <summary>
+        /// A goal category WITHOUT an avoidance dimension behind it.
+        ///
+        /// Hints and errors measures accuracy rather than a decision, so it is not one of the
+        /// <see cref="AnchorElement"/> values and can never be a gap. It is still a goal a student
+        /// can set, and the fallback plan proposes it from the average hints and errors rather than
+        /// from a gap. See <see cref="CategoryForElement"/>.
+        /// </summary>
         public const string HintsAndErrors = "hintsAndErrors";
 
         public const string ExercisesMetric = "exercises";
@@ -68,7 +76,14 @@ namespace webapi.Models.Student
             return options.OrderBy(option => System.Math.Abs(option - target)).ThenBy(option => option).First();
         }
 
-        /// <summary>The goal category that addresses one of the six tracked dimensions.</summary>
+        /// <summary>
+        /// The goal category that addresses one of the tracked avoidance dimensions.
+        ///
+        /// Five of the six categories appear here. Hints and errors does not, because it is not an
+        /// avoidance dimension — see <see cref="AnchorElement"/>. Both callers already handle a null
+        /// for it: one is guarded by a `is null` check, the other only ever passes an element taken
+        /// from the profile's own gap list.
+        /// </summary>
         public static string? CategoryForElement(string element) => element switch
         {
             AnchorElement.Method => Method,
@@ -76,7 +91,6 @@ namespace webapi.Models.Student
             AnchorElement.SelfExplanation => SelfExplanation,
             AnchorElement.MethodComparison => MethodComparison,
             AnchorElement.SolveOnOwn => SolveOnOwn,
-            AnchorElement.HintsAndErrors => HintsAndErrors,
             _ => null
         };
 

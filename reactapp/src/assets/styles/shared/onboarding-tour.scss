@@ -58,6 +58,17 @@
     }
 }
 
+// A step showing a screenshot of the real screen gets a wider card.
+//
+// At the normal 29rem the picture is 414px wide and a 1900px screenshot scaled to that is a
+// thumbnail: the student can see that Pippin is there and that there are three options, and can
+// read none of it. Widening the card does not make the small print legible either, but it turns the
+// picture back into something you look at rather than something you notice. The narrow breakpoint
+// below still wins on a small window, because there is no width to give.
+.onboarding-tour__card--wide {
+    width: min(48rem, calc(100vw - 1.5rem));
+}
+
 .onboarding-tour__close {
     position: absolute;
     top: 0.85rem;
@@ -107,6 +118,22 @@
     font-size: 1rem;
     line-height: 1.62;
     color: rgba(255, 255, 255, 0.88);
+}
+
+// A screenshot of the real exercise screen, printed under the explanation.
+//
+// The aspect ratio is reserved rather than measured: these are 1.3-1.5 MB PNGs, so without it the
+// card would grow when the picture lands and the callout would jump out from under the student's
+// eyes. All three are within a pixel or two of 7:3, and `cover` absorbs that difference.
+.onboarding-tour__image {
+    display: block;
+    width: 100%;
+    aspect-ratio: 7 / 3;
+    margin-top: 0.9rem;
+    border-radius: 0.6rem;
+    border: 1px solid rgba(33, 158, 188, 0.34);
+    object-fit: cover;
+    background: rgba(2, 24, 38, 0.6);
 }
 
 .onboarding-tour__note {

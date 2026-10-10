@@ -1,8 +1,16 @@
 namespace webapi.Models.Anchors
 {
     /// <summary>
-    /// The six dimensions the adaptive system tracks. These are the same six the goal categories
-    /// are built from, so a student's gap and their goals speak the same language.
+    /// The dimensions the adaptive system tracks as AVOIDANCE: things a student is offered and can
+    /// turn down. Five of them, and the goal categories for those five are built from this same
+    /// list, so a student's gap and their goals speak the same language.
+    ///
+    /// Hints and errors is deliberately NOT here. It is a measurement rather than a choice: nobody
+    /// decides to make mistakes, and a hint is a button the student presses rather than an offer
+    /// they decline, so the opportunity/engagement ratio this list exists to feed does not apply to
+    /// it. It survives as a goal category in its own right and as the profile's `AverageHints` and
+    /// `AverageErrors`, both counts rather than rates. Listing it here would not make it measurable,
+    /// only mislabelled.
     /// </summary>
     public static class AnchorElement
     {
@@ -20,17 +28,10 @@ namespace webapi.Models.Anchors
 
         /// <summary>Whether they work a solution out themselves instead of asking to be shown.</summary>
         public const string SolveOnOwn = "SolveOnOwn";
-
-        /// <summary>
-        /// Hints and errors. Tracked like the others, but it is a MEASUREMENT rather than something
-        /// a student avoids — a student cannot "avoid taking hints" in a way that needs correcting.
-        /// It therefore contributes statistics for goal suggestion and never produces a gap.
-        /// </summary>
-        public const string HintsAndErrors = "HintsAndErrors";
     }
 
     /// <summary>
-    /// How each of the six elements is actually read out of the anchor records.
+    /// How each of the five avoidance dimensions is actually read out of the anchor records.
     ///
     /// This lives in one place on purpose. The avoidance profile asks "how often does this student
     /// engage with X" and a goal asks "how many times has this student done X" — the same question
@@ -157,7 +158,7 @@ namespace webapi.Models.Anchors
     }
 
     /// <summary>
-    /// A student's measured behaviour across the six dimensions.
+    /// A student's measured behaviour across the avoidance dimensions.
     ///
     /// Computed on demand from <see cref="AnchorStoreSettings"/> rather than stored, so a threshold
     /// change is reflected immediately and there is no stale copy to reconcile. Cheap enough to

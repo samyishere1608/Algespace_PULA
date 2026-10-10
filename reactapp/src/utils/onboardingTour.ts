@@ -17,6 +17,13 @@
  */
 
 import { Paths } from "@routes/paths.ts";
+import { TranslationNamespaces } from "@/i18n.ts";
+// The three exercise kinds, as they actually look. Screenshots rather than drawings: the student is
+// being told what they are about to open, and a picture of the real screen is the only version of
+// that which cannot be wrong. Filenames are the three kinds, spelled the same way as the enum.
+import suitabilityImage from "@images/suitability.png";
+import efficiencyImage from "@images/efficiency.png";
+import matchingImage from "@images/matching.png";
 
 /** Where the tour is being run from, so the several entry points can share one component. */
 export const TOUR_STORAGE_PREFIX = "algespace-dashboard-tour";
@@ -28,7 +35,7 @@ export const TOUR_STORAGE_PREFIX = "algespace-dashboard-tour";
  * for everyone without touching the concept-onboarding keys, which track real learning progress and
  * must never be reset for a cosmetic reason.
  */
-export const TOUR_VERSION = 3;
+export const TOUR_VERSION = 4;
 
 export const TOUR_COMPLETED_KEY = (studentId: number | string): string =>
     `${TOUR_STORAGE_PREFIX}-v${TOUR_VERSION}-done-${studentId}`;
@@ -57,7 +64,7 @@ export type TourPlacement = "top" | "bottom" | "left" | "right" | "center";
  * built from the app's own parts (the real `GrowingTree`, the real agency colours and icons), so it
  * cannot drift from what the student later sees on the dashboard.
  */
-export type TourVisual = "buddy" | "methods" | "currency" | "xp" | "tree" | "exercise-types";
+export type TourVisual = "buddy" | "methods" | "currency" | "xp" | "tree";
 
 /**
  * The read-only goal picker screen a step needs on screen behind it.
@@ -109,12 +116,38 @@ export interface TourStep {
     showSampleGoal?: boolean;
     /** A small graphic to draw inside the callout. */
     visual?: TourVisual;
+    /**
+     * A picture printed UNDER the explanation.
+     *
+     * The three exercise-kind steps show a screenshot of that kind of exercise. The overlay cannot
+     * spotlight one — the student has not opened an exercise at this point — so a picture is the
+     * only way to show them what the screen actually looks like.
+     */
+    image?: string;
+    /**
+     * Pull this step's title and/or body from somewhere other than `tour-<id>-title` / `-body`.
+     *
+     * The three exercise-kind steps have to be titled with the exercise module's OWN name for the
+     * kind, and described with the sentence the exercise list already uses for it. Retyping either
+     * into this namespace would leave two strings for one idea and two places to forget when the
+     * German or Japanese wording is revised, so a step points at the original instead.
+     */
+    title?: { key: string; ns?: string };
+    body?: { key: string; ns?: string };
     /** Optional extra line rendered under the body, in the smaller note style. */
     noteKey?: string;
+    /**
+     * One of the dashboard's side tabs that this step needs OPEN behind it.
+     *
+     * The exercise leg of the walkthrough lives on the dashboard now, and the exercise list is behind
+     * the Exercises tab. A spotlight can only find an element that is mounted, so without this the
+     * tour would search for a list that is not rendered, give up after its grace period, and fall
+     * back to a centred card — telling the student about a list they cannot see.
+     */
+    tab?: "exercises";
 }
 
 const DASHBOARD = Paths.StudentDashboardPath;
-const FLEXIBILITY = Paths.FlexibilityPath;
 const PREVIEW = Paths.TourFlexibilityPreviewPath;
 
 /**
@@ -160,10 +193,48 @@ export const TOUR_STEPS: TourStep[] = [
     { id: "goal-set", route: DASHBOARD, anchor: '[data-tour="goals-panel"]', placement: "bottom", showSampleGoal: true },
 
     // ── Where a goal actually gets earned ────────────────────────────────────
+    // All of this happens on the DASHBOARD, on its Exercises tab. The walkthrough used to walk the
+    // student out to the standalone flexibility page and back, which taught them that the exercises
+    // are a separate place. They are not: the dashboard is where a goal is set and where the
+    // practising happens, and the two are one screen apart on purpose.
     { id: "to-training", route: DASHBOARD, placement: "center" },
-    { id: "flex-list", route: FLEXIBILITY, anchor: '[data-tour="flex-list"]', placement: "right" },
-    { id: "flex-info", route: FLEXIBILITY, anchor: '[data-tour="flex-info"]', placement: "bottom" },
-    { id: "flex-types", route: FLEXIBILITY, placement: "center", visual: "exercise-types" },
+    { id: "flex-info", route: DASHBOARD, tab: "exercises", anchor: '[data-tour="flex-info"]', placement: "bottom" },
+    { id: "flex-list", route: DASHBOARD, tab: "exercises", anchor: '[data-tour="flex-list"]', placement: "right" },
+    { id: "flex-types", route: DASHBOARD, tab: "exercises", placement: "center" },
+
+    // ── The three kinds, one step each, each with a real screenshot ──────────
+    // These were a single card listing all three. Three sentences side by side is a legend: it is
+    // read once and remembered as "there are three of something". One card per kind, with the
+    // actual screen printed underneath, gives each one somewhere to land before the next arrives.
+    // The sentence about each kind is the exercise list's own, so a student who later reads the
+    // filter chips on the dashboard meets exactly the words they were taught here.
+    {
+        id: "flex-type-suitability",
+        route: DASHBOARD,
+        tab: "exercises",
+        placement: "center",
+        title: { key: "Suitability", ns: TranslationNamespaces.Flexibility },
+        body: { key: "tour-visual-suitability-what" },
+        image: suitabilityImage,
+    },
+    {
+        id: "flex-type-efficiency",
+        route: DASHBOARD,
+        tab: "exercises",
+        placement: "center",
+        title: { key: "Efficiency", ns: TranslationNamespaces.Flexibility },
+        body: { key: "tour-visual-efficiency-what" },
+        image: efficiencyImage,
+    },
+    {
+        id: "flex-type-matching",
+        route: DASHBOARD,
+        tab: "exercises",
+        placement: "center",
+        title: { key: "Matching", ns: TranslationNamespaces.Flexibility },
+        body: { key: "tour-visual-matching-what" },
+        image: matchingImage,
+    },
 
     // ── Inside an exercise (the REAL one, read-only — see FlexibilityPreview.tsx) ─
     { id: "ex-task", route: PREVIEW, anchor: '[data-tour="ex-task"]', placement: "bottom" },

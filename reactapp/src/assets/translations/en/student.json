@@ -52,9 +52,15 @@
   "dashboard-reflect-placeholder": "I think my strongest area is...",
   "dashboard-performance-history": "Performance History (XP / day)",
   "dashboard-tab-main": "Dashboard",
+  "dashboard-tab-exercises": "Exercises",
   "dashboard-tab-analytics": "Analytics",
   "dashboard-tab-tree": "Growth Tree",
   "dashboard-tab-leaderboard": "Leaderboard",
+  "dashboard-exercises-title": "Flexibility exercises",
+  "dashboard-exercises-count": "{{done}} of {{total}} done",
+  "dashboard-exercises-hint": "Pick any exercise and work at your own pace. Finishing one ticks it off here, so you can always see how far you have come.",
+  "dashboard-exercises-filter": "Filter exercises by type",
+  "dashboard-exercises-filter-all": "All",
   "reflection-title": "Reflecting with {{buddy}}",
   "reflection-completed-item": "Reflecting on: {{label}}",
   "reflection-q1": "So, how do you think that went?",
@@ -69,6 +75,7 @@
   "reflection-step-2": "Reflect",
   "reflection-step-3": "Next step",
   "reflection-answer-placeholder": "Write your answer here...",
+  "reflection-your-turn": "Your turn",
   "reflection-buddy-tell-me": "{{buddy}}, tell me",
   "reflection-answer-myself": "I'll answer myself",
   "reflection-ai-unavailable": "I couldn't reach my thinking partner just now, but great effort reflecting. Let's keep going!",
@@ -405,8 +412,8 @@
   "tour-stats-title": "How you are doing",
   "tour-stats-body": "Exercises you have finished, your average accuracy, which counts both mistakes and hints, and how many days in a row you have practised.",
 
-  "tour-tabs-title": "Four views",
-  "tour-tabs-body": "Dashboard is this overview. Analytics breaks down which methods you use and which goal categories you work on. Leaderboard compares you with your class. The Growth Tree grows as you earn agency XP.",
+  "tour-tabs-title": "Five views",
+  "tour-tabs-body": "Dashboard is this overview. Exercises is where you pick a flexibility exercise to work on. Analytics breaks down which methods you use and which goal categories you work on. Leaderboard compares you with your class. The Growth Tree grows as you earn agency XP.",
 
   "tour-buddy-corner-title": "Your companion lives here",
   "tour-buddy-corner-body": "{{name}} sits in the corner of every screen while you work. Tap your companion to choose a different one, or to open the wardrobe.",
@@ -445,12 +452,12 @@
   "tour-goal-set-body": "Your goal now sits on the dashboard with a progress bar, starting at zero. It shows you what is left, and every exercise you finish moves it along. When you complete it you earn Resolve XP.",
 
   "tour-to-training-title": "Now for the exercises",
-  "tour-to-training-body": "A goal is only a target. The real work happens in the flexibility exercises. Let me take you there and show you what one looks like.",
+  "tour-to-training-body": "A goal is only a target. The real work happens in the flexibility exercises, and they are right here on your dashboard. Let me show you what they look like.",
 
   "tour-flex-list-title": "The exercise list",
   "tour-flex-list-body": "Every exercise you can do, in order. The ones you have finished are marked, and you can repeat any of them. Repeating is often how a goal gets met.",
 
-  "tour-flex-info-title": "Why this module exists",
+  "tour-flex-info-title": "What this list is for",
   "tour-flex-info-body": "Knowing how to use a method is one skill. Knowing which method suits a particular system is a different one, and it is the hard one to practise from a textbook. That second skill is what these exercises are for.",
 
   "tour-flex-types-title": "Three kinds of exercise",

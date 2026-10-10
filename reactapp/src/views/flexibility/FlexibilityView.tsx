@@ -2,7 +2,6 @@ import { TranslationNamespaces } from "@/i18n.ts";
 import React, { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { GeneralTranslations } from "@/types/shared/generalTranslations.ts";
-import { Paths } from "@routes/paths.ts";
 import { getCompletedPKExercises, setCollapsibleState } from "@utils/storageUtils.ts";
 import ViewLayout from "@components/views/ViewLayout.tsx";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +15,7 @@ import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { Collapsible } from "@components/views/CollapsibleExerciseList.tsx";
 import { FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
 import { TourHost } from "@components/shared/TourHost.tsx";
+import { exerciseNavTarget } from "@utils/flexibilityExercises.ts";
 
 export default function FlexibilityView(): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.General);
@@ -67,11 +67,12 @@ function ExerciseList({ completedExercises }: { completedExercises?: (number | s
                     <div
                         key={index}
                         className={"exercise-list__item" + (isCompleted ? "--completed" : "--todo")}
-                        onClick={() =>
-                            navigate(Paths.FlexibilityPath + Paths.ExercisesSubPath + entry.id, {
-                                state: { exerciseType: entry.exerciseType, exerciseId: entry.exerciseId, exercises: exerciseIds }
-                            })
-                        }
+                        onClick={() => {
+                            // The destination and its router state come from the shared helper, so this
+                            // list and the dashboard's Exercises tab cannot drift apart.
+                            const { path, state } = exerciseNavTarget(entry, exerciseIds);
+                            navigate(path, { state });
+                        }}
                     >
                         <p className={"exercise-font"}>
                             {t(GeneralTranslations.NAV_EXERCISE)} {index + 1}

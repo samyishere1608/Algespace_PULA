@@ -2,7 +2,7 @@ import { FlexibilityExerciseChoicePhase } from "@/types/studies/enums.ts";
 import { ANCHOR_ELEMENT, CATEGORY_FOR_ELEMENT, type GoalCategory } from "@/types/student/goal.ts";
 
 /**
- * What a student's answer at a decision point says about the six tracked dimensions.
+ * What a student's answer at a decision point says about the dimensions the profile tracks.
  *
  * This is the single translation layer between "what the student just clicked" and "which dimension
  * that speaks to". Two features read it and they must never disagree:
@@ -48,10 +48,13 @@ const SOLVE_ON_OWN: ElementRef = {
 /**
  * The decisions that can be DECLINED.
  *
- * Only three of the six dimensions appear, and that is not an oversight. A student cannot "decline"
- * a solving method or an exercise type — they simply pick a different one — and hints and errors is
- * a measurement rather than a behaviour, so there is nothing to decline there either. The other
- * three dimensions are reached through the goal picker and the AI suggestion instead.
+ * Only three of the five avoidance dimensions appear, and that is not an oversight. A student cannot
+ * "decline" a solving method or an exercise type — they simply pick a different one — so there is
+ * nothing there to accept or turn down, and those two are reached through the goal picker and the AI
+ * suggestion instead.
+ *
+ * Hints and errors is absent for a different reason: it is not an avoidance dimension at all, since
+ * it measures accuracy rather than a decision and a hint is a button rather than an offer to decline.
  *
  * POLARITY, verified against the question text the student is actually shown: at each of these
  * points "Yes" means they took the offer up ("Would you like to try to find the solution on your

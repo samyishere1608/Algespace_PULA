@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import i18n from "@/i18n.ts";
 import { requestReflection } from "@utils/progressUtils.ts";
+import { BuddySays } from "@components/shared/BuddySays.tsx";
 
 interface Props {
     studentId: number | string;
@@ -20,7 +21,6 @@ export function DailyIntentionModal({ studentId, studentName, buddyName, buddyEm
     const { t } = useTranslation(TranslationNamespaces.Student);
     const [showCustomInput, setShowCustomInput] = useState(false);
     const [customText, setCustomText] = useState("");
-    const [hoveredOption, setHoveredOption] = useState<string | null>(null);
     const [submitted, setSubmitted] = useState(false);  // locks modal after any choice
 
     // ── AI Reflection state ────────────────────────────────────────────────
@@ -80,74 +80,63 @@ export function DailyIntentionModal({ studentId, studentName, buddyName, buddyEm
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content daily-intention-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content daily-intention-modal buddy-panel" onClick={(e) => e.stopPropagation()}>
                 <button className="modal-close" onClick={onSkip} title={t("dashboard-modal-close")}>
                     <FontAwesomeIcon icon={faTimes} />
                 </button>
 
-                {/* ── Buddy header with speech bubble ─────────────────── */}
-                <div className="daily-intention-modal__buddy">
-                    <div className="daily-intention-modal__buddy-avatar">
-                        {buddyImgSrc ? (
-                            <img src={buddyImgSrc} alt={buddyName} />
-                        ) : (
-                            <span className="daily-intention-modal__buddy-emoji">{buddyEmoji}</span>
-                        )}
-                    </div>
-                    <div className="daily-intention-modal__speech">
-                        <div className="daily-intention-modal__speech-bubble">
-                            <FontAwesomeIcon icon={faLightbulb} className="daily-intention-modal__sparkle" />
-                            <h2>{t("daily-intention-greeting", { name: studentName, buddy: buddyName })}</h2>
-                        </div>
-                        <p className="daily-intention-modal__question">{t("daily-intention-question")}</p>
-                    </div>
-                </div>
+                {/* One portrait, joined to one bubble, carrying BOTH sentences. It used to be an
+                    avatar in a header box with the question stranded underneath it in the smallest
+                    type on screen — the same words, said by nobody in particular. */}
+                <BuddySays buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImage={buddyImgSrc}>
+                    <p>{t("daily-intention-greeting", { name: studentName, buddy: buddyName })}</p>
+                    <p className="daily-intention-modal__ask">{t("daily-intention-question")}</p>
+                </BuddySays>
 
                 {/* ── Options grid ────────────────────────────────────── */}
                 <div className="daily-intention-modal__options">
                     {!showCustomInput ? (
                         <>
                             <div className="daily-intention-modal__grid">
+                                {/* No hover state in JS: the card's own `:hover` and `:focus-visible`
+                                    carry it, and a re-render per pointer move bought nothing. */}
                                 <button
-                                    className={`daily-intention-modal__card daily-intention-modal__card--gold${hoveredOption === "practice" ? " daily-intention-modal__card--hover" : ""}`}
+                                    className="buddy-choice"
+                                    data-tone="practice"
                                     onClick={() => handlePresetChoice("practice")}
-                                    onMouseEnter={() => setHoveredOption("practice")}
-                                    onMouseLeave={() => setHoveredOption(null)}
                                 >
-                                    <span className="daily-intention-modal__card-icon daily-intention-modal__card-icon--gold">
+                                    <span className="buddy-choice__icon">
                                         <FontAwesomeIcon icon={faBullseye} />
                                     </span>
-                                    <span className="daily-intention-modal__card-label">{t("daily-intention-practice")}</span>
-                                    <span className="daily-intention-modal__card-hint">{t("daily-intention-practice-hint")}</span>
-                                    <FontAwesomeIcon icon={faArrowRight} className="daily-intention-modal__card-arrow" />
+                                    <span className="buddy-choice__label">{t("daily-intention-practice")}</span>
+                                    <span className="buddy-choice__hint">{t("daily-intention-practice-hint")}</span>
+                                    <FontAwesomeIcon icon={faArrowRight} className="buddy-choice__go" />
                                 </button>
 
                                 <button
-                                    className={`daily-intention-modal__card daily-intention-modal__card--amber${hoveredOption === "goal" ? " daily-intention-modal__card--hover" : ""}`}
+                                    className="buddy-choice"
+                                    data-tone="goal"
                                     onClick={() => handlePresetChoice("goal")}
-                                    onMouseEnter={() => setHoveredOption("goal")}
-                                    onMouseLeave={() => setHoveredOption(null)}
                                 >
-                                    <span className="daily-intention-modal__card-icon daily-intention-modal__card-icon--amber">
+                                    <span className="buddy-choice__icon">
                                         <FontAwesomeIcon icon={faTrophy} />
                                     </span>
-                                    <span className="daily-intention-modal__card-label">{t("daily-intention-goal")}</span>
-                                    <span className="daily-intention-modal__card-hint">{t("daily-intention-goal-hint")}</span>
-                                    <FontAwesomeIcon icon={faArrowRight} className="daily-intention-modal__card-arrow" />
+                                    <span className="buddy-choice__label">{t("daily-intention-goal")}</span>
+                                    <span className="buddy-choice__hint">{t("daily-intention-goal-hint")}</span>
+                                    <FontAwesomeIcon icon={faArrowRight} className="buddy-choice__go" />
                                 </button>
 
                                 <button
-                                    className={`daily-intention-modal__card daily-intention-modal__card--blue${hoveredOption === "review" ? " daily-intention-modal__card--hover" : ""}`}
+                                    className="buddy-choice"
+                                    data-tone="review"
                                     onClick={() => handlePresetChoice("review")}
-                                    onMouseEnter={() => setHoveredOption("review")}
-                                    onMouseLeave={() => setHoveredOption(null)}
                                 >
-                                    <span className="daily-intention-modal__card-icon daily-intention-modal__card-icon--blue">
+                                    <span className="buddy-choice__icon">
                                         <FontAwesomeIcon icon={faChartBar} />
                                     </span>
-                                    <span className="daily-intention-modal__card-label">{t("daily-intention-review")}</span>
-                                    <span className="daily-intention-modal__card-hint">{t("daily-intention-review-hint")}</span>
-                                    <FontAwesomeIcon icon={faArrowRight} className="daily-intention-modal__card-arrow" />
+                                    <span className="buddy-choice__label">{t("daily-intention-review")}</span>
+                                    <span className="buddy-choice__hint">{t("daily-intention-review-hint")}</span>
+                                    <FontAwesomeIcon icon={faArrowRight} className="buddy-choice__go" />
                                 </button>
                             </div>
 

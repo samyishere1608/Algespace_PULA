@@ -4,6 +4,7 @@ import { ReactElement, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import i18n from "@/i18n.ts";
+import { BuddySays } from "@components/shared/BuddySays.tsx";
 import {
     completeReflection,
     evaluateReflection,
@@ -45,23 +46,21 @@ const DECISION_EXERCISE_TYPES = ["Suitability", "Efficiency", "Matching"];
  * text that happens to sit beside a small picture, and the student has to infer who is talking —
  * which is what made the dialog read as a generic popup rather than as their companion checking in
  * with them. Used for both turns, question and reply, because both are the companion talking.
+ *
+ * The drawing itself is `BuddySays`, shared with the daily intention, so the two dialogs cannot
+ * drift into looking like two different characters.
  */
-function BuddyBubble({ text, buddyName, buddyEmoji, buddyImgSrc }: {
+function BuddyBubble({ text, buddyName, buddyEmoji, buddyImgSrc, variant = "ask" }: {
     text: string;
     buddyName: string;
     buddyEmoji: string;
     buddyImgSrc?: string;
+    variant?: "ask" | "reply";
 }): ReactElement {
     return (
-        <div className="reflection-modal__bubble reflection-modal__bubble--pippin">
-            <span className="reflection-modal__bubble-avatar">
-                {buddyImgSrc ? <img src={buddyImgSrc} alt={buddyName} /> : <span>{buddyEmoji}</span>}
-            </span>
-            <div className="reflection-modal__bubble-body">
-                <span className="reflection-modal__speaker">{buddyName}</span>
-                <p>{text}</p>
-            </div>
-        </div>
+        <BuddySays buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImage={buddyImgSrc} variant={variant}>
+            <p>{text}</p>
+        </BuddySays>
     );
 }
 
@@ -219,41 +218,39 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content reflection-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content reflection-modal buddy-panel" onClick={(e) => e.stopPropagation()}>
                 <button className="modal-close" onClick={onClose} title={t("dashboard-modal-close")}>
                     <FontAwesomeIcon icon={faTimes} />
                 </button>
 
-                {/* Buddy header */}
-                <div className="reflection-modal__header">
-                    <div className="reflection-modal__avatar">
-                        {buddyImgSrc ? (
-                            <img src={buddyImgSrc} alt={buddyName} />
-                        ) : (
-                            <span className="reflection-modal__emoji">{buddyEmoji}</span>
-                        )}
-                    </div>
-                    <div>
-                        <h2 className="reflection-modal__title">{t("reflection-title", { buddy: buddyName })}</h2>
-                        <p className="reflection-modal__item">{t("reflection-completed-item", { label: item.itemLabel })}</p>
-                    </div>
+                {/* The title and the step rail are chrome. Both sit ABOVE the conversation so the
+                    companion's face and their question are never separated by a progress widget —
+                    which is what the old row of three big labelled dots did, splitting one sentence
+                    into two halves with a stepper in the middle of it. */}
+                <div className="reflection-modal__heading">
+                    <h2 className="reflection-modal__title">{t("reflection-title", { buddy: buddyName })}</h2>
+                    <p className="reflection-modal__item">{t("reflection-completed-item", { label: item.itemLabel })}</p>
                 </div>
 
-                {/* Progress steps */}
-                <div className="reflection-modal__progress">
-                    <div className="reflection-modal__steps">
+                <div
+                    className="buddy-steps"
+                    role="progressbar"
+                    aria-valuemin={1}
+                    aria-valuemax={3}
+                    aria-valuenow={question}
+                    aria-label={t(`reflection-step-${question}`)}
+                >
+                    <span className="buddy-steps__bar">
                         {[1, 2, 3].map((n) => (
-                            <div
+                            <span
                                 key={n}
-                                className={`reflection-modal__step${n === question ? " reflection-modal__step--active" : ""}${n < question ? " reflection-modal__step--done" : ""}`}
-                            >
-                                <span className="reflection-modal__step-dot">
-                                    {n < question ? <FontAwesomeIcon icon={faCheck} /> : n}
-                                </span>
-                                <span className="reflection-modal__step-label">{t(`reflection-step-${n}`)}</span>
-                            </div>
+                                className={`buddy-steps__seg${n < question ? " buddy-steps__seg--done" : n === question ? " buddy-steps__seg--active" : ""}`}
+                            />
                         ))}
-                    </div>
+                    </span>
+                    <span className="buddy-steps__caption">
+                        <strong>{t(`reflection-step-${question}`)}</strong> · {question}/3
+                    </span>
                 </div>
 
                 {/* The question, in the companion's own voice. */}
@@ -262,6 +259,8 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 {/* Answering phase */}
                 {phase === "answering" && (
                     <div className="reflection-modal__answer">
+                        {/* Whose turn it is. An empty box under a question does not say that. */}
+                        <span className="buddy-turn__label">{t("reflection-your-turn")}</span>
                         <textarea
                             className="reflection-modal__input"
                             value={answer}
@@ -301,7 +300,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 {/* Feedback phase */}
                 {phase === "feedback" && (
                     <div className="reflection-modal__feedback">
-                        <BuddyBubble text={feedback} buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImgSrc={buddyImgSrc} />
+                        <BuddyBubble text={feedback} buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImgSrc={buddyImgSrc} variant="reply" />
                         {earnedInsight > 0 && (
                             <div className="reflection-modal__insight-chip">
                                 <FontAwesomeIcon icon={faLightbulb} />

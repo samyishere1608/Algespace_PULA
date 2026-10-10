@@ -52,9 +52,15 @@
   "dashboard-method-versatility": "Methodenvielfalt",
   "dashboard-performance-history": "Leistungsverlauf (XP / Tag)",
   "dashboard-tab-main": "Dashboard",
+  "dashboard-tab-exercises": "Übungen",
   "dashboard-tab-analytics": "Analysen",
   "dashboard-tab-tree": "Wachstumsbaum",
   "dashboard-tab-leaderboard": "Rangliste",
+  "dashboard-exercises-title": "Flexibilitätsübungen",
+  "dashboard-exercises-count": "{{done}} von {{total}} geschafft",
+  "dashboard-exercises-hint": "Wähle eine Übung und arbeite in deinem eigenen Tempo. Wenn du eine abschließt, wird sie hier abgehakt, damit du immer siehst, wie weit du gekommen bist.",
+  "dashboard-exercises-filter": "Übungen nach Art filtern",
+  "dashboard-exercises-filter-all": "Alle",
   "reflection-title": "Reflektieren mit {{buddy}}",
   "reflection-completed-item": "Reflexion über: {{label}}",
   "reflection-q1": "Sag mal, wie lief es für dich?",
@@ -69,6 +75,7 @@
   "reflection-step-2": "Reflektieren",
   "reflection-step-3": "Nächster Schritt",
   "reflection-answer-placeholder": "Schreib deine Antwort hier hin...",
+  "reflection-your-turn": "Du bist dran",
   "reflection-buddy-tell-me": "{{buddy}}, sag es mir",
   "reflection-answer-myself": "Ich antworte selbst",
   "reflection-ai-unavailable": "Ich konnte meinen Denkpartner gerade nicht erreichen, aber stark, dass du reflektierst. Machen wir weiter!",
@@ -405,8 +412,8 @@
   "tour-stats-title": "Wie du stehst",
   "tour-stats-body": "Aufgaben, die du abgeschlossen hast, deine durchschnittliche Trefferquote, in die sowohl Fehler als auch Hinweise eingehen, und wie viele Tage in Folge du geübt hast.",
 
-  "tour-tabs-title": "Vier Ansichten",
-  "tour-tabs-body": "Dashboard ist dieser Überblick. Analytics schlüsselt auf, welche Verfahren du nutzt und an welchen Zielkategorien du arbeitest. Leaderboard vergleicht dich mit deiner Klasse. Der Wachstumsbaum wächst mit deinen Agency-XP.",
+  "tour-tabs-title": "Fünf Ansichten",
+  "tour-tabs-body": "Dashboard ist dieser Überblick. In Übungen wählst du eine Flexibilitätsübung zum Arbeiten. Analytics schlüsselt auf, welche Verfahren du nutzt und an welchen Zielkategorien du arbeitest. Leaderboard vergleicht dich mit deiner Klasse. Der Wachstumsbaum wächst mit deinen Agency-XP.",
 
   "tour-buddy-corner-title": "Hier wohnt dein Begleiter",
   "tour-buddy-corner-body": "{{name}} sitzt beim Arbeiten in der Ecke des Bildschirms. Tippe auf deinen Begleiter, um einen anderen zu wählen oder die Garderobe zu öffnen.",
@@ -445,12 +452,12 @@
   "tour-goal-set-body": "Dein Ziel steht jetzt im Dashboard, mit einem Fortschrittsbalken bei null. Er zeigt dir, was noch fehlt, und jede Aufgabe bringt ihn weiter. Wenn du es schaffst, gibt es Resolve-XP.",
 
   "tour-to-training-title": "Jetzt zu den Aufgaben",
-  "tour-to-training-body": "Ein Ziel ist nur ein Vorhaben. Die eigentliche Arbeit passiert in den Flexibilitätsaufgaben. Ich bringe dich hin und zeige dir, wie eine aussieht.",
+  "tour-to-training-body": "Ein Ziel ist nur ein Vorhaben. Die eigentliche Arbeit passiert in den Flexibilitätsaufgaben, und die sind direkt hier auf deinem Dashboard. Ich zeige dir, wie sie aussehen.",
 
   "tour-flex-list-title": "Die Aufgabenliste",
   "tour-flex-list-body": "Alle Aufgaben, die du machen kannst, der Reihe nach. Erledigte sind markiert, und du kannst jede wiederholen. Oft erreicht man ein Ziel genau dadurch.",
 
-  "tour-flex-info-title": "Warum es dieses Modul gibt",
+  "tour-flex-info-title": "Wofür diese Liste da ist",
   "tour-flex-info-body": "Ein Verfahren anwenden zu können ist das eine. Zu wissen, welches Verfahren zu einem bestimmten System passt, ist etwas anderes, und genau das lässt sich mit einem Schulbuch kaum üben. Dafür sind diese Aufgaben da.",
 
   "tour-flex-types-title": "Drei Arten von Aufgaben",

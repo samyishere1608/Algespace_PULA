@@ -363,7 +363,7 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
 
             <div
                 ref={cardRef}
-                className={"onboarding-tour__card"}
+                className={`onboarding-tour__card${step.image === undefined ? "" : " onboarding-tour__card--wide"}`}
                 style={{ top: position?.top ?? 0, left: position?.left ?? 0, opacity: position === null ? 0 : 1 }}
                 role="dialog"
                 aria-modal="true"
@@ -380,8 +380,11 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
 
                 <h2 id={`tour-title-${step.id}`} className={"onboarding-tour__title"}>
                     {/* `name` is the student's own character. The buddy steps name them, and passing
-                        it everywhere costs nothing and avoids a step that renders a raw {{name}}. */}
-                    {t(`tour-${step.id}-title`, { name: buddyName })}
+                        it everywhere costs nothing and avoids a step that renders a raw {{name}}.
+                        A step may point the lookup at another namespace instead, which is how the
+                        exercise-kind steps get titled with the exercise module's own name for the
+                        kind rather than a second copy of it. */}
+                    {t(step.title?.key ?? `tour-${step.id}-title`, { name: buddyName, ns: step.title?.ns })}
                 </h2>
 
                 {step.visual !== undefined && (
@@ -396,7 +399,16 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
                 {/* The same substitution as the title. The buddy steps introduce the student's own
                     character in the body as well, and without this the sentence opened on an empty
                     gap where the name should be, because a missing value interpolates to "". */}
-                <p className={"onboarding-tour__body"}>{t(`tour-${step.id}-body`, { name: buddyName })}</p>
+                <p className={"onboarding-tour__body"}>
+                    {t(step.body?.key ?? `tour-${step.id}-body`, { name: buddyName, ns: step.body?.ns })}
+                </p>
+
+                {/* Under the explanation on purpose. A picture above the words is a thing to look at;
+                    the same picture under them is the answer to what was just read. */}
+                {step.image !== undefined && (
+                    <img className={"onboarding-tour__image"} src={step.image} alt={""} decoding={"async"} />
+                )}
+
                 {step.noteKey !== undefined && <p className={"onboarding-tour__note"}>{t(step.noteKey)}</p>}
 
                 <div className={"onboarding-tour__track"} aria-hidden>

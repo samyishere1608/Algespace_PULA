@@ -6,6 +6,7 @@ import {
     faCheck,
     faCircleInfo,
     faCircleQuestion,
+    faClipboardList,
     faFire,
     faGaugeHigh,
     faHome,
@@ -44,6 +45,7 @@ import dashboardBackground from "@images/Dashboardbackground.png";
 import dashboardVideo from "@images/Dashboardimage.mp4";
 import "@styles/views/dashboard.scss";
 import ChooseBuddyModal, { BUDDIES } from "./dashboard/ChooseBuddyModal.tsx";
+import DashboardExercises from "./dashboard/DashboardExercises.tsx";
 import SetGoalsModal from "./dashboard/SetGoalsModal.tsx";
 import type { GoalOrigin } from "./dashboard/SetGoalsModal.tsx";
 import CharacterShopModal, { CHARACTER_CATALOGUE, resolveOutfitSrc, type CharacterDef } from "./dashboard/CharacterShopModal.tsx";
@@ -142,7 +144,7 @@ export default function StudentDashboard(): ReactElement {
     const [goalProgressMap, setGoalProgressMap] = useState<Record<string, GoalProgress>>({});
 
     // ── Dashboard tabs (side navigation) ─────────────────────────────────────
-    const [activeTab, setActiveTab] = useState<"main" | "analytics" | "leaderboard" | "tree">("main");
+    const [activeTab, setActiveTab] = useState<"main" | "exercises" | "analytics" | "leaderboard" | "tree">("main");
 
     // ── Daily Intention Check-In ──────────────────────────────────────────────
     const [showDailyIntention, setShowDailyIntention] = useState(false);
@@ -219,10 +221,21 @@ export default function StudentDashboard(): ReactElement {
                 }
             }).catch(() => { /* no reflection prompt */ });
 
-            // The dashboard tour runs once, the first time a student reaches the dashboard after the
-            // concept onboarding is finished. It takes priority over the daily intention: both want
-            // this same moment, and the tour is the one that only ever happens once — the intention
-            // is re-checked when the tour closes, below.
+            // ── The tour and the daily intention both want this exact moment ──────────────
+            // They are two full-screen dialogs, so at most one of them may open here. The tour wins:
+            // it happens once, and the intention is asked again the moment the tour closes.
+            //
+            // A tour that is ALREADY RUNNING comes first, and that ordering is load bearing. The
+            // walkthrough navigates to the flexibility list and back, which unmounts and re-mounts
+            // this page; on the way back `showTour` seeds itself from this same flag, so the overlay
+            // is on screen right now — while `shouldAutoStartTour` reports false, deliberately, so
+            // the walkthrough does not restart itself. Testing only that function therefore let this
+            // page open the intention ON TOP of the running tour.
+            //
+            // `startTour` is deliberately NOT called on this branch: it resets the step to one, which
+            // would throw away the student's progress through the walkthrough.
+            if (isTourActive()) return;
+
             if (shouldAutoStartTour(student.id, getOnboardingStep(student.id))) {
                 // `startTour` records that a tour is running, so the pages the walkthrough navigates to
                 // know to resume it. The state here only decides whether THIS page mounts the overlay.
@@ -366,6 +379,12 @@ export default function StudentDashboard(): ReactElement {
     // handed no-op handlers, so a demonstration cannot save a goal or award any XP.
     const handleTourStep = useCallback((step: TourStep | null): void => {
         setTourStep(step);
+
+        // A step can need one of the dashboard's tabs open behind it — the exercise leg of the
+        // walkthrough lives on the Exercises tab now, and a spotlight cannot find an element that
+        // was never mounted. Without this the tour would look for the exercise list, find nothing,
+        // and spend its grace period doing so before falling back to a centred card.
+        if (step?.tab !== undefined) setActiveTab(step.tab);
     }, []);
 
     const tourPickerStep = tourStep?.picker ?? null;
@@ -713,6 +732,18 @@ export default function StudentDashboard(): ReactElement {
                     >
                         <FontAwesomeIcon icon={faGaugeHigh} />
                         <span>{t("dashboard-tab-main")}</span>
+                    </button>
+                    {/* Second, right after the overview. The exercises are what the dashboard is for,
+                        and the goals above it are what send you there — so the way to practise
+                        should not be the fifth thing in the list. */}
+                    <button
+                        role="tab"
+                        aria-selected={activeTab === "exercises"}
+                        className={`dashboard__tab${activeTab === "exercises" ? " dashboard__tab--active" : ""}`}
+                        onClick={() => setActiveTab("exercises")}
+                    >
+                        <FontAwesomeIcon icon={faClipboardList} />
+                        <span>{t("dashboard-tab-exercises")}</span>
                     </button>
                     <button
                         role="tab"
@@ -1087,6 +1118,8 @@ export default function StudentDashboard(): ReactElement {
                         <GrowingTree choiceXP={agency.choiceXP} insightXP={agency.insightXP} resolveXP={agency.resolveXP} />
                     </div>
                     )}
+
+                    {activeTab === "exercises" && <DashboardExercises />}
                 </div>
             </div>
 
@@ -1222,7 +1255,11 @@ export default function StudentDashboard(): ReactElement {
                     }}
                 />
             )}
-            {showDailyIntention && (
+            {/* The `!showTour` is not redundant: it makes "never two dialogs at once" a property of
+                the RENDER rather than of one effect happening to read a storage flag at the right
+                moment. The tour finishing also asks for the intention, and on that path the flag has
+                already been cleared while this state update is still in flight. */}
+            {showDailyIntention && !showTour && (
                 <DailyIntentionModal
                     studentId={student?.id ?? "guest"}
                     studentName={student?.username ?? "Student"}

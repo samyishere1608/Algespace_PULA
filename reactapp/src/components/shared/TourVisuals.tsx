@@ -1,6 +1,6 @@
 import { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { faBullseye, faGaugeHigh, faLightbulb, faScaleBalanced, faShapes, faShieldHalved } from "@fortawesome/free-solid-svg-icons";
+import { faBullseye, faLightbulb, faShieldHalved } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { TranslationNamespaces } from "@/i18n.ts";
 import { GrowingTree } from "@components/shared/GrowingTree.tsx";
@@ -113,34 +113,6 @@ export function TourVisualBlock({ visual, buddyName, buddyImage, wallets }: Prop
                 </div>
             );
 
-        /**
-         * The three kinds of exercise in the list, in detail.
-         *
-         * Grounded in what each exercise ACTUALLY opens with, read from the exercise module's own
-         * instructions — and the names are the module's own too, so the student meets the same words
-         * on the list they are looking at. The distinction the last row makes is the one that catches
-         * people out: Suitability and Efficiency give you a system and ask for a method, Matching
-         * gives you a method and asks for a system.
-         */
-        case "exercise-types":
-            return (
-                <div className={"tour-visual tour-visual__rows"}>
-                    {EXERCISE_TYPES.map((entry) => (
-                        <div key={entry.nameKey} className={"tour-visual__row"}>
-                            <span className={"tour-visual__row-icon"}>
-                                <FontAwesomeIcon icon={entry.icon} />
-                            </span>
-                            <span className={"tour-visual__row-body"}>
-                                <span className={"tour-visual__row-label"}>
-                                    {t(entry.nameKey, { ns: TranslationNamespaces.Flexibility })}
-                                </span>
-                                <span className={"tour-visual__row-desc"}>{t(entry.whatKey)}</span>
-                            </span>
-                        </div>
-                    ))}
-                </div>
-            );
-
         default:
             return null;
     }
@@ -159,14 +131,3 @@ const WALLET_DESC_KEYS: Record<AgencyWallet, string> = {
     insight: "agency-insight-desc",
     resolve: "agency-resolve-desc",
 };
-
-/**
- * The three exercise types, named the way the exercise list names them.
- *
- * `nameKey` is looked up in the FLEXIBILITY namespace so the tour shows exactly what the list shows.
- */
-const EXERCISE_TYPES = [
-    { nameKey: "Suitability", icon: faScaleBalanced, whatKey: "tour-visual-suitability-what" },
-    { nameKey: "Efficiency", icon: faGaugeHigh, whatKey: "tour-visual-efficiency-what" },
-    { nameKey: "Matching", icon: faShapes, whatKey: "tour-visual-matching-what" },
-] as const;

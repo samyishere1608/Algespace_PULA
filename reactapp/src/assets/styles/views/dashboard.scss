@@ -2342,217 +2342,104 @@
 
 /* ─── Daily Intention Modal ─────────────────────────────────── */
 .daily-intention-modal {
-    max-width: 520px;
+    // No plate, border or shadow here: `.buddy-panel` supplies them, and it is the SAME surface the
+    // reflection dialog wears, so the two read as one character speaking in two moments.
+    width: 600px;
+    max-width: calc(100vw - 2rem);
+    padding: 1.6rem 1.6rem 1.5rem;
     text-align: center;
-    padding: 1.75rem;
-    background: linear-gradient(180deg, #0b3d5c, #06283b);
-    border: 1px solid rgba(33, 158, 188, 0.35);
-    border-top: 3px solid var(--primary-blue);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 24px rgba(33, 158, 188, 0.12);
 
-    &__buddy {
+    // The second sentence INSIDE the bubble, and the actual question. It used to be a faint grey
+    // line floating outside the speech, in the smallest type in the dialog — the ask, set as an
+    // afterthought.
+    &__ask {
+        margin-top: 0.45rem;
+        font-size: 1.05rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.84);
+    }
+
+    &__options {
         display: flex;
-        align-items: flex-start;
-        gap: 1rem;
-        margin-bottom: 1.25rem;
-        text-align: left;
-
-        &-avatar {
-            flex-shrink: 0;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: rgba(33, 158, 188, 0.15);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            border: 2px solid rgba(33, 158, 188, 0.3);
-
-            img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-        }
-
-        &-emoji {
-            font-size: 1.8rem;
-        }
-    }
-
-    &__speech {
-        flex: 1;
-
-        &-bubble {
-            background: rgba(33, 158, 188, 0.1);
-            border: 1px solid rgba(33, 158, 188, 0.2);
-            border-radius: 0.75rem 0.75rem 0.75rem 0;
-            padding: 0.75rem 1rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.5rem;
-
-            h2 {
-                font-size: 0.95rem;
-                font-weight: 600;
-                color: #fff;
-                margin: 0;
-                line-height: 1.35;
-            }
-        }
-    }
-
-    &__sparkle {
-        color: #ffd166;
-        font-size: 0.85rem;
-        flex-shrink: 0;
-    }
-
-    &__question {
-        font-size: 0.8rem;
-        color: rgba(255, 255, 255, 0.55);
-        margin: 0 0 0 0.5rem;
+        flex-direction: column;
+        gap: 0.9rem;
+        margin-top: 1.25rem;
     }
 
     &__grid {
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 0.65rem;
-        margin-bottom: 0.75rem;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.7rem;
     }
 
-    &__card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 1.1rem 0.5rem 0.85rem;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 0.6rem;
-        color: #fff;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        position: relative;
-
-        &:hover,
-        &--hover {
-            background: rgba(33, 158, 188, 0.12);
-            border-color: rgba(33, 158, 188, 0.35);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        }
-
-        &--gold  { border-top: 3px solid #ffd166; }
-        &--amber { border-top: 3px solid #ffb74d; }
-        &--blue  { border-top: 3px solid #4fc3f7; }
-
-        &--gold:hover,
-        &--gold--hover {
-            background: rgba(255, 209, 102, 0.1);
-            border-color: rgba(255, 209, 102, 0.45);
-            box-shadow: 0 4px 14px rgba(255, 209, 102, 0.18);
-        }
-
-        &--amber:hover,
-        &--amber--hover {
-            background: rgba(255, 183, 77, 0.1);
-            border-color: rgba(255, 183, 77, 0.45);
-            box-shadow: 0 4px 14px rgba(255, 183, 77, 0.18);
-        }
-
-        &--blue:hover,
-        &--blue--hover {
-            background: rgba(79, 195, 247, 0.1);
-            border-color: rgba(79, 195, 247, 0.45);
-            box-shadow: 0 4px 14px rgba(79, 195, 247, 0.18);
-        }
-
-        &-icon {
-            font-size: 1.35rem;
-            width: 2.4rem;
-            height: 2.4rem;
-            border-radius: 0.55rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            &--gold  { background: rgba(255, 209, 102, 0.15); color: #ffd166; }
-            &--amber { background: rgba(255, 183, 77, 0.15); color: #ffb74d; }
-            &--blue  { background: rgba(33, 158, 188, 0.15); color: #4fc3f7; }
-        }
-
-        &-label {
-            font-size: 0.78rem;
-            font-weight: 600;
-            line-height: 1.2;
-        }
-
-        &-hint {
-            font-size: 0.6rem;
-            color: rgba(255, 255, 255, 0.4);
-            line-height: 1.2;
-        }
-
-        &-arrow {
-            position: absolute;
-            top: 0.5rem;
-            right: 0.6rem;
-            font-size: 0.6rem;
-            color: rgba(255, 255, 255, 0.25);
-            opacity: 0;
-            transition: opacity 0.15s;
-        }
-
-        &:hover &-arrow,
-        &--hover &-arrow {
-            opacity: 1;
-        }
-    }
+    // The three choice cards are `.buddy-choice` now, defined once in
+    // styles/shared/buddy-conversation.scss. They used to be private to this modal, with 12px
+    // labels and 9px hints — the smallest type anywhere in the student area, on the three controls
+    // the whole check-in depends on.
 
     &__secondary {
         display: flex;
-        gap: 0.5rem;
+        align-items: center;
         justify-content: center;
+        gap: 0.6rem;
     }
 
+    // Both of these were 12px and grey-on-dark, and "skip" sat at 30% white — below the readable
+    // floor, for the two controls a hesitant student is most likely to reach for.
     &__custom-btn {
         display: flex;
         align-items: center;
-        gap: 0.4rem;
-        padding: 0.45rem 1rem;
+        gap: 0.45rem;
+        min-height: 2.75rem;
+        padding: 0.5rem 1.1rem;
         background: transparent;
-        border: 1px dashed rgba(255, 255, 255, 0.2);
-        border-radius: 0.5rem;
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 0.78rem;
+        border: 1px dashed rgba(255, 255, 255, 0.28);
+        border-radius: 999px;
+        color: rgba(255, 255, 255, 0.78);
+        font-family: inherit;
+        font-size: 0.95rem;
+        font-weight: 600;
         cursor: pointer;
-        transition: all 0.15s;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
 
         &:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(255, 255, 255, 0.35);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.45);
             color: #fff;
         }
 
+        &:focus-visible {
+            outline: 2px solid #8ecae6;
+            outline-offset: 2px;
+        }
+
         &-icon {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.45);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
         }
     }
 
     &__skip-btn {
-        padding: 0.45rem 1rem;
+        min-height: 2.75rem;
+        padding: 0.5rem 1.1rem;
         background: transparent;
         border: none;
-        color: rgba(255, 255, 255, 0.35);
-        font-size: 0.75rem;
+        border-radius: 999px;
+        color: rgba(255, 255, 255, 0.62);
+        font-family: inherit;
+        font-size: 0.95rem;
+        font-weight: 600;
         cursor: pointer;
+        transition: color 0.15s, background 0.15s;
 
         &:hover {
-            color: rgba(255, 255, 255, 0.6);
+            color: #fff;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        &:focus-visible {
+            outline: 2px solid #8ecae6;
+            outline-offset: 2px;
         }
     }
 
@@ -2560,30 +2447,33 @@
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
+        text-align: left;
 
         p {
-            font-size: 0.85rem;
-            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.72);
         }
 
         &-input {
             width: 100%;
-            padding: 0.6rem 0.75rem;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 0.4rem;
+            padding: 0.7rem 0.85rem;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(33, 158, 188, 0.3);
+            border-radius: 0.75rem;
             color: #fff;
-            font-size: 0.85rem;
             font-family: inherit;
+            font-size: 1rem;
+            line-height: 1.5;
             resize: vertical;
 
             &::placeholder {
-                color: rgba(255, 255, 255, 0.3);
+                color: rgba(255, 255, 255, 0.4);
             }
 
             &:focus {
                 outline: none;
-                border-color: var(--primary-blue);
+                border-color: rgba(142, 202, 230, 0.7);
+                box-shadow: 0 0 0 3px rgba(33, 158, 188, 0.18);
             }
         }
 
@@ -2593,6 +2483,405 @@
             justify-content: flex-end;
         }
     }
+}
+
+/* ─── Exercises tab ──────────────────────────────────────────── */
+
+// The flexibility exercises, in the dashboard's own visual language rather than as a page of its
+// own. Deliberately built from the same parts as the goal cards below them — the same card surface,
+// the same tinted chips, the same left rule — because they are two halves of the same loop: a goal
+// says what to practise, and this is where you go and do it.
+.dash-exercises {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.dash-exercises__summary {
+    background: linear-gradient(180deg, rgba(4, 58, 83, 0.72), rgba(1, 38, 56, 0.5));
+    border: 1px solid rgba(33, 158, 188, 0.18);
+    border-left: 4px solid var(--primary-blue);
+    border-radius: 1rem;
+    padding: 1.1rem 1.25rem;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.dash-exercises__summary-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.6rem;
+}
+
+.dash-exercises__title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #fff;
+}
+
+.dash-exercises__count {
+    flex-shrink: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #8ecae6;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.dash-exercises__track {
+    height: 8px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.dash-exercises__fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #219ebc 0%, #06d6a0 100%);
+    transition: width 0.4s ease;
+}
+
+.dash-exercises__hint {
+    margin-top: 0.6rem;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.dash-exercises__error {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.dash-exercises__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* ── The three kinds, and the ONE place their colour is decided ──
+   Keyed off the enum's own member name, which is what `data-type` carries, so no magic number
+   appears here. The hue is only ever a SECOND cue: everything coloured by it also carries the
+   kind's mark, and a row carries its name too, so the three stay telling apart without colour. */
+.dash-exercises {
+    [data-type="Suitability"] {
+        --type-color: #8ecae6;
+        --type-tint: rgba(142, 202, 230, 0.14);
+        --type-border: rgba(142, 202, 230, 0.4);
+    }
+
+    [data-type="Efficiency"] {
+        --type-color: #06d6a0;
+        --type-tint: rgba(6, 214, 160, 0.13);
+        --type-border: rgba(6, 214, 160, 0.38);
+    }
+
+    [data-type="Matching"] {
+        --type-color: #c77dff;
+        --type-tint: rgba(199, 125, 255, 0.15);
+        --type-border: rgba(199, 125, 255, 0.42);
+    }
+
+    /* The "every kind" chip is not a kind, so it borrows the app's own accent rather than picking
+       a fourth colour that would read as a fourth type. */
+    [data-type="all"] {
+        --type-color: #8ecae6;
+        --type-tint: rgba(142, 202, 230, 0.14);
+        --type-border: rgba(142, 202, 230, 0.4);
+    }
+}
+
+.dash-exercises__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+/* The filter row doubles as the legend. A chip has to be tall enough to hit with a thumb — this is
+   the control a student touches most on a tablet. */
+.dash-exercise-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.4rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.75);
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.28);
+        color: #fff;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #8ecae6;
+        outline-offset: 2px;
+    }
+
+    .dash-exercise-filter__count {
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.58);
+    }
+}
+
+/* Selection is carried by the fill AND the border AND the text colour, never by hue alone. */
+.dash-exercise-filter--active {
+    background-color: var(--type-tint);
+    border-color: var(--type-border);
+    color: #fff;
+
+    .dash-exercise-filter__icon {
+        color: var(--type-color);
+    }
+
+    .dash-exercise-filter__count {
+        color: var(--type-color);
+    }
+}
+
+.dash-exercise-filter__icon {
+    font-size: 1rem;
+}
+
+/* What the selected kind actually asks for. This exists so the explanation is reachable by tapping
+   a chip, which is the only way a tablet student can get it — hover is not available there. */
+.dash-exercises__kind {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border-radius: 0.75rem;
+    background-color: var(--type-tint);
+    border: 1px solid var(--type-border);
+    border-left: 4px solid var(--type-color);
+}
+
+.dash-exercises__kind-icon {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.55rem;
+    background-color: rgba(1, 38, 56, 0.45);
+    font-size: 1.05rem;
+    color: var(--type-color);
+}
+
+.dash-exercises__kind-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.dash-exercises__kind-name {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #fff;
+}
+
+.dash-exercises__kind-what {
+    font-size: 0.95rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.dash-exercises__kind-count {
+    flex-shrink: 0;
+    align-self: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.dash-exercise {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    background-color: rgba(1, 38, 56, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 3px solid var(--type-color);
+    border-radius: 0.75rem;
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+
+    /* No transform on hover: a lifted card can move the pointer off its own edge and oscillate the
+       hover state. The fill and the border carry the hover instead. */
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.07);
+        border-color: var(--type-border);
+        border-left-color: var(--type-color);
+    }
+
+    &:focus-visible {
+        outline: 2px solid #8ecae6;
+        outline-offset: 2px;
+    }
+}
+
+/* A finished exercise stays in the list — a student repeats them to hit a goal — so completion is
+   marked by a NEUTRAL lift and the green pill, and NOT by repainting the row. Overriding the left
+   rule here would erase the one cue that says which kind the row is, which is the whole point. */
+.dash-exercise--done {
+    background-color: rgba(255, 255, 255, 0.03);
+
+    .dash-exercise__name {
+        color: rgba(255, 255, 255, 0.78);
+    }
+}
+
+.dash-exercise__index {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 0.5rem;
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.72);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Sized and tinted as a real chip rather than a bare glyph. At 1.05rem of faint grey the mark was
+   too small to tell one kind from another at a glance, which is exactly what it is here to do. */
+.dash-exercise__icon {
+    position: relative;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 0.6rem;
+    background-color: var(--type-tint);
+    border: 1px solid var(--type-border);
+    font-size: 1.05rem;
+    color: var(--type-color);
+}
+
+/* The tooltip is a SHORTCUT, not the route to the meaning: the kind's sentence is also printed by
+   the filter banner. It opens off the chip, so it can be found deliberately without every row the
+   pointer crosses flashing an explanation. */
+.dash-exercise__tip {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    z-index: 20;
+    width: 17rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.65rem 0.8rem;
+    border-radius: 0.6rem;
+    background-color: #012638;
+    border: 1px solid var(--type-border);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+    text-align: left;
+    font-weight: 400;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+
+.dash-exercise__tip-name {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: var(--type-color);
+}
+
+.dash-exercise__tip-what {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.dash-exercise__icon:hover .dash-exercise__tip,
+.dash-exercise:focus-visible .dash-exercise__tip {
+    opacity: 1;
+    visibility: visible;
+}
+
+.dash-exercise__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.dash-exercise__name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+/* The kind's name in the kind's colour. This is the cue that survives a colour-blind student,
+   because the words still say which kind it is. */
+.dash-exercise__type {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--type-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dash-exercise__status {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+}
+
+.dash-exercise__status--done {
+    color: #06d6a0;
+    background-color: rgba(6, 214, 160, 0.12);
+    border-color: rgba(6, 214, 160, 0.3);
+}
+
+.dash-exercise__chevron {
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.35);
 }
 
 /* ─── Modal overlay (shared) ────────────────────────────────── */
@@ -3023,38 +3312,41 @@
     &__head {
         display: flex;
         align-items: center;
-        gap: 0.55rem;
-        margin-bottom: 0.6rem;
+        gap: 0.6rem;
+        margin-bottom: 0.65rem;
 
         strong {
-            font-size: 0.95rem;
-            font-weight: 700;
+            font-size: 1rem;
+            font-weight: 800;
             color: #8ecae6;
             letter-spacing: 0.3px;
         }
     }
 
+    // Sized like a face rather than an avatar chip, so the prompt reads as the character leaning in
+    // rather than as a notification with a picture on it.
     &__avatar {
-        width: 2.4rem;
-        height: 2.4rem;
+        width: 3rem;
+        height: 3rem;
         border-radius: 50%;
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(33, 158, 188, 0.2);
-        border: 2px solid rgba(142, 202, 230, 0.5);
-        font-size: 1.15rem;
+        background: radial-gradient(circle at 50% 34%, rgba(142, 202, 230, 0.3), rgba(33, 158, 188, 0.12));
+        border: 2px solid rgba(142, 202, 230, 0.55);
+        box-shadow: 0 0 0 4px rgba(33, 158, 188, 0.14);
+        font-size: 1.4rem;
         overflow: hidden;
 
         img { width: 100%; height: 100%; object-fit: cover; }
     }
 
     &__text {
-        font-size: 1rem;
-        color: rgba(255, 255, 255, 0.9);
+        font-size: 1.05rem;
+        color: rgba(255, 255, 255, 0.92);
         line-height: 1.5;
-        margin-bottom: 0.7rem;
+        margin-bottom: 0.8rem;
     }
 
     &__actions {
@@ -3063,28 +3355,48 @@
         justify-content: flex-end;
     }
 
+    // Both buttons are the same size and weight on purpose: a "no" that is smaller or greyer stops
+    // being a real answer, and the whole reflection depends on that answer being honest.
     &__no,
     &__yes {
-        font-size: 0.95rem;
+        min-height: 2.75rem;
+        font-family: inherit;
+        font-size: 0.98rem;
         font-weight: 700;
         border: none;
-        border-radius: 0.8rem;
-        padding: 0.5rem 1rem;
+        border-radius: 999px;
+        padding: 0.55rem 1.15rem;
         cursor: pointer;
-        transition: transform 0.15s, box-shadow 0.15s;
+        transition: box-shadow 0.15s, background 0.15s, color 0.15s;
 
-        &:hover { transform: translateY(-1px); }
+        // No translate on hover — a control that moves can slide out from under the pointer.
+        &:focus-visible {
+            outline: 2px solid #8ecae6;
+            outline-offset: 2px;
+        }
     }
 
     &__no {
-        background: rgba(255, 255, 255, 0.08);
-        color: rgba(255, 255, 255, 0.7);
+        background: rgba(255, 255, 255, 0.09);
+        color: rgba(255, 255, 255, 0.78);
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
     }
 
+    // The app's own mint. This was #1db954, a green from outside the palette that appears nowhere
+    // else in the product, on the one button that asks a student to say yes to reflecting.
     &__yes {
-        background: #1db954;
-        color: #fff;
-        box-shadow: 0 0 10px rgba(29, 185, 84, 0.4);
+        background: #06d6a0;
+        color: #012a3b;
+        box-shadow: 0 0 12px rgba(6, 214, 160, 0.4);
+
+        &:hover {
+            background: #2ae0b4;
+            box-shadow: 0 0 18px rgba(6, 214, 160, 0.55);
+        }
     }
 }
 
@@ -3102,13 +3414,8 @@
     width: 620px;
     max-width: calc(100vw - 2rem);
     padding: 1.6rem 1.9rem 1.9rem;
-    // Warmer and rounder than the shared modal plate, so it reads as a conversation panel rather
-    // than as a form that appeared. The teal rim is the one the buddy widget and the hint button
-    // use, which is what ties the three together as the same character.
-    background: linear-gradient(180deg, #063a54 0%, #012a3b 100%);
-    border: 1px solid rgba(33, 158, 188, 0.38);
-    border-radius: 1.25rem;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    // No plate, rim or shadow here: `.buddy-panel` supplies them, and it is the SAME surface the
+    // daily intention wears, so the two read as one character speaking in two moments.
 
     &__finished {
         color: rgba(255, 255, 255, 0.8);
@@ -3117,163 +3424,34 @@
         margin-bottom: 1.25rem;
     }
 
-    &__header {
-        display: flex;
-        align-items: center;
-        gap: 0.9rem;
-        margin-bottom: 1.1rem;
+    // Chrome, and deliberately quiet. The dialog's own portrait used to live here at 64px while a
+    // SECOND copy sat inside the bubble at 40px — two sizes of the same face is not “the companion
+    // twice”, it is two unrelated panels.
+    &__heading {
         text-align: left;
-    }
-
-    &__avatar {
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        background: rgba(33, 158, 188, 0.15);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        border: 2px solid rgba(142, 202, 230, 0.6);
-        box-shadow: 0 0 0 4px rgba(33, 158, 188, 0.18);
-        flex-shrink: 0;
-
-        img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-    }
-
-    &__emoji {
-        font-size: 2rem;
+        margin-bottom: 1.15rem;
     }
 
     &__title {
-        font-size: 1.2rem;
+        font-size: 1.15rem;
         font-weight: 700;
-        color: #fff;
+        color: rgba(255, 255, 255, 0.92);
         margin: 0 0 0.15rem;
     }
 
     &__item {
         font-size: 0.9rem;
-        color: rgba(255, 255, 255, 0.6);
+        color: rgba(255, 255, 255, 0.62);
         margin: 0;
     }
 
-    &__progress {
-        margin-bottom: 1rem;
-    }
+    // The step rail is `.buddy-steps`, defined once in styles/shared/buddy-conversation.scss. It
+    // replaced a row of three big labelled dots that sat BETWEEN the companion's face and their
+    // question, cutting one sentence in half with a progress bar.
 
-    &__steps {
-        display: flex;
-        justify-content: space-between;
-        gap: 0.5rem;
-    }
-
-    &__step {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.35rem;
-        opacity: 0.4;
-        transition: opacity 0.2s ease;
-
-        &--active { opacity: 1; }
-        &--done { opacity: 0.85; }
-    }
-
-    &__step-dot {
-        width: 2.1rem;
-        height: 2.1rem;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.95rem;
-        font-weight: 700;
-        color: #fff;
-        background: rgba(255, 255, 255, 0.08);
-        border: 2px solid rgba(255, 255, 255, 0.15);
-        transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-
-        .reflection-modal__step--active & {
-            background: var(--primary-blue);
-            border-color: #8ecae6;
-            box-shadow: 0 0 12px rgba(33, 158, 188, 0.5);
-        }
-
-        .reflection-modal__step--done & {
-            background: #1db954;
-            border-color: #1db954;
-        }
-    }
-
-    &__step-label {
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: rgba(255, 255, 255, 0.7);
-    }
-
-    &__bubble {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.85rem;
-        border-radius: 1.1rem;
-        padding: 1rem 1.25rem;
-        font-size: 1.05rem;
-        line-height: 1.55;
-        margin-bottom: 1.1rem;
-
-        p { margin: 0; color: inherit; }
-
-        // Every turn in this dialog is the companion speaking, the question and the reply alike.
-        // There is no student bubble: the student's own words are what they typed into the box, and
-        // drawing the companion's reply with the student's styling made the answer look like
-        // something the student had said.
-        &--pippin {
-            background: rgba(33, 158, 188, 0.1);
-            border: 1px solid rgba(33, 158, 188, 0.22);
-            border-bottom-left-radius: 0.3rem;
-            color: #fff;
-        }
-    }
-
-    // Who is talking, above what they said. Without it the bubble is a panel of text beside a
-    // portrait and the student has to work out that the companion is the one asking.
-    &__speaker {
-        display: block;
-        font-size: 0.9rem;
-        font-weight: 700;
-        color: #8ecae6;
-        letter-spacing: 0.3px;
-        margin-bottom: 0.2rem;
-    }
-
-    &__bubble-body {
-        flex: 1;
-        min-width: 0;
-    }
-
-    &__bubble-avatar {
-        width: 2.7rem;
-        height: 2.7rem;
-        border-radius: 50%;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(33, 158, 188, 0.2);
-        border: 2px solid rgba(142, 202, 230, 0.5);
-        font-size: 1.4rem;
-        overflow: hidden;
-
-        img { width: 100%; height: 100%; object-fit: cover; }
-    }
+    // The stepper, the bubble, the speaker line and the bubble portrait are all gone from here.
+    // `.buddy-steps` and `.buddy-says` own them now (styles/shared/buddy-conversation.scss), so the
+    // reflection dialog and the daily intention cannot drift into two different-looking characters.
 
     &__insight-chip {
         display: inline-flex;
@@ -3287,7 +3465,6 @@
         color: #06d6a0;
         font-size: 0.9rem;
         font-weight: 700;
-        margin-bottom: 0.75rem;
         box-shadow: 0 0 10px rgba(6, 214, 160, 0.15);
     }
 
@@ -3309,30 +3486,33 @@
         p { margin: 0; color: inherit; }
     }
 
+    // The student's turn. The label sits above the box so an empty field says whose move it is.
     &__answer {
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 0.6rem;
+        margin-top: 1.3rem;
     }
 
     &__input {
         width: 100%;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(33, 158, 188, 0.25);
-        border-radius: 0.75rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(33, 158, 188, 0.3);
+        border-radius: 0.9rem;
         color: #fff;
         font-family: inherit;
-        font-size: 1rem;
-        padding: 0.8rem 1rem;
+        font-size: 1.05rem;
+        line-height: 1.55;
+        padding: 0.85rem 1rem;
         resize: none;
         outline: none;
         transition: border-color 0.15s, box-shadow 0.15s;
 
-        &::placeholder { color: rgba(255, 255, 255, 0.3); }
+        &::placeholder { color: rgba(255, 255, 255, 0.4); }
 
         &:focus {
-            border-color: rgba(33, 158, 188, 0.6);
-            box-shadow: 0 0 0 3px rgba(33, 158, 188, 0.15);
+            border-color: rgba(142, 202, 230, 0.7);
+            box-shadow: 0 0 0 3px rgba(33, 158, 188, 0.18);
         }
     }
 
@@ -3340,6 +3520,7 @@
         display: flex;
         justify-content: flex-end;
         gap: 0.6rem;
+        margin-top: 0.35rem;
 
         .button {
             display: inline-flex;
@@ -3348,9 +3529,15 @@
         }
     }
 
+    // `gap` rather than margins on the children: this is a flex column, so child margins would ADD
+    // to each other instead of collapsing, and the spacing would drift every time a block was added.
+    // The margin-top is the space between the companion's QUESTION (which lives outside this
+    // container) and their reply.
     &__feedback {
         display: flex;
         flex-direction: column;
+        gap: 0.95rem;
+        margin-top: 1.3rem;
     }
 
     &__next-step {
