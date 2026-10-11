@@ -86,7 +86,17 @@ export function measureCommitCost(directory, commits = 15) {
 }
 
 /** Where the database files live. Resolved from this file so the suite runs from any directory. */
-export const DATABASES_DIR = resolve(HERE, "..", "..", "webapi", "Data", "databases");
+/**
+ * Where the SQLite files are.
+ *
+ * Derived from THIS module's location, so the suite finds the databases whether it is invoked from
+ * the repository root or from inside `loadtest/`. The override exists because the deployment mounts
+ * them somewhere else entirely: production keeps the database on a persistent volume rather than
+ * inside the image, so the path is a fact about the environment and not something to derive.
+ */
+export const DATABASES_DIR = process.env.LOADTEST_DATABASES_DIR
+    ? resolve(process.env.LOADTEST_DATABASES_DIR)
+    : resolve(HERE, "..", "..", "webapi", "Data", "databases");
 
 /**
  * Creates or signs in a pool of accounts, one per simulated student.

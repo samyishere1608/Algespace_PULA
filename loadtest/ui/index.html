@@ -240,6 +240,32 @@
   let startedAt = 0;
   let lastResult = null;
 
+  // ── Access key ───────────────────────────────────────────────────────────
+  // Only the API host has a gate; the standalone Node host has none. So it is passed through when
+  // present and omitted entirely when not, rather than sent empty.
+  const accessKey = new URLSearchParams(location.search).get("key");
+
+  function withKey(url) {
+    if (!accessKey) return url;
+    return `${url}${url.includes("?") ? "&" : "?"}key=${encodeURIComponent(accessKey)}`;
+  }
+
+  // ── Endpoints are RELATIVE, so one page works on both hosts ──────────────
+  // Served at `/loadtest/` by the API and at `/` by the standalone host. `./run` resolves against
+  // whichever directory the page came from, which is why the API redirects `/loadtest` to
+  // `/loadtest/` — without the trailing slash `./run` would resolve to `/run`.
+
+  // ── Which backend to point at ────────────────────────────────────────────
+  // `localhost:7273` is correct on a laptop and wrong inside a container, where the API listens on
+  // PORT. The host that served this page knows which it is, so it answers instead of guessing here.
+  async function loadInfo() {
+    try {
+      const response = await fetch(withKey("./info"));
+      const { defaultBase } = await response.json();
+      if (defaultBase) $("base").value = defaultBase;
+    } catch { /* keep whatever the markup says */ }
+  }
+
   function fmt(value) {
     if (value === 0 || value === undefined || value === null) return "0";
     if (value < 10) return value.toFixed(1);
@@ -252,7 +278,7 @@
     $("targetState").textContent = "checking…";
 
     try {
-      const response = await fetch(`/api/target?base=${encodeURIComponent($("base").value)}`);
+      const response = await fetch(withKey(`./target?base=${encodeURIComponent($("base").value)}`));
       const { reachable, detail } = await response.json();
       $("dot").className = reachable ? "dot ok" : "dot bad";
       $("targetState").textContent = reachable ? "backend reachable" : `unreachable — ${detail}`;
@@ -378,7 +404,7 @@
     // Kept so the progress bar knows the duration before the result arrives.
     lastResult = { options: { durationSeconds: num("durationSeconds") } };
 
-    source = new EventSource(`/api/run?${params}`);
+    source = new EventSource(withKey(`./run?${params}`));
 
     source.onmessage = (message) => {
       const event = JSON.parse(message.data);
@@ -429,7 +455,7 @@
 
   $("run").addEventListener("click", start);
   $("probe").addEventListener("click", probe);
-  probe();
+  loadInfo().finally(probe);
 })();
 </script>
 </body>

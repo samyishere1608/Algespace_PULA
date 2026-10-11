@@ -62,11 +62,92 @@ only measures the ramp-up — not the steady state a class actually produces.
 concurrency, with a per-step latency table. Use it when the simulation says something is slow and you
 need to know which call it is.
 
-**The test page** wraps the student simulation in a form with live progress and results:
+**`stream.mjs` is the third, and it is internal.** It runs one simulation and writes the events as
+newline-delimited JSON on stdout, which is exactly what `/loadtest/run` forwards to the page. Run it
+directly if you ever want to see the raw event stream without a UI in the way:
 
 ```powershell
-node loadtest/ui/server.mjs       # → http://localhost:4599
+node loadtest/stream.mjs --students 2 --durationSeconds 25
 ```
+
+`loadtest/check-route.ps1` drives one small run through the API route and prints the verdict followed
+by the data checks, which is the quickest way to confirm the route works after a deploy.
+
+**The test page** wraps the student simulation in a form with live progress and results. There are
+two hosts for the SAME page, and they serve it from the same path with the same route names:
+
+```powershell
+# Local, needs no rebuild of the backend
+node loadtest/ui/server.mjs       # → http://localhost:4599/loadtest/
+
+# Served by the API itself, which is what makes a deployed server testable
+# http://localhost:7273/loadtest/
+```
+
+### The page on the API (`/loadtest`)
+
+`LoadTestController` serves the page, starts the harness as a child process, and forwards the JSON it
+emits as Server-Sent Events. Three things follow from that, and each one is the reason for a design
+decision:
+
+- **The harness is not reimplemented.** It is the same Node code the CLI runs, so the page cannot
+  quietly disagree with the terminal. That is also why the deploy image installs Node (see the
+  Dockerfile).
+- **The page is on the API rather than in the React app**, because the suite's second half is SQL
+  against the SQLite files. A browser cannot read them, so a page inside the app could drive traffic
+  but never answer the question the suite exists to answer.
+- **One run at a time**, enforced by a process-wide gate. Two simulations share the database and the
+  CPU and both reports would be worthless.
+
+**It is off unless you turn it on.** The route registers nothing at all unless `LoadTest:Enabled` is
+true, so a deployment that does not want it cannot expose it by accident:
+
+```powershell
+# locally
+$env:LoadTest__Enabled='true'      # then dotnet run
+```
+
+```text
+# Railway → variables
+LoadTest__Enabled=true
+LoadTest__Key=<a long random string>     # optional; falls back to the app's ApiKey
+```
+
+In production every other route needs `X-API-Key`, and a browser cannot put a header on a navigation
+— so `ApiKeyMiddleware` is branched around `/loadtest` (Program.cs) and the controller does the same
+check itself against `?key=`, which can travel in a URL. Open it as:
+
+```text
+https://<your-api>/loadtest/?key=<LoadTest__Key or ApiKey>
+```
+
+The page passes the key on to its own requests, so nothing else is needed. With no key configured
+anywhere the route asks for nothing, which is the local case.
+
+**Point it at the online server from the online server.** The container's own API is the target, so
+use the value `/loadtest/info` reports (it derives it from `PORT`); the page fills that in for you.
+
+### Before you run it against a real deployment
+
+Read these three, because all of them are consequences of running a load test on live infrastructure:
+
+- **It writes to the production database, and the database is on a persistent volume.** A run
+  registers `lt_*` accounts and writes real rows into the real tables. It purges its own rows
+  afterwards and only ever touches accounts whose prefix is `lt_`, but **it does not delete the
+  accounts**, so they persist. While a run is in progress those accounts have XP, which means they
+  appear on the leaderboard. Do not run it while real students are using the platform.
+- **The generator shares the container's CPU with the API.** Latency numbers from an in-container run
+  are pessimistic and contaminated by the generator itself. That is a fair price for the data checks,
+  which are the point; it is not a fair way to measure capacity. For a capacity number, run
+  `simulate.mjs` from a laptop against the public URL instead (that path cannot do the SQL checks,
+  which is why the page lives on the server).
+- **The database path is an environment variable, not a guess.** The harness derives it from its own
+  location by default, which is right in the repository and wrong in a container. The image sets
+  `LOADTEST_DATABASES_DIR=/app/Data/databases`; point it at wherever the volume is mounted.
+
+If you would rather not carry Node in the deploy image at all, delete the Node block and the
+`COPY loadtest/` line from the Dockerfile and leave `LoadTest__Enabled` unset. The route then reports
+that the harness is not installed, and the CLI still works from a checkout.
 
 ---
 

@@ -108,7 +108,15 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseCors("ProductionPolicy");
-    app.UseMiddleware<ApiKeyMiddleware>();
+
+    // Every request needs X-API-Key, with one exception: the load test page is reached by pointing a
+    // browser at it, and a browser cannot put a header on a navigation. That route does the same
+    // check itself, against a value that can travel in the URL (LoadTestController.Authorized), so
+    // this branches AROUND the gate rather than lifting it. It is also off unless
+    // LoadTest:Enabled is set, and then it is one route on a path nothing else uses.
+    app.UseWhen(
+        context => !context.Request.Path.StartsWithSegments("/loadtest"),
+        branch => branch.UseMiddleware<ApiKeyMiddleware>());
 }
 
 app.UseMiddleware<JwtMiddleware>(); // Middlewares are only required for conducting studies

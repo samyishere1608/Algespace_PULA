@@ -79,6 +79,11 @@ function createRateGate(rps) {
 export function createClient({ baseUrl, apiKey, timeoutMs = 15000, rps = 0, record }) {
     const awaitSlot = createRateGate(rps);
 
+    // Paths are joined by concatenation, so a trailing slash on the base would produce `//student/…`
+    // — a URL no router matches, and one that looks exactly like the backend being down. Stripping
+    // it here means the caller does not have to know that, whether it is the CLI or the API.
+    const origin = String(baseUrl).replace(/\/+$/, "");
+
     async function send(method, path, body, { scenario, step }) {
         await awaitSlot();
 
@@ -94,7 +99,7 @@ export function createClient({ baseUrl, apiKey, timeoutMs = 15000, rps = 0, reco
             if (body !== undefined) headers["Content-Type"] = "application/json";
             if (apiKey) headers["X-API-Key"] = apiKey;
 
-            const response = await fetch(`${baseUrl}${path}`, {
+            const response = await fetch(`${origin}${path}`, {
                 method,
                 headers,
                 body: body === undefined ? undefined : JSON.stringify(body),
