@@ -492,6 +492,7 @@
   "daily-intention-goal-hint": "目標に集中する",
   "daily-intention-review": "進捗を確認したい",
   "daily-intention-review-hint": "統計を見る",
+  "daily-intention-focus-text": "これが今のきみの状態です。これを見て、今日は何に取り組みたい？",
   "daily-intention-custom": "その他...",
   "daily-intention-skip": "今日はスキップ",
   "daily-intention-custom-prompt": "今日やりたいことを教えてください：",

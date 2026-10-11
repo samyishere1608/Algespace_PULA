@@ -491,6 +491,7 @@
   "daily-intention-goal-hint": "Focus on a goal",
   "daily-intention-review": "I want to review my progress",
   "daily-intention-review-hint": "Check my stats",
+  "daily-intention-focus-text": "This is where you are right now. Looking at it, what do you want to work on today?",
   "daily-intention-custom": "Something else...",
   "daily-intention-skip": "Skip for today",
   "daily-intention-custom-prompt": "Tell me what you would like to do today:",

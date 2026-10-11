@@ -3301,6 +3301,22 @@
     bottom: 15rem;
     width: 21rem;
     max-width: calc(100vw - 2rem);
+    /* The nav is sticky at the top and this bubble is pinned 15rem above the bottom of the window,
+       so on a SHORT window the two meet — and the bubble wins, because it is painted at z-index 210
+       against the nav's 100, right over the XP counters.
+       This cap is what stops that. It reserves the offset plus 8rem for the nav (measured 103px at
+       its tallest, when its contents wrap) and a gap, so the bubble can never reach the nav however
+       short the window gets. Measured: it clears the nav by 277 / 137 / 35 px at 900 / 760 / 640px
+       tall, and never overlaps at any height down to 480.
+       Below about 680px the bubble stops fitting and scrolls. THAT IS THE INTENDED TRADE, and the
+       alternative was measured and rejected: pinning the answers and scrolling only the question
+       collapsed the question to 0px at 600px and below, i.e. asking the student to answer something
+       they could no longer read. Scrolling everything keeps everything reachable. */
+    max-height: calc(100vh - 15rem - 8rem);
+    overflow-y: auto;
+    /* Scrolling the bubble must not drag the page behind it along. */
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
     background: linear-gradient(180deg, #0b3d5c, #06283b);
     border: 1px solid rgba(33, 158, 188, 0.4);
     border-radius: 1.2rem 1.2rem 0.3rem 1.2rem;
@@ -3400,10 +3416,196 @@
     }
 }
 
+/* ─── The review follow-up ──────────────────────────────────────
+   Same bubble as the reflection prompt, because it is the same thing: the companion asking one
+   question. Only the inside differs — this one has TWO real answers rather than a yes and a no, so
+   the dismiss is demoted to a line of text under two equal buttons.
+
+   It is the ONE prompt that does not float. Pinned to the bottom-right corner it covered the Agency
+   XP Split legend, so the counters the question asks the student to look at were the exact thing it
+   hid: measured at 1600x740 the bubble spanned x 1210-1578 while the legend's values sat at
+   x 1476-1530. Reserving a gutter for it instead was rejected — that only works on a wide window
+   and would crush the analytics grid on a tablet, which is a target device. In the flow it cannot
+   overlap anything, at any width, and the reading order comes out right: the question, then the
+   report it is about.
+
+   The base class's placement is all that is overridden. Chrome, portrait, text and buttons are
+   inherited, so the two prompts stay recognisably the same character speaking. */
+.buddy-reflection-bubble--focus {
+    position: static;
+    width: auto;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    /* Full width, but laid out sideways: the portrait becomes a column of its own so the question
+       and its answers get the rest of the row rather than a 1400px line. */
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+        "face said"
+        "face do";
+    align-items: start;
+    column-gap: 1.1rem;
+    row-gap: 0.9rem;
+    padding: 1.15rem 1.35rem;
+
+    /* A rim that breathes.
+       This plate sits in the same column as the report it is asking about, wearing the same dark
+       teal as every panel around it, so without something it reads as one more section of the
+       dashboard — and a question that looks like a section does not get answered.
+       The glow is the whole difference: a brighter rim plus a slow bloom, nothing else.
+       Only the SHADOW moves. The plate and everything on it stay perfectly still, which is the
+       repo's rule for anything clickable, and the pulse stops under `prefers-reduced-motion`. */
+    border-color: rgba(142, 202, 230, 0.6);
+    animation:
+        reflection-bubble-in 0.3s ease-out,
+        focus-prompt-glow 2.8s ease-in-out 0.35s infinite;
+
+    .buddy-reflection-bubble__head {
+        grid-area: face;
+        flex-direction: column;
+        gap: 0.35rem;
+        margin-bottom: 0;
+    }
+
+    .buddy-reflection-bubble__text {
+        grid-area: said;
+        margin-bottom: 0;
+        /* There is room for a long line here. There is not room for a very long one. */
+        max-width: 44rem;
+    }
+
+    .buddy-reflection-bubble__actions {
+        grid-area: do;
+        flex-direction: row;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 0.6rem;
+    }
+}
+
+/* Narrower than this the portrait column costs more than it gives, so the bar stacks back into the
+   portrait-above-question shape and the answers go full width, where they are easier to hit. */
+@media (max-width: 640px) {
+    .buddy-reflection-bubble--focus {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "face"
+            "said"
+            "do";
+
+        .buddy-reflection-bubble__head {
+            flex-direction: row;
+        }
+
+        .buddy-reflection-bubble__actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .buddy-focus__dismiss {
+            align-self: center;
+        }
+    }
+}
+
+@keyframes focus-prompt-glow {
+    0%,
+    100% {
+        box-shadow:
+            0 12px 32px rgba(0, 0, 0, 0.5),
+            0 0 0 1px rgba(142, 202, 230, 0.2),
+            0 0 16px rgba(33, 158, 188, 0.26);
+    }
+
+    50% {
+        box-shadow:
+            0 12px 32px rgba(0, 0, 0, 0.5),
+            0 0 0 1px rgba(142, 202, 230, 0.45),
+            0 0 30px rgba(142, 202, 230, 0.42);
+    }
+}
+
+/* Hold the calm end of the pulse and drop the movement entirely. The rim still reads as brighter
+   than the panels around it, so the plate is still marked out as the thing to answer. */
+@media (prefers-reduced-motion: reduce) {
+    .buddy-reflection-bubble--focus {
+        animation: reflection-bubble-in 0.3s ease-out;
+        box-shadow:
+            0 12px 32px rgba(0, 0, 0, 0.5),
+            0 0 0 1px rgba(142, 202, 230, 0.45),
+            0 0 24px rgba(142, 202, 230, 0.35);
+    }
+}
+
+.buddy-focus__option {
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-family: inherit;
+    font-size: 0.98rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, box-shadow 0.15s;
+
+    &:focus-visible {
+        outline: 2px solid #8ecae6;
+        outline-offset: 2px;
+    }
+}
+
+/* Two destinations, two hues, each carrying its own words. Neither is the one to pick. */
+.buddy-focus__option--practice {
+    background: rgba(142, 202, 230, 0.14);
+    border-color: rgba(142, 202, 230, 0.42);
+    color: #8ecae6;
+
+    &:hover {
+        background: rgba(142, 202, 230, 0.24);
+        box-shadow: 0 0 12px rgba(142, 202, 230, 0.28);
+    }
+}
+
+.buddy-focus__option--goal {
+    background: rgba(6, 214, 160, 0.14);
+    border-color: rgba(6, 214, 160, 0.42);
+    color: #06d6a0;
+
+    &:hover {
+        background: rgba(6, 214, 160, 0.24);
+        box-shadow: 0 0 12px rgba(6, 214, 160, 0.28);
+    }
+}
+
+.buddy-focus__dismiss {
+    align-self: center;
+    min-height: 2rem;
+    padding: 0.3rem 0.9rem;
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.62);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+    }
+
+    &:focus-visible {
+        outline: 2px solid #8ecae6;
+        outline-offset: 2px;
+    }
+}
+
 @keyframes reflection-bubble-in {
     from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
+    to   { opacity: 1; transform: translateY(0); }}
 
 /* ─── Reflection modal ───────────────────────────────────────── */
 .reflection-modal {

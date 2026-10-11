@@ -21,7 +21,7 @@ import {
     faUserCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { ReactElement, useCallback, useEffect, useState } from "react";
+import { ReactElement, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -148,6 +148,32 @@ export default function StudentDashboard(): ReactElement {
 
     // ── Daily Intention Check-In ──────────────────────────────────────────────
     const [showDailyIntention, setShowDailyIntention] = useState(false);
+    /**
+     * The follow-up to "review my progress".
+     *
+     * Looking at your own numbers is the start of a decision, not the decision itself, so this asks
+     * the next question on the screen the student is already reading. See `handleIntentionFocus`.
+     */
+    const [showIntentionFocus, setShowIntentionFocus] = useState(false);
+    /**
+     * The dashboard's scroll area, so the follow-up prompt can be brought into view.
+     *
+     * The prompt renders as the FIRST thing in the Analytics content, and switching tabs does not
+     * reset this element's scroll position (pre-existing, and true of every tab). So a student who
+     * had scrolled down on the dashboard would arrive part-way into the report with the question
+     * they were just asked sitting above the visible area.
+     *
+     * Assigned directly rather than via `scrollIntoView({ behavior: "smooth" })`: that animates on
+     * the next frames, and a throttled tab never runs them, so the jump silently did not happen.
+     * Instant is also the right feel here — this fires on a tab switch.
+     */
+    const dashboardBodyRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        if (showIntentionFocus) {
+            const body = dashboardBodyRef.current;
+            if (body) body.scrollTop = 0;
+        }
+    }, [showIntentionFocus]);
     // A tour can already be running on arrival. The walkthrough navigates away from the dashboard and
     // back, which unmounts and re-mounts this page; reading the flag instead of starting at `false`
     // is what stops the overlay vanishing the moment the student presses Back.
@@ -537,10 +563,46 @@ export default function StudentDashboard(): ReactElement {
         } else if (choice === "goal") {
             setShowGoals(true);
         } else if (choice === "review") {
-            // "Review my progress" — jump straight to the Analytics tab
+            // "Review my progress" — jump straight to the Analytics tab, and ask the follow-up once
+            // they can see the numbers they are meant to decide from.
             setActiveTab("analytics");
+            setShowIntentionFocus(true);
         }
         // "custom" — AI feedback shows inside modal, then stays on dashboard
+    }
+
+    /**
+     * The question the "review my progress" choice leads to: now that you can see how it is going,
+     * what are you actually going to work on?
+     *
+     * Why this exists at all: `review` records an intention that commits the student to nothing and
+     * can never be followed through, so choosing it used to end the check-in with no plan and no
+     * Resolve. The answer here REPLACES the recorded intention with a real one, and the machinery
+     * that was already there takes over — `goal` is followed through by completing a goal,
+     * `practice` by doing two more exercises, and both pay Resolve. Nothing new tracks anything; the
+     * follow-up just makes sure there is something worth tracking.
+     */
+    function handleIntentionFocus(choice: "practice" | "goal"): void {
+        if (!student) return;
+        // Re-recorded rather than amended: the commitment starts NOW, so the exercise count has to
+        // be today's number at the moment they chose, not the one from when the modal opened.
+        setDailyIntention(student.id, choice, "", exercisesCompleted, "unclear");
+        setShowIntentionFocus(false);
+
+        if (choice === "goal") {
+            setShowGoals(true);
+        } else {
+            showExercises();
+        }
+    }
+
+    /**
+     * Declining the follow-up. The day stays recorded as `review`, which pays nothing — the student
+     * looked at their progress and committed to nothing, and pretending otherwise would make the
+     * Resolve track reward opening a tab.
+     */
+    function dismissIntentionFocus(): void {
+        setShowIntentionFocus(false);
     }
     function handleSkipIntention(): void {
         if (student) {
@@ -724,7 +786,7 @@ export default function StudentDashboard(): ReactElement {
             </nav>
 
             {/* ── Body ────────────────────────────────────────────────────── */}
-            <div className={"dashboard__body"}>
+            <div className={"dashboard__body"} ref={dashboardBodyRef}>
                 {/* ── Side tab navigation ─────────────────────────────────── */}
                 <aside className={"dashboard__tabs"} role="tablist" aria-label={t("dashboard-sections")} data-tour={"tabs"}>
                     <button
@@ -982,6 +1044,39 @@ export default function StudentDashboard(): ReactElement {
 
                     {activeTab === "analytics" && (
                     <div className={"dashboard__analytics"}>
+                        {/* The follow-up to "review my progress".
+                            It reuses the reflection bubble, because it is the same thing: the
+                            companion leaning in to ask one question. The `--focus` modifier only
+                            restacks it, since this one has two real answers rather than a yes and a
+                            no.
+                            It sits IN the flow, above the report it asks about, rather than floating
+                            over it. Floating, it covered the Agency XP Split legend: measured at
+                            1600x740 the bubble spanned x 1210-1578 while the legend's values sat at
+                            x 1476-1530, so the counters the question is ABOUT were the exact thing
+                            it hid. See the `--focus` block in dashboard.scss. */}
+                        {showIntentionFocus && student && (
+                            <div className={"buddy-reflection-bubble buddy-reflection-bubble--focus"}>
+                                <div className={"buddy-reflection-bubble__head"}>
+                                    <span className={"buddy-reflection-bubble__avatar"}>
+                                        {buddyImgSrc ? <img src={buddyImgSrc} alt={activeBuddy.name} /> : <span>{activeBuddy.emoji}</span>}
+                                    </span>
+                                    <strong>{activeBuddy.name}</strong>
+                                </div>
+                                <p className={"buddy-reflection-bubble__text"}>{t("daily-intention-focus-text")}</p>
+                                <div className={"buddy-reflection-bubble__actions"}>
+                                    <button className={"buddy-focus__option buddy-focus__option--practice"} onClick={() => handleIntentionFocus("practice")}>
+                                        {t("daily-intention-practice-hint")}
+                                    </button>
+                                    <button className={"buddy-focus__option buddy-focus__option--goal"} onClick={() => handleIntentionFocus("goal")}>
+                                        {t("daily-intention-goal-hint")}
+                                    </button>
+                                    <button className={"buddy-focus__dismiss"} onClick={dismissIntentionFocus}>
+                                        {t("reflection-prompt-no")}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         <div className={"analytics-grid"}>
                             {/* Goals completed per category, all time. First in the grid on purpose: it
                                 answers "what am I actually working on", which is the question this tab
@@ -1128,7 +1223,11 @@ export default function StudentDashboard(): ReactElement {
 
             {/* ── Buddy widget ─────────────────────────────────────────────── */}
             <div className={"dashboard__buddy"} data-tour={"buddy-widget"}>
-                {showReflectionPrompt && reflectionQueue.length > 0 && (
+                {/* One question at a time. The follow-up to "review my progress" renders on the
+                    Analytics tab (see `dashboard__analytics`), so it is not in this slot — but the
+                    student must not be asked two things at once, and the reflection is still in the
+                    queue and returns the moment the follow-up is answered. */}
+                {showReflectionPrompt && !showIntentionFocus && reflectionQueue.length > 0 && (
                     <div className={"buddy-reflection-bubble"}>
                         <div className={"buddy-reflection-bubble__head"}>
                             <span className={"buddy-reflection-bubble__avatar"}>

@@ -194,7 +194,10 @@ export function checkIntentionFollowThrough(
             }
             // "unclear" → no Resolve XP, AI couldn't classify
             break;
-        // "review" — handled separately later
+        // "review" deliberately falls through, and pays nothing on its own: looking at your numbers
+        // commits you to nothing. The dashboard follows that choice up with one question — "what do
+        // you want to work on today?" — and RE-RECORDS the intention as `goal` or `practice`, which
+        // are the two cases above. So the decision is still tracked; it just is not made twice.
     }
 
     if (resolved) {
