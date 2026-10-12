@@ -480,6 +480,324 @@ Console.WriteLine();
 Console.WriteLine($"relevance gate: {gateCases.Length * 3} answer/language pairs checked, " +
                   $"{gateCases.Count(c => c.ShouldReject)} of them junk");
 
+// ── The goal questions, with a real window ───────────────────────────────────
+//
+// The goal scenarios above carry no window, so they exercise the fallback used for a goal completed
+// before the window was recorded. These carry one, and are what actually tests the rules: each option
+// has a definition, so the set of accepted chips is asserted exactly rather than loosely.
+
+static ReflectionGoalExercise Goal(int method, int errors, int hints, double time,
+    bool own = false, bool explained = false, bool compared = false, bool correct = false, int type = 0) =>
+    new() { Method = method, Errors = errors, Hints = hints, Time = time, Own = own, Explained = explained, Compared = compared, Correct = correct, ExerciseType = type };
+
+// Method values as the bank names them.
+const int Equalization = 0;
+const int Substitution = 1;
+const int Elimination = 2;
+const int Suitability = 2;
+const int Efficiency = 1;
+const int Matching = 3;
+
+void CheckGoal(string name, ReflectionEvidence evidence, string q1Key, string q2Key, string q3Key,
+    string[]? q1Aligned = null, string[]? q1Offered = null, string[]? q2Aligned = null, string[]? q3Chips = null)
+{
+    List<ReflectionQuestion> questions;
+    try
+    {
+        questions = ReflectionQuestionBank.Build(evidence);
+    }
+    catch (Exception ex)
+    {
+        Fail(name, $"Build threw {ex.GetType().Name}: {ex.Message}");
+        return;
+    }
+
+    var (q1, q2, q3) = (questions[0], questions[1], questions[2]);
+
+    if (q1.TextKey != q1Key) Fail(name, $"Q1 was {q1.TextKey}, expected {q1Key}");
+    if (q2.TextKey != q2Key) Fail(name, $"Q2 was {q2.TextKey}, expected {q2Key}");
+    if (q3.TextKey != q3Key) Fail(name, $"Q3 was {q3.TextKey}, expected {q3Key}");
+
+    if (q3.Chips.Count == 0) Fail(name, "Q3 offers no commitment at all");
+
+    if (q3Chips is not null)
+    {
+        var offered = q3.Chips.Select(c => c.Id).ToList();
+        if (!offered.SequenceEqual(q3Chips))
+            Fail(name, $"Q3 chips were [{string.Join(", ", offered)}], expected [{string.Join(", ", q3Chips)}]");
+    }
+
+    if (q1Offered is not null)
+    {
+        var offered = q1.Chips.Select(c => c.Id).ToList();
+        if (!offered.SequenceEqual(q1Offered))
+            Fail(name, $"Q1 offered [{string.Join(", ", offered)}], expected [{string.Join(", ", q1Offered)}]");
+    }
+
+    if (q1Aligned is not null)
+    {
+        var aligned = q1.AlignedChipIds.OrderBy(id => id).ToList();
+        var wanted = q1Aligned.OrderBy(id => id).ToList();
+        if (!aligned.SequenceEqual(wanted))
+            Fail(name, $"Q1 accepted [{string.Join(", ", aligned)}], expected [{string.Join(", ", wanted)}]");
+    }
+
+    if (q2Aligned is not null)
+    {
+        var aligned = q2.AlignedChipIds.OrderBy(id => id).ToList();
+        var wanted = q2Aligned.OrderBy(id => id).ToList();
+        if (!aligned.SequenceEqual(wanted))
+            Fail(name, $"Q2 accepted [{string.Join(", ", aligned)}], expected [{string.Join(", ", wanted)}]");
+    }
+
+    // A goal question must never be a promise graded as if it were an answer.
+    if (q3.Kind != ReflectionQuestionBank.NextAction || q3.AlignedChipIds.Count > 0)
+        Fail(name, "Q3 is not an unjudged next-action question");
+
+    // Every option the menu offers must be one the student could have named, and every accepted one
+    // must be on the menu.
+    foreach (var id in q1.AlignedChipIds.Concat(q1.PartialChipIds))
+        if (!q1.Chips.Any(c => c.Id == id)) Fail(name, $"Q1 key names {id}, which is not offered");
+}
+
+// A method goal: mistakes went UP, nothing was clean, no hint-free run, slower, never solved alone.
+var methodWorse = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "method", FocusLabelKey = "flexibility:elimination-method",
+    GoalExercises = [Goal(Elimination, 2, 0, 50, type: Efficiency), Goal(Elimination, 3, 1, 60, type: Efficiency)],
+};
+
+CheckGoal("goal-window/method-some-went-well", methodWorse,
+    "reflection-goal-q1-method", "reflection-q2-count-clean", "reflection-goal-q3-method",
+    q1Aligned: ["went-no-hints"],
+    q1Offered: ["went-errors-down", "went-no-errors", "went-no-hints", "went-faster", "went-solved-alone"],
+    // No other methods in the history, so there is nothing to compare against: the accuracy question
+    // stands in rather than the comparison having an answer the student could not know.
+    // Efficiency invites an explanation and never a comparison, so only the first is on the menu.
+    q3Chips: ["act-no-hints", "act-solve-alone", "act-explain", "act-beat-average"]);
+
+// The same method goal, but its exercises were Suitability ones. A commitment has to be one the next
+// exercise can actually keep, so the explanation drops out and the comparison takes its place.
+var methodSuitabilityOnly = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "method", FocusLabelKey = "flexibility:elimination-method",
+    GoalExercises = [Goal(Elimination, 2, 0, 50, correct: true, type: Suitability), Goal(Elimination, 1, 0, 40, correct: true, type: Suitability)],
+    OtherMethodExercises = [Goal(Equalization, 8, 0, 50, type: Suitability)],
+};
+
+CheckGoal("goal-window/method-only-suitability", methodSuitabilityOnly,
+    "reflection-goal-q1-method", "reflection-goal-q2-method-compare", "reflection-goal-q3-method",
+    q3Chips: ["act-no-hints", "act-solve-alone", "act-compare", "act-beat-average"]);
+
+// A method goal where NOTHING went well: every option is offered and every one pays the partial
+// amount, because a student who answered honestly about a bad session should not be paid nothing.
+var methodNothing = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "method", FocusLabelKey = "flexibility:elimination-method",
+    GoalExercises = [Goal(Elimination, 1, 1, 50), Goal(Elimination, 2, 2, 60)],
+};
+
+CheckGoal("goal-window/method-nothing-went-well", methodNothing,
+    "reflection-goal-q1-method", "reflection-q2-count-clean", "reflection-goal-q3-method",
+    q1Aligned: [],
+    q2Aligned: ["band-none"]);
+{
+    var questions = ReflectionQuestionBank.Build(methodNothing);
+    if (questions[0].PartialChipIds.Count != questions[0].Chips.Count)
+        Fail("goal-window/method-nothing-went-well", "not every option pays the partial amount when nothing went well");
+}
+
+// A method goal with other methods in the history, so the comparison question is real: this method
+// averaged 2 mistakes, the others 8.
+var methodWithOthers = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "method", FocusLabelKey = "flexibility:elimination-method",
+    GoalExercises = [Goal(Elimination, 2, 0, 50), Goal(Elimination, 2, 0, 50)],
+    OtherMethodExercises = [Goal(Equalization, 8, 0, 50), Goal(Substitution, 8, 0, 50)],
+};
+
+CheckGoal("goal-window/method-compares-with-others", methodWithOthers,
+    "reflection-goal-q1-method", "reflection-goal-q2-method-compare", "reflection-goal-q3-method",
+    q2Aligned: ["cmp-fewer"]);
+
+// The record line handed to the model has to name the window's individual exercises. The goal
+// questions ask about their ORDER — mistakes down, faster by the end — so a model given only the
+// totals cannot check a free-text "I got faster" in either direction.
+{
+    var record = ReflectionQuestionBank.DescribeRecord(methodWithOthers);
+    if (!record.Contains("#1:") || !record.Contains("#2:") || !record.Contains("oldest first"))
+        Fail("goal-window/record-line", $"the goal record line does not describe the window: {record}");
+}
+
+// A Suitability goal where the choices got better: wrong, wrong, right, right.
+var suitability = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "exerciseType", GoalFocus = "Suitability",
+    GoalExercises =
+    [
+        Goal(Substitution, 2, 1, 50, correct: false, type: Suitability),
+        Goal(Substitution, 3, 1, 50, correct: false, type: Suitability),
+        Goal(Elimination, 0, 0, 40, correct: true, type: Suitability),
+        Goal(Elimination, 0, 0, 40, correct: true, type: Suitability),
+    ],
+};
+
+CheckGoal("goal-window/suitability-worked", suitability,
+    "reflection-goal-q1-suitability", "reflection-goal-q2-pick-unsuitable", "reflection-goal-q3-suitability",
+    // Hints also fell: 1,1 before against 0,0 after.
+    q1Aligned: ["went-better-choices", "went-no-errors", "went-fewer-hints"],
+    q2Aligned: ["pick-substitution"],
+    q3Chips: ["act-suitable-choice", "act-no-hints", "act-solve-alone", "act-explain", "act-compare"]);
+
+// An Efficiency goal: the best method was picked every time, one run was clean, and they sped up.
+var efficiency = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "exerciseType", GoalFocus = "Efficiency",
+    GoalExercises =
+    [
+        Goal(Equalization, 1, 0, 90, correct: true, type: Efficiency),
+        Goal(Equalization, 0, 0, 30, correct: true, type: Efficiency),
+    ],
+};
+
+CheckGoal("goal-window/efficiency-worked", efficiency,
+    "reflection-goal-q1-efficiency", "reflection-goal-q2-pick-inefficient", "reflection-goal-q3-efficiency",
+    q1Aligned: ["went-always-correct", "went-no-errors", "went-faster"],
+    q3Chips: ["act-best-choice", "act-no-hints", "act-solve-alone", "act-no-errors"]);
+
+// A Matching goal: the method is given, so there is no right choice, and the question is which method
+// went worst. There is a clean run, so "no mistakes" is true as well as "fewer mistakes later".
+var matching = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "exerciseType", GoalFocus = "Matching",
+    GoalExercises =
+    [
+        Goal(Elimination, 4, 2, 50, explained: true, type: Matching),
+        Goal(Equalization, 0, 0, 40, type: Matching),
+    ],
+};
+
+CheckGoal("goal-window/matching-worked", matching,
+    "reflection-goal-q1-matching", "reflection-goal-q2-most-errors-type", "reflection-goal-q3-matching",
+    q1Aligned: ["went-no-errors", "went-fewer-errors", "went-no-hints", "went-faster", "went-explained"],
+    q2Aligned: ["pick-elimination"],
+    q3Chips: ["act-no-errors", "act-no-hints", "act-explain", "act-solve-alone"]);
+
+// A self-explanation goal: explaining went with fewer mistakes and fewer hints.
+var explained = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "selfExplanation",
+    GoalExercises =
+    [
+        Goal(Elimination, 0, 0, 50, explained: true),
+        Goal(Elimination, 3, 2, 50, explained: false),
+    ],
+    PriorSkippedExplanation = [Elimination],
+};
+
+CheckGoal("goal-window/self-explanation-worked", explained,
+    "reflection-goal-q1-self-explanation", "reflection-goal-q2-group-compare", "reflection-goal-q3-explain-type",
+    q1Aligned: ["went-explain-helped", "went-explain-clean", "went-explain-hints", "went-explain-new"],
+    q2Aligned: ["cmp-in-group"],
+    q3Chips: ["pick-efficiency", "pick-matching"]);
+
+// A self-explanation goal where they explained EVERY time. The two options that compare explaining
+// against skipping are not offered, because there is no skipped half to compare against — and offering
+// them would be worse than useless: the absent side averages to zero, so "fewer mistakes when I
+// explained" would come out TRUE for a student who never skipped anything.
+var alwaysExplained = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "selfExplanation",
+    GoalExercises =
+    [
+        Goal(Elimination, 0, 0, 50, explained: true),
+        Goal(Elimination, 1, 0, 40, explained: true),
+    ],
+};
+
+CheckGoal("goal-window/self-explanation-always-explained", alwaysExplained,
+    "reflection-goal-q1-self-explanation", "reflection-q2-count-clean", "reflection-goal-q3-explain-type",
+    q1Offered: ["went-explain-clean", "went-explain-new"]);
+
+// The same guard on the comparison goal, which is built from the same rule.
+var alwaysCompared = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "methodComparison",
+    GoalExercises =
+    [
+        Goal(Elimination, 0, 0, 50, compared: true),
+        Goal(Elimination, 1, 0, 40, compared: true),
+    ],
+};
+
+CheckGoal("goal-window/comparison-always-compared", alwaysCompared,
+    "reflection-goal-q1-comparison", "reflection-q2-count-clean", "reflection-goal-q3-compare-method",
+    q1Offered: ["went-compare-clean", "went-compare-new"]);
+
+// A solve-on-own goal: they worked one out that they used to hand over, and the system was handed
+// equalization.
+var solvedAlone = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "solveOnOwn",
+    GoalExercises =
+    [
+        Goal(Equalization, 2, 1, 50, own: false),
+        Goal(Equalization, 1, 1, 50, own: false),
+        Goal(Elimination, 0, 0, 40, own: true),
+    ],
+    PriorSystem = [Elimination],
+};
+
+CheckGoal("goal-window/solve-on-own-worked", solvedAlone,
+    "reflection-goal-q1-solve-on-own", "reflection-goal-q2-system-method", "reflection-goal-q3-solve-method",
+    // "Fewer mistakes when I did it myself" is true here too: nothing went wrong on the one they did
+    // themselves, against 2 and 1 on the two they handed over.
+    q1Aligned: ["went-alone-clean", "went-alone-hints", "went-alone-new", "went-alone-fewer"],
+    q2Aligned: ["pick-equalization"],
+    q3Chips: ["pick-equalization", "pick-substitution", "pick-elimination"]);
+
+// The solve-on-own option comparing alone against the system is hidden when they ALWAYS solve alone,
+// because there is no second group for it to be true of.
+var alwaysAlone = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "solveOnOwn",
+    GoalExercises = [Goal(Elimination, 0, 0, 40, own: true), Goal(Elimination, 1, 0, 40, own: true)],
+};
+
+CheckGoal("goal-window/solve-on-own-always-alone", alwaysAlone,
+    "reflection-goal-q1-solve-on-own", "reflection-q2-count-clean", "reflection-goal-q3-solve-method",
+    q1Offered: ["went-alone-clean", "went-alone-hints", "went-alone-new"]);
+
+// A hints-and-errors goal with a limit, where every exercise stayed inside it.
+var hintsErrors = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "hintsAndErrors", GoalQuality = "hints", GoalLimit = 1,
+    GoalExercises = [Goal(Elimination, 1, 1, 50, type: Efficiency), Goal(Elimination, 0, 0, 40, type: Efficiency)],
+};
+
+CheckGoal("goal-window/hints-errors-worked", hintsErrors,
+    "reflection-goal-q1-hints-errors", "reflection-goal-q2-most-hints", "reflection-goal-q3-hints-errors",
+    q1Aligned: ["went-no-hints", "went-no-errors", "went-errors-down", "went-hints-down", "went-within-limit"],
+    q1Offered: ["went-no-hints", "went-no-errors", "went-errors-down", "went-hints-down", "went-within-limit"],
+    // This category is measured over whatever they did, so which commitments are menu-worthy depends
+    // on the exercise types inside the goal — the same gate as a method goal.
+    q3Chips: ["act-no-hints", "act-beat-average", "act-solve-alone", "act-explain"]);
+
+// The same goal with the limit on HINTS asks about hints, not mistakes.
+var hintsOnly = new ReflectionEvidence
+{
+    IsGoal = true, Focus = "hintsAndErrors", GoalQuality = "hints", GoalLimit = 1,
+    GoalExercises = [Goal(Elimination, 0, 3, 50), Goal(Equalization, 0, 1, 50)],
+};
+
+CheckGoal("goal-window/hints-errors-asks-about-hints", hintsOnly,
+    "reflection-goal-q1-hints-errors", "reflection-goal-q2-most-hints", "reflection-goal-q3-hints-errors",
+    q2Aligned: ["pick-elimination"]);
+
+// A goal whose window could not be read back falls back to the plain questions rather than breaking.
+scenarios.Add(("goal/no-window", new ReflectionEvidence { IsGoal = true, Focus = "method", InSet = 3 }));
+Expect("goal/no-window", q1: "reflection-q1-better-than-last");
+
 // ── The report ───────────────────────────────────────────────────────────────
 
 Console.WriteLine();

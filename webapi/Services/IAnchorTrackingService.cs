@@ -462,7 +462,10 @@ namespace webapi.Services
                 opportunities++;
 
                 // "Yes to Elimination" and a bare "Yes" both count as engaging, matching the reader above.
-                if (decisions.Any(d => d.Choice.StartsWith("Yes", StringComparison.OrdinalIgnoreCase)))
+                // A decline anywhere beats a yes anywhere, though, because the two solution points are
+                // the same act: asking to be shown after trying is not doing it yourself. See
+                // AnchorDimension.Engaged.
+                if (AnchorDimension.Engaged(decisions.Select(d => d.Choice)))
                     engaged++;
             }
 
@@ -523,7 +526,7 @@ namespace webapi.Services
                 byAttempt.TryGetValue(attempt.Id, out var records);
                 records ??= [];
 
-                bool Engaged(string[] names) => AnchorDimension.AnyYes(
+                bool Engaged(string[] names) => AnchorDimension.Engaged(
                     records.Where(r => names.Contains(r.Name, StringComparer.Ordinal)).Select(r => r.Choice));
 
                 events.Add(new GoalEvent

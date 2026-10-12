@@ -7,6 +7,7 @@ using System.Text.Json;
 using webapi.Models.Analytics;
 using webapi.Models.Anchors;
 using webapi.Models.Database;
+using webapi.Models.Flexibility;
 using webapi.Models.Student;
 using webapi.Services;
 
@@ -439,7 +440,7 @@ namespace webapi.Controllers
             // later: the goal has just been claimed and is about to stop existing.
             EnqueueReflection(conn, request.StudentId, "goal", request.GoalId, request.GoalLabel,
                 request.TotalErrors, request.TotalHints, 0, request.ExerciseType, "", request.Focus,
-                BuildGoalEvidence(conn, request.StudentId, request.Since, request.Focus));
+                BuildGoalEvidence(conn, request.StudentId, request.GoalId, request.Since, request.Focus, request.Quality, request.MaxPerExercise));
 
             var newTotal = conn.ExecuteScalar<int>(
                 $"SELECT TotalXP FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId = @StudentId",
@@ -532,6 +533,48 @@ namespace webapi.Controllers
 
         /// <summary>Resolve for following through on the next action the reflection asked for.</summary>
         private const int FollowThroughResolveXp = 5;
+
+        /// <summary>Choice for committing to a next action, paid when they commit rather than when they keep it.</summary>
+        private const int CommitmentChoiceXp = 2;
+
+        /// <summary>
+        /// Pays the small Choice award for a next-action commitment, once per reflection item.
+        ///
+        /// Idempotent through the agency log rather than a column: the source names the queue item, and a
+        /// student who re-answers the same reflection cannot be paid twice for one promise. The row is
+        /// also the audit trail for what the award was for.
+        /// </summary>
+        private static void AwardCommitmentChoice(
+            Microsoft.Data.Sqlite.SqliteConnection conn, long studentId, long queueItemId)
+        {
+            var source = $"reflection-commit-{queueItemId}";
+
+            var already = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(*) FROM {StudentProgressDBSettings.AgencyLogTable} " +
+                "WHERE StudentId = @StudentId AND XpType = 'choice' AND Source = @Source",
+                new { StudentId = studentId, Source = source });
+
+            if (already > 0) return;
+
+            conn.Execute(
+                $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, Amount, Source, LoggedAt) " +
+                "VALUES (@StudentId, 'choice', @Amount, @Source, @Now)",
+                new
+                {
+                    StudentId = studentId,
+                    Amount = CommitmentChoiceXp,
+                    Source = source,
+                    Now = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
+                });
+
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ProgressTable} " +
+                "SET ChoiceXP = ChoiceXP + @Amount, LifetimeAgencyXP = LifetimeAgencyXP + @Amount " +
+                "WHERE StudentId = @StudentId",
+                new { StudentId = studentId, Amount = CommitmentChoiceXp });
+
+            Console.WriteLine($"[Reflection] Commitment Choice +{CommitmentChoiceXp} for queue item {queueItemId}");
+        }
 
         /// <summary>
         /// Judges the student's last next-action promise against the exercise they just finished.
@@ -1738,19 +1781,48 @@ RULES:
         /// five is the same window the goal maths itself uses, so a question can never describe a larger
         /// set than the goal actually counted.
         ///
-        /// Shape: set=5;errors=7;hints=2;clean=1;hintfree=3;solo=2;explain=0;compare=5;focus=4
+        /// Stored as JSON rather than a flat string, because the goal questions ask about the individual
+        /// exercises in ORDER — did the errors go down, were the later ones faster, which method had the
+        /// most errors. Totals cannot answer any of those.
         /// </summary>
         private static string BuildGoalEvidence(
-            Microsoft.Data.Sqlite.SqliteConnection conn, long studentId, string since, string focus)
+            Microsoft.Data.Sqlite.SqliteConnection conn,
+            long studentId,
+            string category,
+            string since,
+            string focus,
+            string quality,
+            int limit)
         {
-            var attempts = conn.Query<GoalAttemptRow>(
-                $"SELECT Id, TotalErrors, TotalHints, SelectedMethod FROM {AnchorStoreSettings.Table} " +
-                "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
-                (string.IsNullOrWhiteSpace(since) ? "" : "AND CompletedAt >= @Since ") +
-                "ORDER BY Id DESC LIMIT 5",
-                string.IsNullOrWhiteSpace(since)
+            // Narrowed the same way the goal itself was measured, so a question can never describe a set
+            // the goal did not count: a method goal is about one method, an exercise-type goal one type.
+            //
+            // The other four categories are about a DECISION any exercise can be part of, so theirs stays
+            // open — and has to, because their questions compare the exercises where the decision was
+            // taken against the ones where it was not, which needs both kinds in the window.
+            var narrowing =
+                category == "method" && !string.IsNullOrWhiteSpace(focus) ? "AND SelectedMethod = @Focus COLLATE NOCASE " :
+                category == "exerciseType" && !string.IsNullOrWhiteSpace(focus) ? "AND ExerciseType = @Focus COLLATE NOCASE " :
+                "";
+
+            // The named parameters have to be passed as one object, so the whole set is built here and
+            // reused by the two queries below rather than each spelling its own.
+            var windowArgs = narrowing.Length == 0
+                ? (object)(string.IsNullOrWhiteSpace(since)
                     ? new { StudentId = studentId }
                     : new { StudentId = studentId, Since = since })
+                : (string.IsNullOrWhiteSpace(since)
+                    ? new { StudentId = studentId, Focus = focus }
+                    : new { StudentId = studentId, Since = since, Focus = focus });
+
+            var attempts = conn.Query<GoalAttemptRow>(
+                $"SELECT Id, ExerciseType, ExerciseId, TotalErrors, TotalHints, TotalTime, SelectedMethod " +
+                $"FROM {AnchorStoreSettings.Table} " +
+                "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
+                (string.IsNullOrWhiteSpace(since) ? "" : "AND CompletedAt >= @Since ") +
+                narrowing +
+                "ORDER BY Id DESC LIMIT 5",
+                windowArgs)
                 .ToList();
 
             if (attempts.Count == 0) return "";
@@ -1760,23 +1832,190 @@ RULES:
                 $"SELECT AttemptId, Name, Choice FROM {AnchorStoreSettings.RecordTable} WHERE AttemptId IN @Ids",
                 new { Ids = ids }).ToList();
 
-            bool Engaged(long attemptId, string[] names) => records.Any(record =>
-                record.AttemptId == attemptId
-                && names.Contains(record.Name, StringComparer.Ordinal)
-                && record.Choice.StartsWith("Yes", StringComparison.OrdinalIgnoreCase));
+            // Which methods each exercise allowed, so "was their choice a good one" can be answered. Read
+            // from the exercises database, which is a different file from the attempts.
+            var allowed = AllowedMethodsByExercise(attempts);
 
-            var set = attempts.Count;
-            var clean = attempts.Count(a => a.TotalErrors == 0 && a.TotalHints == 0);
-            var hintFree = attempts.Count(a => a.TotalHints == 0);
-            var solo = attempts.Count(a => Engaged(a.Id, AnchorDimension.SolveOnOwn));
-            var explain = attempts.Count(a => Engaged(a.Id, AnchorDimension.SelfExplanation));
-            var compare = attempts.Count(a => Engaged(a.Id, AnchorDimension.MethodComparison));
-            var usedFocus = focus.Length > 0
-                ? attempts.Count(a => string.Equals(a.SelectedMethod, focus, StringComparison.OrdinalIgnoreCase))
-                : 0;
+            var window = new ReflectionGoalWindow { Quality = quality ?? "", Limit = limit };
 
-            return $"set={set};errors={attempts.Sum(a => a.TotalErrors)};hints={attempts.Sum(a => a.TotalHints)};" +
-                   $"clean={clean};hintfree={hintFree};solo={solo};explain={explain};compare={compare};focus={usedFocus}";
+            // Oldest first: every option rule is about order — "later" versus "earlier", the first
+            // exercise versus the last.
+            foreach (var attempt in attempts.OrderBy(a => a.Id))
+            {
+                window.Exercises.Add(ToGoalExercise(attempt, records, allowed));
+            }
+
+            // The exercises that came BEFORE this goal, for the options that read "I explained in a
+            // method I used to skip". That comparison is against their habit before the goal, which the
+            // window itself cannot show: inside it, everything the goal is about has already changed.
+            var priorAttempts = conn.Query<GoalAttemptRow>(
+                $"SELECT Id, ExerciseType, ExerciseId, TotalErrors, TotalHints, TotalTime, SelectedMethod " +
+                $"FROM {AnchorStoreSettings.Table} " +
+                "WHERE StudentId = @StudentId AND CompletedAt <> '' AND Id < @Before ORDER BY Id DESC LIMIT 20",
+                new { StudentId = studentId, Before = attempts.Min(a => a.Id) }).ToList();
+
+            if (priorAttempts.Count > 0)
+            {
+                var priorIds = priorAttempts.Select(a => a.Id).ToList();
+                var priorRecords = conn.Query<DecisionRecordRow>(
+                    $"SELECT AttemptId, Name, Choice FROM {AnchorStoreSettings.RecordTable} WHERE AttemptId IN @Ids",
+                    new { Ids = priorIds }).ToList();
+
+                foreach (var attempt in priorAttempts)
+                {
+                    window.OtherMethodExercises.Add(ToGoalExercise(attempt, priorRecords, allowed));
+
+                    var method = (int)MethodFromName(attempt.SelectedMethod);
+                    if (Declined(attempt.Id, AnchorDimension.SelfExplanation, priorRecords)) window.PriorSkippedExplanation.Add(method);
+                    if (Declined(attempt.Id, AnchorDimension.MethodComparison, priorRecords)) window.PriorSkippedComparison.Add(method);
+                    if (Declined(attempt.Id, AnchorDimension.SolveOnOwn, priorRecords)) window.PriorSystem.Add(method);
+                }
+            }
+
+            return System.Text.Json.JsonSerializer.Serialize(window);
+        }
+
+        /// <summary>One attempt reduced to the shape a question can be built from.</summary>
+        private static ReflectionGoalExercise ToGoalExercise(
+            GoalAttemptRow attempt,
+            List<DecisionRecordRow> records,
+            Dictionary<(int Type, long Id), List<int>> allowed)
+        {
+            var method = (int)MethodFromName(attempt.SelectedMethod);
+            var type = ExerciseTypeNumber(attempt.ExerciseType);
+
+            return new ReflectionGoalExercise
+            {
+                Method = method,
+                ExerciseType = type,
+                Errors = attempt.TotalErrors,
+                Hints = attempt.TotalHints,
+                Time = attempt.TotalTime,
+                Own = Engaged(attempt.Id, AnchorDimension.SolveOnOwn, records),
+                Explained = Engaged(attempt.Id, AnchorDimension.SelfExplanation, records),
+                Compared = Engaged(attempt.Id, AnchorDimension.MethodComparison, records),
+                WasShown = Declined(attempt.Id, AnchorDimension.SolveOnOwn, records),
+                Correct = allowed.TryGetValue((type, attempt.ExerciseId), out var ok) && ok.Contains(method),
+            };
+        }
+
+        private static bool Engaged(long attemptId, string[] names, List<DecisionRecordRow> records) =>
+            AnchorDimension.Engaged(Answers(attemptId, names, records));
+
+        /// <summary>
+        /// Whether they turned the offer down. Distinct from "no record at all", which means they never
+        /// reached that point rather than that they refused it.
+        /// </summary>
+        private static bool Declined(long attemptId, string[] names, List<DecisionRecordRow> records) =>
+            Answers(attemptId, names, records)
+                .Any(choice => choice.StartsWith("No", StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>The answers recorded for one dimension on one attempt, in the order they were made.</summary>
+        private static IEnumerable<string> Answers(long attemptId, string[] names, List<DecisionRecordRow> records) =>
+            records
+                .Where(record => record.AttemptId == attemptId && names.Contains(record.Name, StringComparer.Ordinal))
+                .Select(record => record.Choice);
+
+        /// <summary>
+        /// For each attempt, the methods its exercise allowed. Empty for Matching, which gives the method
+        /// rather than asking for one, and for any exercise that cannot be found.
+        /// </summary>
+        private static Dictionary<(int Type, long Id), List<int>> AllowedMethodsByExercise(List<GoalAttemptRow> attempts)
+        {
+            var result = new Dictionary<(int, long), List<int>>();
+
+            // Only the two types that ask the student to choose have a right answer here.
+            var chosen = attempts
+                .Select(attempt => (Type: ExerciseTypeNumber(attempt.ExerciseType), attempt.ExerciseId))
+                .Where(attempt => attempt.Type is 1 or 2)
+                .Distinct()
+                .ToList();
+
+            foreach (var group in chosen.GroupBy(attempt => attempt.Type))
+            {
+                var column = group.Key == 1 ? "EfficientMethods" : "SuitableMethods";
+                var table = group.Key == 1 ? "EfficiencyExercises" : "SuitabilityExercises";
+                var ids = group.Select(attempt => attempt.ExerciseId).Distinct().ToList();
+
+                try
+                {
+                    using var exerciseConn = DBSettings.GetSQLiteConnectionForExercisesDB();
+                    var rows = exerciseConn.Query<(long Id, string Methods)>(
+                        $"SELECT Id, {column} AS Methods FROM {table} WHERE Id IN @Ids", new { Ids = ids });
+
+                    foreach (var row in rows)
+                        result[(group.Key, row.Id)] = [.. ParseMethodList(row.Methods)];
+                }
+                catch
+                {
+                    // The exercises database is not essential to a reflection. If it cannot be read the
+                    // choice questions simply lose their correct answer, which the bank already treats as
+                    // "we cannot check this" rather than as a wrong answer.
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// The exercise type as the questions number it, from the name the attempt stored.
+        ///
+        /// The attempts table keeps the type NAME, so this is the one place the two are bridged: the
+        /// questions were specified against numbers (Efficiency 1, Suitability 2, Matching 3) and every
+        /// rule in the bank is written with those. Zero means unrecognised, which callers treat as "there
+        /// is no right answer to check" rather than as a fourth kind of exercise.
+        /// </summary>
+        private static int ExerciseTypeNumber(string? name) => name?.Trim().ToLowerInvariant() switch
+        {
+            "efficiency" => 1,
+            "suitability" => 2,
+            "matching" => 3,
+            _ => 0,
+        };
+
+        /// <summary>The method list as stored: a JSON array of the enum's numeric values.</summary>
+        private static List<int> ParseMethodList(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return [];
+
+            try
+            {
+                return [.. System.Text.Json.JsonSerializer.Deserialize<List<int>>(json) ?? []];
+            }
+            catch
+            {
+                return [];
+            }
+        }
+
+        /// <summary>The Method enum's value for a stored method name, or Equalization when unrecognised.</summary>
+        private static Method MethodFromName(string? name) => name?.Trim().ToLowerInvariant() switch
+        {
+            "substitution" => Method.Substitution,
+            "elimination" => Method.Elimination,
+            _ => Method.Equalization,
+        };
+
+        /// <summary>
+        /// The goal's window as it was stored at completion, or null when it cannot be read.
+        ///
+        /// Null is a normal outcome, not a failure: rows written before the window was stored as JSON
+        /// still hold the old flat string, and a goal whose window was empty stored nothing at all. The
+        /// caller falls back to the plain questions for those, so an old row degrades instead of breaking.
+        /// </summary>
+        private static ReflectionGoalWindow? ParseGoalWindow(string? evidence)
+        {
+            if (string.IsNullOrWhiteSpace(evidence)) return null;
+            if (!evidence.TrimStart().StartsWith('{')) return null;
+
+            try
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<ReflectionGoalWindow>(evidence);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
@@ -1803,8 +2042,15 @@ RULES:
                 InSet = 1,
             };
 
-            if (isGoal && item.ItemId == "method" && item.Focus.Length > 0)
-                evidence.FocusLabelKey = $"flexibility:{item.Focus.ToLowerInvariant()}-method";
+            if (isGoal && item.Focus.Length > 0)
+            {
+                // The narrowed value: the method for a method goal, the TYPE for an exercise-type goal.
+                // The category is in ItemId and is not enough — all three types share one category.
+                evidence.GoalFocus = item.Focus;
+
+                if (item.ItemId == "method")
+                    evidence.FocusLabelKey = $"flexibility:{item.Focus.ToLowerInvariant()}-method";
+            }
 
             evidence.DecisionDimension =
                 evidence.Focus == "Suitability" ? "compare" :
@@ -1840,32 +2086,56 @@ RULES:
 
             var set = 1;
 
-            if (isGoal && !string.IsNullOrWhiteSpace(item.Evidence))
+            // A goal's window: the exercises it covered, in order, plus the limit it was measured
+            // against. Stored as JSON so the questions can ask about ORDER — did the errors go down,
+            // were the later ones faster, which method had the most errors — none of which a total
+            // can answer.
+            if (isGoal)
             {
-                var counts = item.Evidence.Split(';')
-                    .Select(chunk => chunk.Split('='))
-                    .Where(bits => bits.Length == 2)
-                    .ToDictionary(bits => bits[0], bits => int.TryParse(bits[1], out var parsed) ? parsed : 0);
+                var window = ParseGoalWindow(item.Evidence);
 
-                counts.TryGetValue("set", out set);
-                if (set < 1) set = 1;
+                if (window is not null && window.Exercises.Count > 0)
+                {
+                    evidence.GoalExercises = window.Exercises;
+                    evidence.GoalQuality = window.Quality;
+                    evidence.GoalLimit = window.Limit;
 
-                evidence.InSet = set;
-                counts.TryGetValue("clean", out var clean);
-                counts.TryGetValue("hintfree", out var hintFree);
-                counts.TryGetValue("solo", out var solo);
-                counts.TryGetValue("explain", out var explain);
-                counts.TryGetValue("compare", out var compare);
-                counts.TryGetValue("focus", out var usedFocus);
+                    set = window.Exercises.Count;
+                    evidence.InSet = set;
+                    evidence.CleanRuns = window.Exercises.Count(e => e.Errors == 0 && e.Hints == 0);
+                    evidence.HintFreeRuns = window.Exercises.Count(e => e.Hints == 0);
+                    evidence.SolvedOnOwnRuns = window.Exercises.Count(e => e.Own);
+                    evidence.ExplainedSelfRuns = window.Exercises.Count(e => e.Explained);
+                    evidence.ComparedRuns = window.Exercises.Count(e => e.Compared);
 
-                evidence.CleanRuns = clean;
-                evidence.HintFreeRuns = hintFree;
-                evidence.SolvedOnOwnRuns = solo;
-                evidence.ExplainedSelfRuns = explain;
-                evidence.ComparedRuns = compare;
-                evidence.UsedFocusRuns = usedFocus;
+                    // The goal's own totals, so every question that reads them stays consistent with the
+                    // window the goal was actually measured over.
+                    evidence.Errors = window.Exercises.Sum(e => e.Errors);
+                    evidence.Hints = window.Exercises.Sum(e => e.Hints);
+
+                    evidence.HasDecisions = window.Exercises.Any(e => e.Own || e.Explained || e.Compared || e.WasShown);
+                    evidence.DidSolveOnOwn = window.Exercises.Any(e => e.Own);
+                    evidence.WasShownAnswer = window.Exercises.Any(e => e.WasShown);
+                    evidence.DidExplain = window.Exercises.Any(e => e.Explained);
+                    evidence.DidCompare = window.Exercises.Any(e => e.Compared);
+
+                    evidence.UsedFocusRuns = string.IsNullOrWhiteSpace(item.Focus)
+                        ? 0
+                        : window.Exercises.Count(e => e.Method == (int)MethodFromName(item.Focus));
+
+                    // The history the window cannot show: the exercises from BEFORE this goal. Three of the
+                    // Q1 options read "I did this in a method I used to skip", and the method goal's
+                    // comparison question reads the student's other methods, so all four lists have to be
+                    // carried across — without them those options can never be the right answer and a
+                    // student who answers honestly is marked wrong.
+                    evidence.OtherMethodExercises = window.OtherMethodExercises;
+                    evidence.PriorSkippedExplanation = window.PriorSkippedExplanation;
+                    evidence.PriorSkippedComparison = window.PriorSkippedComparison;
+                    evidence.PriorSystem = window.PriorSystem;
+                }
             }
-            else
+
+            if (evidence.GoalExercises.Count == 0)
             {
                 // One exercise, so every count is the decision itself.
                 evidence.CleanRuns = item.Errors == 0 && item.Hints == 0 ? 1 : 0;
@@ -1947,8 +2217,18 @@ RULES:
         private sealed class GoalAttemptRow
         {
             public long Id { get; set; }
+
+            /// <summary>
+            /// The type NAME, not its number. The attempts table stores "Efficiency", "Suitability" and
+            /// "Matching" as text, which is also what the rest of this controller compares against for
+            /// exercise reflections.
+            /// </summary>
+            public string ExerciseType { get; set; } = "";
+
+            public long ExerciseId { get; set; }
             public int TotalErrors { get; set; }
             public int TotalHints { get; set; }
+            public double TotalTime { get; set; }
             public string SelectedMethod { get; set; } = "";
         }
 
@@ -2071,6 +2351,16 @@ RULES:
                       "insightXp=0. Copy this exactly, do NOT agree with their version, and do NOT invent a reason why it was right.";
 
             Console.WriteLine($"[Reflection] Question {asked.Id} ({asked.Kind}) — choice=\"{request.Choice}\"{(string.IsNullOrWhiteSpace(request.ChoiceLabel) ? "" : $" (\"{request.ChoiceLabel}\")")} => {verdict.Status} ({verdict.InsightXp} XP){(verdict.FromRecord ? "" : ", the text has to decide")}");
+
+            // A commitment pays a little Choice, straight away.
+            //
+            // Choosing what to do next IS the skill Choice is for, so it is worth something the moment
+            // they commit, whether or not the next exercise bears it out. Following through is a
+            // different thing and pays Resolve later, from the exercise itself. Paying nothing until the
+            // promise is kept would punish a student whose next exercise simply did not offer the moment
+            // they had picked.
+            if (asked.Kind == ReflectionQuestionBank.NextAction && !string.IsNullOrWhiteSpace(request.Choice))
+                AwardCommitmentChoice(conn, request.StudentId, request.QueueItemId);
 
             if (verdict.FromRecord)
             {

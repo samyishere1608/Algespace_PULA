@@ -68,6 +68,15 @@ namespace webapi.Models.Student
         /// where that boundary is. With it, the reflection questions can be about the actual set.
         /// </summary>
         public string Since { get; set; } = "";
+        /// <summary>
+        /// The goal's per-exercise limit, for the category that sets one ("hints" or "errors").
+        ///
+        /// Sent for the same reason as the window: the goal is claimed and REMOVED from the server on
+        /// completion, so by the time the reflection is answered there is nowhere to look this up. The
+        /// hint questions need it to ask whether they stayed inside it.
+        /// </summary>
+        public string Quality { get; set; } = "";
+        public int MaxPerExercise { get; set; }
         /// <summary>Resolve XP awarded for following through on the goal.</summary>
         public int XpEarned { get; set; }
         public string ExerciseType { get; set; } = "";

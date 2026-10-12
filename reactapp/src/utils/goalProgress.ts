@@ -209,6 +209,11 @@ async function logCompletion(studentId: number, goal: StudyGoal, label: string, 
             // five most recent, which may have nothing to do with the goal being celebrated.
             since: dateToServerStamp(new Date(goal.createdAt)),
             focus: goal.focus ?? "",
+            // The limit the goal was measured against, so the reflection can ask whether they stayed
+            // inside it. The goal is claimed and removed on completion, so the server cannot look it up
+            // afterwards — it has to arrive with this call or not at all.
+            quality: goal.quality ?? "",
+            maxPerExercise: goal.maxPerExercise ?? 0,
         });
     } catch {
         // The student keeps the XP locally either way; only the server-side record is lost.

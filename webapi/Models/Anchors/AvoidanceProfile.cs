@@ -61,9 +61,25 @@ namespace webapi.Models.Anchors
         /// </summary>
         public static readonly string[] MethodComparison = ["ComparisonChoice", "ResolvingChoice"];
 
-        /// <summary>True when any of the named decisions was answered "Yes" or "Yes to X".</summary>
-        public static bool AnyYes(IEnumerable<string> choices) =>
-            choices.Any(c => c.StartsWith("Yes", StringComparison.OrdinalIgnoreCase));
+        /// <summary>
+        /// Whether the answers to a dimension's decisions read as ENGAGEMENT: the offer was taken up and
+        /// never handed back.
+        ///
+        /// A decline anywhere beats a yes anywhere, because two of these dimensions are the same act
+        /// offered twice inside one exercise. A student who starts the calculation and then, after
+        /// getting it wrong, asks to be shown the answer has taken help on that exercise — and what the
+        /// SolveOnOwn goal is about is doing the calculation, not attempting it. Reading "yes then no" as
+        /// engagement lets the first moment paper over the help that came after, and it also sets the
+        /// goal against the reflection: the client's own summary of the exercise already counts a decline
+        /// as winning, so the two would be describing the same exercise in two different ways.
+        /// </summary>
+        public static bool Engaged(IEnumerable<string> choices)
+        {
+            var answers = choices.ToList();
+
+            return answers.Any(c => c.StartsWith("Yes", StringComparison.OrdinalIgnoreCase))
+                   && !answers.Any(c => c.StartsWith("No", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     /// <summary>

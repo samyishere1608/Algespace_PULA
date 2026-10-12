@@ -104,12 +104,14 @@ namespace webapi.Services
         /// and where it does not the item gets a weaker question rather than no question: a reflection
         /// that skips a step is worse than one that asks something simpler.
         /// </summary>
-        public static List<ReflectionQuestion> Build(ReflectionEvidence evidence) =>
-        [
-            BuildObservation(evidence),
-            BuildJudgement(evidence),
-            BuildNextAction(evidence),
-        ];
+        public static List<ReflectionQuestion> Build(ReflectionEvidence evidence) => evidence.IsGoal
+            ? evidence.GoalExercises.Count > 0
+                // A goal with a readable window is asked its own questions.
+                ? [BuildGoalObservation(evidence), BuildGoalJudgement(evidence), BuildGoalNextAction(evidence)]
+                // A goal completed before the window was recorded, or one whose window was empty. The
+                // plain questions are all that can be asked of it, and they still ask something real.
+                : [BuildObservation(evidence), BuildJudgement(evidence), BuildNextAction(evidence)]
+            : [BuildObservation(evidence), BuildJudgement(evidence), BuildNextAction(evidence)];
 
         /// <summary>
         /// Q1: which part went well, read from the per-step numbers.
@@ -424,6 +426,609 @@ namespace webapi.Services
             return question;
         }
 
+        // ── The goal questions ────────────────────────────────────────────────
+        //
+        // A goal is a different kind of item from an exercise, and it is asked different things.
+        //
+        // Q1 is a MENU OF THINGS THAT MIGHT HAVE GONE WELL, and the record decides which of them
+        // actually did. The student is not told what we know; they pick the one they believe, and they
+        // are right when it matches. If nothing went well the menu is still offered and any answer pays
+        // the partial amount, because a reflection the student answered honestly should not be paid
+        // nothing — but if SOMETHING did go well, claiming one of the others is simply wrong.
+        //
+        // Q2 is about the goal's own pattern: which method was the weak one, how this method compared
+        // with the others, whether explaining helped.
+        //
+        // Q3 names a commitment out of the things the next exercise can actually check.
+        //
+        // Every rule reads the goal's window: the exercises it covered, in order.
+
+        /// <summary>Q1 for a goal: what actually went well, as a menu the student chooses from.</summary>
+        private static ReflectionQuestion BuildGoalObservation(ReflectionEvidence evidence)
+        {
+            var window = evidence.GoalExercises;
+            var question = new ReflectionQuestion
+            {
+                Id = "goal-q1-went-well",
+                Kind = Observation,
+                ItemType = "goal",
+                Expectation = "they name something that genuinely went well in this goal, and it did",
+            };
+
+            var options = new List<(string Id, string TextKey, bool True)>();
+
+            void Offer(string id, string textKey, bool isTrue) => options.Add((id, textKey, isTrue));
+
+            switch (evidence.Focus)
+            {
+                case "method":
+                    question.TextKey = "reflection-goal-q1-method";
+                    question.Slots = new Dictionary<string, string> { ["focus"] = evidence.FocusLabelKey };
+                    Offer("went-errors-down", "reflection-chip-went-errors-down", Last(window, e => e.Errors) < First(window, e => e.Errors));
+                    Offer("went-no-errors", "reflection-chip-went-no-errors", window.Any(e => e.Errors == 0));
+                    Offer("went-no-hints", "reflection-chip-went-no-hints", window.Any(e => e.Hints == 0));
+                    Offer("went-faster", "reflection-chip-went-faster", Last(window, e => e.Time) < First(window, e => e.Time));
+                    Offer("went-solved-alone", "reflection-chip-went-solved-alone", window.Any(e => e.Own));
+                    break;
+
+                case "exerciseType" when GoalExerciseType(evidence) == SuitabilityType:
+                    question.TextKey = "reflection-goal-q1-suitability";
+                    Offer("went-better-choices", "reflection-chip-went-better-choices", LaterAverage(window, e => e.Correct) > EarlierAverage(window, e => e.Correct));
+                    Offer("went-always-correct", "reflection-chip-went-always-correct", window.Count > 0 && window.All(e => e.Correct));
+                    Offer("went-no-errors", "reflection-chip-went-no-errors", window.Any(e => e.Errors == 0));
+                    Offer("went-fewer-hints", "reflection-chip-went-fewer-hints", LaterMean(window, e => e.Hints) < EarlierMean(window, e => e.Hints));
+                    break;
+
+                case "exerciseType" when GoalExerciseType(evidence) == EfficiencyType:
+                    question.TextKey = "reflection-goal-q1-efficiency";
+                    Offer("went-better-choices", "reflection-chip-went-best-choices", LaterAverage(window, e => e.Correct) > EarlierAverage(window, e => e.Correct));
+                    Offer("went-always-correct", "reflection-chip-went-always-best", window.Count > 0 && window.All(e => e.Correct));
+                    Offer("went-no-errors", "reflection-chip-went-no-errors", window.Any(e => e.Errors == 0));
+                    Offer("went-faster", "reflection-chip-went-faster", Last(window, e => e.Time) < First(window, e => e.Time));
+                    break;
+
+                case "exerciseType":
+                    question.TextKey = "reflection-goal-q1-matching";
+                    Offer("went-no-errors", "reflection-chip-went-no-errors", window.Any(e => e.Errors == 0));
+                    Offer("went-fewer-errors", "reflection-chip-went-fewer-errors", LaterMean(window, e => e.Errors) < EarlierMean(window, e => e.Errors));
+                    Offer("went-no-hints", "reflection-chip-went-no-hints", window.Any(e => e.Hints == 0));
+                    Offer("went-faster", "reflection-chip-went-faster", Last(window, e => e.Time) < First(window, e => e.Time));
+                    Offer("went-explained", "reflection-chip-went-explained", window.Any(e => e.Explained));
+                    break;
+
+                case "selfExplanation":
+                {
+                    question.TextKey = "reflection-goal-q1-self-explanation";
+
+                    // Every rule here compares the exercises they explained against the ones they did
+                    // not, so with only one kind present there is nothing to compare against — and
+                    // without this guard the absent side averages to zero, which would mark "fewer
+                    // mistakes when I explained" as true for a student who never explained at all.
+                    var explained = window.Where(e => e.Explained).ToList();
+                    var skipped = window.Where(e => !e.Explained).ToList();
+                    var comparable = explained.Count > 0 && skipped.Count > 0;
+
+                    if (comparable)
+                        Offer("went-explain-helped", "reflection-chip-went-explain-helped", Mean(explained, e => e.Errors) < Mean(skipped, e => e.Errors));
+
+                    Offer("went-explain-clean", "reflection-chip-went-explain-clean", explained.Any(e => e.Errors == 0));
+
+                    if (comparable)
+                        Offer("went-explain-hints", "reflection-chip-went-explain-hints", Mean(explained, e => e.Hints) < Mean(skipped, e => e.Hints));
+
+                    Offer("went-explain-new", "reflection-chip-went-explain-new", explained.Any(e => evidence.PriorSkippedExplanation.Contains(e.Method)));
+                    break;
+                }
+
+                case "methodComparison":
+                {
+                    question.TextKey = "reflection-goal-q1-comparison";
+
+                    // Same guard, same reason as self-explanation above.
+                    var compared = window.Where(e => e.Compared).ToList();
+                    var skipped = window.Where(e => !e.Compared).ToList();
+                    var comparable = compared.Count > 0 && skipped.Count > 0;
+
+                    if (comparable)
+                        Offer("went-compare-helped", "reflection-chip-went-compare-helped", Mean(compared, e => e.Errors) < Mean(skipped, e => e.Errors));
+
+                    Offer("went-compare-clean", "reflection-chip-went-compare-clean", compared.Any(e => e.Errors == 0));
+
+                    if (comparable)
+                        Offer("went-compare-hints", "reflection-chip-went-compare-hints", Mean(compared, e => e.Hints) < Mean(skipped, e => e.Hints));
+
+                    Offer("went-compare-new", "reflection-chip-went-compare-new", compared.Any(e => evidence.PriorSkippedComparison.Contains(e.Method)));
+                    break;
+                }
+
+                case "solveOnOwn":
+                    question.TextKey = "reflection-goal-q1-solve-on-own";
+                    Offer("went-alone-clean", "reflection-chip-went-alone-clean", window.Any(e => e.Own && e.Errors == 0));
+                    Offer("went-alone-hints", "reflection-chip-went-alone-hints", window.Any(e => e.Own && e.Hints == 0));
+                    Offer("went-alone-new", "reflection-chip-went-alone-new", window.Any(e => e.Own && evidence.PriorSystem.Contains(e.Method)));
+                    // Offered only when there is something to compare against. A student who always solves
+                    // it themselves has no other kind of exercise, so the option has no meaning for them.
+                    if (window.Any(e => !e.Own) && window.Any(e => e.Own))
+                        Offer("went-alone-fewer", "reflection-chip-went-alone-fewer", Mean(window.Where(e => e.Own), e => e.Errors) < Mean(window.Where(e => !e.Own), e => e.Errors));
+                    break;
+
+                default:
+                    question.TextKey = "reflection-goal-q1-hints-errors";
+                    Offer("went-no-hints", "reflection-chip-went-no-hints", window.Any(e => e.Hints == 0));
+                    Offer("went-no-errors", "reflection-chip-went-no-errors", window.Any(e => e.Errors == 0));
+                    Offer("went-errors-down", "reflection-chip-went-errors-down", Last(window, e => e.Errors) < First(window, e => e.Errors));
+                    Offer("went-hints-down", "reflection-chip-went-hints-down", Last(window, e => e.Hints) < First(window, e => e.Hints));
+                    // Only for a goal that set a limit. Without one there is nothing to stay inside.
+                    if (evidence.GoalLimit > 0 || !string.IsNullOrWhiteSpace(evidence.GoalQuality))
+                        Offer("went-within-limit", "reflection-chip-went-within-limit",
+                            window.Count > 0 && window.All(e => WithinLimit(e, evidence)));
+                    break;
+            }
+
+            question.Chips = [.. options.Select(option => new ReflectionChip { Id = option.Id, TextKey = option.TextKey })];
+            question.AlignedChipIds = [.. options.Where(option => option.True).Select(option => option.Id)];
+
+            // Nothing went well, so there is no wrong answer here: whichever one they pick, they answered
+            // honestly about a session that simply did not go their way, and paying nothing for that
+            // teaches them the reflection is not worth answering.
+            if (question.AlignedChipIds.Count == 0)
+                question.PartialChipIds = [.. question.Chips.Select(chip => chip.Id)];
+
+            return question;
+        }
+
+        /// <summary>Q2 for a goal: the pattern behind the goal, which is the thing a goal is <em>about</em>.</summary>
+        private static ReflectionQuestion BuildGoalJudgement(ReflectionEvidence evidence)
+        {
+            var window = evidence.GoalExercises;
+            var question = new ReflectionQuestion { Id = "goal-q2-pattern", Kind = Judgement, ItemType = "goal" };
+
+            // The three methods, in the order the app lists them.
+            var methods = new (int Value, string Id)[]
+            {
+                (MethodEqualization, "equalization"),
+                (MethodSubstitution, "substitution"),
+                (MethodElimination, "elimination"),
+            };
+
+            List<ReflectionChip> MethodChips() =>
+            [
+                .. methods.Select(m => new ReflectionChip
+                {
+                    Id = $"pick-{m.Id}",
+                    // The method names live in the exercise module, which is the app's one spelling of
+                    // them. Reused rather than copied so the two can never drift.
+                    TextKey = $"flexibility:{m.Id}-method",
+                }),
+            ];
+
+            switch (evidence.Focus)
+            {
+                case "method":
+                {
+                    // This method against the student's other ones, which is the comparison the goal is
+                    // implicitly about. With nothing to compare against there is no question, so it falls
+                    // through to the accuracy question instead of disappearing.
+                    var other = OtherMethodErrors(evidence);
+                    if (other is null) return BuildGoalAccuracyQuestion(evidence);
+
+                    var mine = Mean(window, e => e.Errors);
+                    var fewer = mine < other.Value - ComparisonTolerance;
+                    var more = mine > other.Value + ComparisonTolerance;
+
+                    question.TextKey = "reflection-goal-q2-method-compare";
+                    question.Slots = new Dictionary<string, string> { ["focus"] = evidence.FocusLabelKey };
+                    question.Chips =
+                    [
+                        new ReflectionChip { Id = "cmp-fewer", TextKey = "reflection-chip-cmp-fewer" },
+                        new ReflectionChip { Id = "cmp-same", TextKey = "reflection-chip-cmp-same" },
+                        new ReflectionChip { Id = "cmp-more", TextKey = "reflection-chip-cmp-more" },
+                    ];
+                    question.AlignedChipIds = [fewer ? "cmp-fewer" : more ? "cmp-more" : "cmp-same"];
+                    question.Expectation = $"they say how this method compared with their others: {Fmt(mine)} against {Fmt(other.Value)} mistakes per exercise";
+                    return question;
+                }
+
+                case "exerciseType" when GoalExerciseType(evidence) == SuitabilityType:
+                    return BuildGoalPickMethodQuestion(
+                        question, MethodChips(), window.Where(e => !e.Correct),
+                        "reflection-goal-q2-pick-unsuitable",
+                        "they name the method they most often chose when it was not a suitable one",
+                        evidence);
+
+                case "exerciseType" when GoalExerciseType(evidence) == EfficiencyType:
+                    return BuildGoalPickMethodQuestion(
+                        question, MethodChips(), window.Where(e => !e.Correct),
+                        "reflection-goal-q2-pick-inefficient",
+                        "they name the method they most often chose when it was not the best one",
+                        evidence);
+
+                case "exerciseType":
+                    return BuildGoalPickMethodQuestion(
+                        question, MethodChips(), window,
+                        "reflection-goal-q2-most-errors-type",
+                        "they name the method they made the most mistakes with",
+                        evidence, byErrors: true);
+
+                case "selfExplanation":
+                    return BuildGoalGroupComparisonQuestion(
+                        question, window, e => e.Explained,
+                        "reflection-chip-cmp-explained", "reflection-chip-cmp-skipped",
+                        "they say whether they made fewer mistakes in the exercises they explained",
+                        evidence);
+
+                case "methodComparison":
+                    return BuildGoalGroupComparisonQuestion(
+                        question, window, e => e.Compared,
+                        "reflection-chip-cmp-compared", "reflection-chip-cmp-skipped",
+                        "they say whether they made fewer mistakes in the exercises they compared",
+                        evidence);
+
+                case "solveOnOwn":
+                {
+                    var system = window.Where(e => !e.Own).ToList();
+
+                    // Nothing was handed to the system, so there is no method to name. Falls back to the
+                    // accuracy question rather than asking about something that never happened.
+                    if (system.Count == 0) return BuildGoalAccuracyQuestion(evidence);
+
+                    question.TextKey = "reflection-goal-q2-system-method";
+                    question.Chips = MethodChips();
+                    var weakest = MostCommonMethod(system);
+                    question.AlignedChipIds = weakest is null ? [] : [$"pick-{weakest}"];
+                    if (question.AlignedChipIds.Count == 0) question.PartialChipIds = [.. question.Chips.Select(c => c.Id)];
+                    question.Expectation = weakest is null
+                        ? "they name a method, because the record cannot single one out"
+                        : $"they name the method they most often handed over: {weakest}";
+                    return question;
+                }
+
+                default:
+                {
+                    var mostHints = evidence.GoalQuality == "hints";
+                    return BuildGoalPickMethodQuestion(
+                        question, MethodChips(), window,
+                        mostHints ? "reflection-goal-q2-most-hints" : "reflection-goal-q2-most-errors",
+                        mostHints
+                            ? "they name the method they took the most hints with"
+                            : "they name the method they made the most mistakes with",
+                        evidence, byErrors: !mostHints);
+                }
+            }
+        }
+
+        /// <summary>The goal question used when the pattern question has nothing to go on.</summary>
+        private static ReflectionQuestion BuildGoalAccuracyQuestion(ReflectionEvidence evidence)
+        {
+            var window = evidence.GoalExercises;
+            var clean = window.Count(e => e.Errors == 0 && e.Hints == 0);
+
+            return new ReflectionQuestion
+            {
+                Id = "q2-count",
+                Kind = Judgement,
+                ItemType = "goal",
+                TextKey = "reflection-q2-count-clean",
+                Values = new Dictionary<string, string> { ["total"] = window.Count.ToString() },
+                Chips =
+                [
+                    new ReflectionChip { Id = "band-all", TextKey = "reflection-chip-band-all" },
+                    new ReflectionChip { Id = "band-most", TextKey = "reflection-chip-band-most" },
+                    new ReflectionChip { Id = "band-some", TextKey = "reflection-chip-band-some" },
+                    new ReflectionChip { Id = "band-none", TextKey = "reflection-chip-band-none" },
+                ],
+                AlignedChipIds = [BandFor(clean, window.Count)],
+                Expectation = $"they are honest about how often it happened: {clean} of {window.Count} exercises",
+            };
+        }
+
+        /// <summary>Q2 asking which method a subset of the exercises went worst in.</summary>
+        private static ReflectionQuestion BuildGoalPickMethodQuestion(
+            ReflectionQuestion question,
+            List<ReflectionChip> chips,
+            IEnumerable<ReflectionGoalExercise> subset,
+            string textKey,
+            string expectation,
+            ReflectionEvidence evidence,
+            bool byErrors = false)
+        {
+            question.TextKey = textKey;
+            question.Chips = chips;
+
+            var rows = subset.ToList();
+            var weakest = MostCommonMethod(rows);
+            if (byErrors || weakest is null) weakest = MethodWithMost(rows, byErrors);
+
+            question.AlignedChipIds = weakest is null ? [] : [$"pick-{weakest}"];
+            if (question.AlignedChipIds.Count == 0)
+                question.PartialChipIds = [.. chips.Select(chip => chip.Id)];
+
+            question.Expectation = weakest is null ? $"{expectation}, which the record cannot single out" : expectation;
+            return question;
+        }
+
+        /// <summary>Q2 comparing two groups inside the same goal, on mistakes.</summary>
+        private static ReflectionQuestion BuildGoalGroupComparisonQuestion(
+            ReflectionQuestion question,
+            List<ReflectionGoalExercise> window,
+            Func<ReflectionGoalExercise, bool> inGroup,
+            string inGroupChip,
+            string outOfGroupChip,
+            string expectation,
+            ReflectionEvidence evidence)
+        {
+            var inside = window.Where(inGroup).ToList();
+            var outside = window.Where(e => !inGroup(e)).ToList();
+
+            // Needs at least one of each, or there is nothing to compare and the question would have a
+            // right answer the student could not possibly know.
+            if (inside.Count == 0 || outside.Count == 0) return BuildGoalAccuracyQuestion(evidence);
+
+            var with = Mean(inside, e => e.Errors);
+            var without = Mean(outside, e => e.Errors);
+            var fewer = with < without - ComparisonTolerance;
+            var more = with > without + ComparisonTolerance;
+
+            question.TextKey = "reflection-goal-q2-group-compare";
+            question.Chips =
+            [
+                new ReflectionChip { Id = "cmp-in-group", TextKey = inGroupChip },
+                new ReflectionChip { Id = "cmp-same", TextKey = "reflection-chip-cmp-same" },
+                new ReflectionChip { Id = "cmp-out-group", TextKey = outOfGroupChip },
+            ];
+            question.AlignedChipIds = [fewer ? "cmp-in-group" : more ? "cmp-out-group" : "cmp-same"];
+            question.Expectation = $"{expectation}: {Fmt(with)} against {Fmt(without)} mistakes per exercise";
+            return question;
+        }
+
+        /// <summary>Q3 for a goal: a promise the next exercise can be checked against.</summary>
+        private static ReflectionQuestion BuildGoalNextAction(ReflectionEvidence evidence)
+        {
+            var question = new ReflectionQuestion { Id = "q3-next-action", Kind = NextAction, ItemType = "goal" };
+
+            var methods = new (string Id, string TextKey)[]
+            {
+                ("equalization", "flexibility:equalization-method"),
+                ("substitution", "flexibility:substitution-method"),
+                ("elimination", "flexibility:elimination-method"),
+            };
+
+            List<ReflectionChip> CommitmentChips(params (string Id, string TextKey)[] chips) =>
+                [.. chips.Select(chip => new ReflectionChip { Id = chip.Id, TextKey = chip.TextKey })];
+
+            List<ReflectionChip> MethodChips() =>
+                [.. methods.Select(m => new ReflectionChip { Id = $"pick-{m.Id}", TextKey = m.TextKey })];
+
+            // Every commitment names the field it will be checked against in its own id, so the next
+            // exercise can be judged against it without storing anything extra.
+            var noHints = ("act-no-hints", "reflection-chip-act-no-hints");
+            var solveAlone = ("act-solve-alone", "reflection-chip-act-solve-alone");
+            var explain = ("act-explain", "reflection-chip-act-explain");
+            var compare = ("act-compare", "reflection-chip-act-compare");
+            var beatAverage = ("act-beat-average", "reflection-chip-act-beat-average");
+            var noErrors = ("act-no-errors", "reflection-chip-act-no-errors");
+
+            switch (evidence.Focus)
+            {
+                case "method":
+                    question.TextKey = "reflection-goal-q3-method";
+                    question.Slots = new Dictionary<string, string> { ["focus"] = evidence.FocusLabelKey };
+                    // A method is practised through whichever exercise types the goal happens to cover, so
+                    // these two are offered only when one of those types asks the question at all. A
+                    // student cannot promise to explain their choice in a type that never invites it.
+                    question.Chips = CommitmentChips([
+                        .. new[] { noHints, solveAlone },
+                        .. OffersExplanation(evidence) ? [explain] : Array.Empty<(string, string)>(),
+                        .. OffersComparison(evidence) ? [compare] : Array.Empty<(string, string)>(),
+                        beatAverage,
+                    ]);
+                    return question;
+
+                case "exerciseType" when GoalExerciseType(evidence) == SuitabilityType:
+                    question.TextKey = "reflection-goal-q3-suitability";
+                    question.Chips = CommitmentChips(
+                        ("act-suitable-choice", "reflection-chip-act-suitable-choice"),
+                        noHints, solveAlone, explain, compare);
+                    return question;
+
+                case "exerciseType" when GoalExerciseType(evidence) == EfficiencyType:
+                    question.TextKey = "reflection-goal-q3-efficiency";
+                    question.Chips = CommitmentChips(
+                        ("act-best-choice", "reflection-chip-act-best-choice"),
+                        noHints, solveAlone, noErrors);
+                    return question;
+
+                case "exerciseType":
+                    question.TextKey = "reflection-goal-q3-matching";
+                    question.Chips = CommitmentChips(noErrors, noHints, explain, solveAlone);
+                    return question;
+
+                case "selfExplanation":
+                    question.TextKey = "reflection-goal-q3-explain-type";
+                    question.Chips = CommitmentChips(
+                        ("pick-efficiency", "reflection-chip-type-efficiency"),
+                        ("pick-matching", "reflection-chip-type-matching"));
+                    return question;
+
+                case "methodComparison":
+                    question.TextKey = "reflection-goal-q3-compare-method";
+                    question.Chips = MethodChips();
+                    return question;
+
+                case "solveOnOwn":
+                    question.TextKey = "reflection-goal-q3-solve-method";
+                    question.Chips = MethodChips();
+                    return question;
+
+                default:
+                    question.TextKey = "reflection-goal-q3-hints-errors";
+                    question.Chips = CommitmentChips([
+                        .. new[] { noHints, beatAverage, solveAlone },
+                        .. OffersExplanation(evidence) ? [explain] : Array.Empty<(string, string)>(),
+                        .. OffersComparison(evidence) ? [compare] : Array.Empty<(string, string)>(),
+                    ]);
+                    if (!string.IsNullOrWhiteSpace(evidence.FocusLabelKey))
+                        question.Slots = new Dictionary<string, string> { ["focus"] = evidence.FocusLabelKey };
+                    return question;
+            }
+        }
+
+        // ── Goal arithmetic ───────────────────────────────────────────────────
+        //
+        // Small and deliberately literal: every rule above is meant to be readable straight off the
+        // definition the questions were specified from, so the numbers behind an option are obvious
+        // rather than clever.
+
+        private const int SuitabilityType = 2;
+        private const int EfficiencyType = 1;
+
+        // The Method enum's values. Repeated here as plain numbers rather than imported, because the bank
+        // is the questions and nothing else: importing the exercise model to name three methods would
+        // pull a chain of types into a file that has no other use for them, and it is what lets the audit
+        // harness compile this file on its own.
+        private const int MethodEqualization = 0;
+        private const int MethodSubstitution = 1;
+        private const int MethodElimination = 2;
+
+        /// <summary>How far apart two averages must be before one counts as more than the other.</summary>
+        private const double ComparisonTolerance = 0.5;
+
+        private static int TypeOf(string name) => name switch
+        {
+            "Suitability" => SuitabilityType,
+            "Efficiency" => EfficiencyType,
+            _ => 3,
+        };
+
+        /// <summary>
+        /// Which exercise type an exercise-type goal is about.
+        ///
+        /// Read from the goal's narrowed focus, not from <see cref="ReflectionEvidence.Focus"/>: for a
+        /// goal that one holds the CATEGORY, and every exercise-type goal has the same category whichever
+        /// type it is about.
+        /// </summary>
+        private static int GoalExerciseType(ReflectionEvidence evidence) => TypeOf(evidence.GoalFocus);
+
+        private static bool WithinLimit(ReflectionGoalExercise exercise, ReflectionEvidence evidence) =>
+            evidence.GoalQuality == "errors"
+                ? exercise.Errors <= evidence.GoalLimit
+                : exercise.Hints <= evidence.GoalLimit;
+
+        /// <summary>
+        /// Whether the goal's own window covers an exercise type that invites the student to explain their
+        /// reasoning. Efficiency and Matching do; Suitability offers a method comparison instead.
+        ///
+        /// Read from the window rather than assumed from the category, because a method goal is practised
+        /// through whichever types that method appears in, and a promise to explain has to be one the next
+        /// exercise can actually keep.
+        /// </summary>
+        private static bool OffersExplanation(ReflectionEvidence evidence) =>
+            evidence.GoalExercises.Any(e => e.ExerciseType is EfficiencyType or 3);
+
+        /// <summary>Whether the goal's own window covers a type that offers the method comparison.</summary>
+        private static bool OffersComparison(ReflectionEvidence evidence) =>
+            evidence.GoalExercises.Any(e => e.ExerciseType == SuitabilityType);
+
+        private static double First(List<ReflectionGoalExercise> window, Func<ReflectionGoalExercise, double> value) =>
+            window.Count == 0 ? 0 : value(window[0]);
+
+        private static double Last(List<ReflectionGoalExercise> window, Func<ReflectionGoalExercise, double> value) =>
+            window.Count == 0 ? 0 : value(window[^1]);
+
+        private static double Mean(IEnumerable<ReflectionGoalExercise> window, Func<ReflectionGoalExercise, double> value)
+        {
+            var rows = window.ToList();
+            return rows.Count == 0 ? 0 : rows.Average(value);
+        }
+
+        private static double EarlierMean(List<ReflectionGoalExercise> window, Func<ReflectionGoalExercise, double> value) =>
+            Mean(EarlierHalf(window), value);
+
+        private static double LaterMean(List<ReflectionGoalExercise> window, Func<ReflectionGoalExercise, double> value) =>
+            Mean(LaterHalf(window), value);
+
+        private static double EarlierAverage(List<ReflectionGoalExercise> window, Func<ReflectionGoalExercise, bool> flag) =>
+            Mean(EarlierHalf(window), e => flag(e) ? 1 : 0);
+
+        private static double LaterAverage(List<ReflectionGoalExercise> window, Func<ReflectionGoalExercise, bool> flag) =>
+            Mean(LaterHalf(window), e => flag(e) ? 1 : 0);
+
+        /// <summary>The earlier half of the window, the later half of it, or both when it cannot be split.</summary>
+        private static List<ReflectionGoalExercise> Half(List<ReflectionGoalExercise> window, bool later)
+        {
+            if (window.Count < 2) return window;
+            var half = window.Count / 2;
+            return later ? window.Skip(window.Count - half).ToList() : window.Take(half).ToList();
+        }
+
+        private static List<ReflectionGoalExercise> EarlierHalf(List<ReflectionGoalExercise> window) => Half(window, later: false);
+        private static List<ReflectionGoalExercise> LaterHalf(List<ReflectionGoalExercise> window) => Half(window, later: true);
+
+        /// <summary>The method used most often in a group, or null when the group is empty or tied.</summary>
+        private static string? MostCommonMethod(List<ReflectionGoalExercise> group)
+        {
+            if (group.Count == 0) return null;
+
+            var ranked = group.GroupBy(e => e.Method)
+                .Select(g => new { Method = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
+                .ToList();
+
+            // A tie is not a question with one answer, so it is reported as no answer rather than picking
+            // one at random and marking the other wrong.
+            if (ranked.Count > 1 && ranked[0].Count == ranked[1].Count) return null;
+
+            return MethodKey(ranked[0].Method);
+        }
+
+        /// <summary>The method a group went worst in, by total mistakes or total hints.</summary>
+        private static string? MethodWithMost(List<ReflectionGoalExercise> group, bool byErrors)
+        {
+            if (group.Count == 0) return null;
+
+            var ranked = group.GroupBy(e => e.Method)
+                .Select(g => new { Method = g.Key, Total = byErrors ? g.Sum(e => e.Errors) : g.Sum(e => e.Hints) })
+                .OrderByDescending(g => g.Total)
+                .ToList();
+
+            // Nothing went wrong anywhere, so there is no worst method to name.
+            if (ranked[0].Total == 0) return null;
+            if (ranked.Count > 1 && ranked[0].Total == ranked[1].Total) return null;
+
+            return MethodKey(ranked[0].Method);
+        }
+
+        private static string MethodKey(int method) => method switch
+        {
+            MethodSubstitution => "substitution",
+            MethodElimination => "elimination",
+            _ => "equalization",
+        };
+
+        /// <summary>
+        /// The average mistakes per exercise in the student's other methods, or null when this goal covers
+        /// every method they have used — there is then nothing to compare against, and a comparison
+        /// question with one side missing has no answer the student could know.
+        /// </summary>
+        private static double? OtherMethodErrors(ReflectionEvidence evidence)
+        {
+            var focus = evidence.FocusLabelKey.Length > 0
+                ? MethodKey(MethodFromKey(evidence.FocusLabelKey))
+                : "";
+
+            var others = evidence.OtherMethodExercises.Where(e => MethodKey(e.Method) != focus).ToList();
+            return others.Count == 0 ? null : Mean(others, e => e.Errors);
+        }
+
+        private static int MethodFromKey(string labelKey) => labelKey switch
+        {
+            var k when k.Contains("substitution", StringComparison.OrdinalIgnoreCase) => MethodSubstitution,
+            var k when k.Contains("elimination", StringComparison.OrdinalIgnoreCase) => MethodElimination,
+            _ => MethodEqualization,
+        };
+
+        private static string Fmt(double value) => value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
         /// <summary>
         /// The steps that count as "took the most fight": the costliest one, plus any within a tenth of
         /// it. Two steps costing about the same is not a student misremembering, so accepting only one
@@ -551,6 +1156,26 @@ namespace webapi.Services
             }
 
             parts.Add($"{evidence.Errors} mistake(s) and {evidence.Hints} hint(s) were counted.");
+
+            // The goal's exercises one by one, because its questions ask about their ORDER: did the
+            // mistakes go down, was the later one faster, was any run clean, did they work one out
+            // alone. Totals cannot answer any of that, so without this the model would be judging a
+            // free-text answer like "I got faster" against no evidence at all and would be as likely to
+            // contradict it as to confirm it.
+            //
+            // Stated as facts, never as a verdict: which of these add up to "something went well" is
+            // still the reading the student is being asked to make.
+            if (evidence.IsGoal && evidence.GoalExercises.Count > 0)
+            {
+                var runs = evidence.GoalExercises.Select((exercise, index) =>
+                    $"#{index + 1}: {exercise.Errors} mistake(s), {exercise.Hints} hint(s), {Fmt(exercise.Time)}s" +
+                    (exercise.Own ? ", worked out alone" : exercise.WasShown ? ", asked to be shown" : "") +
+                    (exercise.Explained ? ", explained their reasoning" : "") +
+                    (exercise.Compared ? ", compared the methods" : "") +
+                    (exercise.Correct ? ", chose a method the exercise allowed" : ""));
+
+                parts.Add($"The goal's exercises, oldest first — {string.Join("; ", runs)}.");
+            }
 
             // The figure the question is actually about. For a count question this IS the answer, and
             // the model is meant to check the student's claim against it.
