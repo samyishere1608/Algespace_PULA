@@ -45,7 +45,9 @@ static List<ReflectionStepStat> Steps(params (string Id, int Errors, int Hints, 
 var stepy = Steps(("choose", 0, 0, 8), ("setup", 2, 1, 40), ("solve", 0, 0, 12), ("explain", 1, 0, 9));
 var stepyNoClean = Steps(("choose", 1, 0, 8), ("setup", 3, 2, 40), ("solve", 1, 1, 12), ("explain", 2, 0, 9));
 var stepyOne = Steps(("choose", 0, 0, 8));
-var stepyTie = Steps(("choose", 1, 0, 8), ("setup", 4, 0, 20), ("solve", 4, 0, 21), ("explain", 0, 0, 9));
+// Two steps costing the same, and NO step free of mistakes, so the question has to be the "which
+// part was hardest" one and both tied steps must be accepted.
+var stepyTie = Steps(("choose", 1, 0, 8), ("setup", 4, 0, 20), ("solve", 4, 0, 21), ("explain", 1, 0, 9));
 
 var scenarios = new List<(string Name, ReflectionEvidence Evidence)>();
 

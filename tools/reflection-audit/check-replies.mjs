@@ -94,6 +94,24 @@ console.log(`reply: ${result.feedback}`);
 console.log(`next:  ${result.nextStep}`);
 check(result.insightXp === 0, 'a promise still pays no Insight', `insightXp=${result.insightXp}`);
 
+// ── 4. Q1 asked of a student who was SHOWN the solution ──────────────────────
+// This is the case that produced "you didn't get to work it out yourself, so there's no real win to
+// celebrate" — a negative answer to the one question that is supposed to be about what went well.
+// It must lead with something genuinely good instead.
+
+console.log('\n=== Q1 on an attempt where the solution was handed over');
+id = seed('SolveOnOwn=Declined');
+result = await evaluate(id, 1, 'q1-step-sure', '', '', '');
+console.log(`reply: ${result.feedback}`);
+
+const negativeFraming = [
+    /did ?n'?o?t? ?get to/i, /no real win/i, /nothing to celebrate/i, /does ?n'?o?t? ?count/i,
+    /you (never|didn'?t) (actually )?(solve|work)/i,
+];
+const framedBadly = negativeFraming.find(pattern => pattern.test(result.feedback));
+check(!framedBadly, 'the report on what went well does not lead with what they did not do',
+    framedBadly ? `matched ${framedBadly}` : '');
+
 conn.prepare('DELETE FROM ReflectionQueue WHERE StudentId = ?').run(STUDENT);
 
 console.log();

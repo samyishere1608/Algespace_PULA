@@ -127,7 +127,17 @@ namespace webapi.Services
             if (steps.Count >= 2)
             {
                 var clean = evidence.CleanStepIds.Where(steps.Contains).ToList();
-                var asksWhatWentWell = clean.Count > 0;
+
+                // A part with NO MISTAKES in it is one the student can honestly say they felt sure
+                // about, even if they opened a hint there. Hints are often caution rather than confusion,
+                // and requiring a hint-free step meant a student who understood every part but took one
+                // hint was told the only part worth naming was the one that cost them the most, which is
+                // the opposite of what Q1 asks. A step WITH mistakes in it is still not an honest answer.
+                var sure = clean.Count > 0
+                    ? clean
+                    : steps.Where(step => evidence.Steps.First(stat => stat.Id == step).Errors == 0).ToList();
+
+                var asksWhatWentWell = sure.Count > 0;
 
                 var question = new ReflectionQuestion
                 {
@@ -141,14 +151,14 @@ namespace webapi.Services
                         TextKey = StepLabelKey(step),
                     }).ToList(),
                     // More than one step being easy is not a student getting the question wrong, so on the
-                    // "sure" variant every clean step is accepted. On the "fight" variant the answer is the
-                    // one that actually cost them, and a step within a whisker of it counts too: two steps
-                    // costing the same is not a student misremembering.
+                    // "sure" variant every part they got right is accepted. On the "fight" variant the
+                    // answer is the one that actually cost them, and a step within a whisker of it counts
+                    // too: two steps costing the same is not a student misremembering.
                     AlignedChipIds = asksWhatWentWell
-                        ? clean.Select(step => $"step-{step}").ToList()
+                        ? sure.Select(step => $"step-{step}").ToList()
                         : Costliest(steps, evidence),
                     Expectation = asksWhatWentWell
-                        ? "they name the part they felt most sure about, which was a part they got right without help"
+                        ? "they name the part they felt most sure about, which is a part they got through without a mistake"
                         : "they name the part that cost them the most, which was the part that did",
                 };
 
