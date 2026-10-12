@@ -13,10 +13,11 @@ import { showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
  * WHY IT CANNOT BE FARMED, and why that is structural rather than a rule:
  *
  * The award is conditional on the element being a gap, and engaging is precisely what closes a gap.
- * The server defines a gap as at most one engagement in five, so working through the thing you avoid
- * raises your rate above that within a couple of attempts and the awards stop on their own. There is
- * no counter to maintain and no daily cap to tune — the reward extinguishes itself by the same
- * measurement that switched it on.
+ * The server calls it a gap after three opportunities with at most a fifth of them engaged, which at
+ * that floor means no engagement at all — so working through the thing you avoid makes you stop
+ * qualifying within a couple of attempts and the awards stop on their own. There is no counter to
+ * maintain and no daily cap to tune — the reward extinguishes itself by the same measurement that
+ * switched it on.
  *
  * That also means the award is worth little by design. It is for STARTING, not for continuing, and a
  * student who has genuinely changed gets nothing more from it. The alternative — paying per

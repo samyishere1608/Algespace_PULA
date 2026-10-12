@@ -70,8 +70,8 @@ export interface NudgeMemory {
      *
      * Kept so the nudge can come back when the pattern has grown. "Once, ever" was the wrong rule:
      * a threshold exists to measure evidence, and evidence that has increased substantially is new
-     * information. A student who declined when the record said 1-in-5 is entitled to hear it again
-     * when it says 1-in-10, because that is a different finding about them.
+     * information. A student who declined when the record showed no engagement in three is entitled
+     * to hear it again when it shows none in six, because that is a different finding about them.
      */
     opportunities: number;
 }
@@ -79,11 +79,16 @@ export interface NudgeMemory {
 /**
  * How much fresh evidence earns a second ask.
  *
- * Deliberately the same number as the server's observation floor, so a re-ask costs one full window
- * of new observations. The gap has to be re-established, not merely still open — otherwise a
- * student who has already answered would be asked again at the very next decline.
+ * Deliberately the SAME number as the server's observation floor (`GapThresholds.MinOpportunities`),
+ * so a re-ask costs one full window of new observations. The gap has to be re-established, not merely
+ * still open — otherwise a student who has already answered would be asked again at the very next
+ * decline.
+ *
+ * It therefore moved with that floor, from five to three, on 2026-10-12. **The coupling is the point:
+ * if the server's floor changes again, change this too.** The two drifting apart is silent, and shows
+ * up as a nudge that either repeats too soon or never comes back.
  */
-export const RE_ASK_AFTER_OPPORTUNITIES = 5;
+export const RE_ASK_AFTER_OPPORTUNITIES = 3;
 
 const KEY_PREFIX = "algespace_nudges_";
 

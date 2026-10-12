@@ -198,18 +198,25 @@ namespace webapi.Models.Anchors
     /// <summary>
     /// Thresholds for calling something a gap.
     ///
-    /// Deliberately generous. Declining twice is often a deliberate, reasonable decision — the
-    /// student may simply prefer another method, not be avoiding anything. Only sustained avoidance
-    /// counts, because both the nudge and the insight award depend on this being right: a false gap
-    /// nags a student who does not need nagging, and awards insight for something they were never
-    /// avoiding.
+    /// Declining once is often a deliberate, reasonable decision — the student may simply prefer
+    /// another method, not be avoiding anything. Only sustained avoidance counts, because both the
+    /// nudge and the insight award depend on this being right: a false gap nags a student who does
+    /// not need nagging, and awards insight for something they were never avoiding.
+    ///
+    /// The floor was lowered from five opportunities to three on 2026-10-12. It stays ONE floor for
+    /// both the nudge and the Insight award, because they are two reactions to a single judgement —
+    /// a student must never be nudged about something the award would not recognise, or the reverse.
     /// </summary>
     public static class GapThresholds
     {
         /// <summary>At least this many opportunities before avoidance can be judged.</summary>
-        public const int MinOpportunities = 5;
+        public const int MinOpportunities = 3;
 
-        /// <summary>Engagement at or below this counts as avoidance. 0.2 means at most 1 in 5.</summary>
+        /// <summary>
+        /// Engagement at or below this counts as avoidance. 0.20 is one in five, so at the
+        /// three-opportunity floor it means NONE — a single engagement there is already a third.
+        /// A gap is therefore "no engagement in three, or at most a fifth of a longer record".
+        /// </summary>
         public const double MaxEngagementRate = 0.20;
     }
 }
