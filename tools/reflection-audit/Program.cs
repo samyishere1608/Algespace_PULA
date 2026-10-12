@@ -53,8 +53,7 @@ var scenarios = new List<(string Name, ReflectionEvidence Evidence)>();
 
 foreach (var (category, q2) in new[]
 {
-    ("method", "reflection-q2-count-focus"),
-    ("exerciseType", "reflection-q2-count-clean"),
+    ("method", "reflection-q2-count-focus"),    ("exerciseType", "reflection-q2-count-clean"),
     ("selfExplanation", "reflection-q2-count-explained"),
     ("methodComparison", "reflection-q2-count-compared"),
     ("solveOnOwn", "reflection-q2-count-solo"),
@@ -83,7 +82,9 @@ foreach (var (category, q2) in new[]
 
     var name = $"goal/{category}";
     scenarios.Add((name, evidence));
-    Expect(name, q2: q2, q3: category switch
+    // A method goal that names no method cannot ask about one, so it gets the plain count of clean
+    // runs instead of a question with an empty slot in it.
+    Expect(name, q2: category == "method" ? "reflection-q2-count-clean" : q2, q3: category switch
     {
         "hintsAndErrors" => "reflection-q3-target",
         "selfExplanation" => "reflection-q3-explain",
@@ -99,7 +100,7 @@ foreach (var (category, q2) in new[]
         var narrowed = Clone(evidence);
         narrowed.FocusLabelKey = "flexibility:elimination-method";
         scenarios.Add(("goal/method+narrowed", narrowed));
-        Expect("goal/method+narrowed", q2: q2, q3: "reflection-q3-method");
+        Expect("goal/method+narrowed", q2: "reflection-q2-count-focus", q3: "reflection-q3-method");
     }
 }
 
@@ -134,8 +135,12 @@ foreach (var (type, dimension) in new[] { ("Suitability", "compare"), ("Efficien
         var name = $"exercise/{type}-{label}";
         scenarios.Add((name, evidence));
         Expect(name,
-            q2: dimension == "compare" ? "reflection-q2-compared" : "reflection-q2-explained",
-            q3: dimension == "compare" ? "reflection-q3-compare" : "reflection-q3-explain");
+            q2: dimension == "compare"
+                ? "reflection-q2-compared"
+                : type == "Matching" ? "reflection-q2-explained-matching" : "reflection-q2-explained-efficiency",
+            q3: dimension == "compare"
+                ? "reflection-q3-compare"
+                : type == "Matching" ? "reflection-q3-explain-matching" : "reflection-q3-explain-efficiency");
     }
 }
 
@@ -150,7 +155,7 @@ scenarios.Add(("exercise/no-steps-no-history", new ReflectionEvidence
     InSet = 1,
     Errors = 4,
 }));
-Expect("exercise/no-steps-no-history", q1: "reflection-q1-held-together", q2: "reflection-q2-explained", q3: "reflection-q3-explain");
+Expect("exercise/no-steps-no-history", q1: "reflection-q1-expectation", q2: "reflection-q2-explained-efficiency", q3: "reflection-q3-explain-efficiency");
 
 // No step detail, but a previous attempt: the fallback question becomes checkable.
 scenarios.Add(("exercise/no-steps-with-history", new ReflectionEvidence
@@ -165,6 +170,19 @@ scenarios.Add(("exercise/no-steps-with-history", new ReflectionEvidence
 }));
 Expect("exercise/no-steps-with-history", q1: "reflection-q1-better-than-last");
 
+// No step detail, and the run was level with the last one.
+scenarios.Add(("exercise/no-steps-level", new ReflectionEvidence
+{
+    IsGoal = false,
+    Focus = "Matching",
+    DecisionDimension = "explain",
+    InSet = 1,
+    Errors = 4,
+    PreviousErrors = 4,
+    HasHistory = true,
+}));
+Expect("exercise/no-steps-level", q1: "reflection-q1-better-than-last");
+
 // No step detail, and this run went worse than the last.
 scenarios.Add(("exercise/no-steps-worse", new ReflectionEvidence
 {
@@ -176,7 +194,7 @@ scenarios.Add(("exercise/no-steps-worse", new ReflectionEvidence
     PreviousErrors = 4,
     HasHistory = true,
 }));
-Expect("exercise/no-steps-worse", q1: "reflection-q1-held-together");
+Expect("exercise/no-steps-worse", q1: "reflection-q1-better-than-last");
 
 // Nothing clean: Q1 has to ask what took the most fight instead of what went well.
 scenarios.Add(("exercise/nothing-clean", new ReflectionEvidence
@@ -203,7 +221,7 @@ scenarios.Add(("exercise/one-step", new ReflectionEvidence
     Steps = stepyOne,
     CleanStepIds = ["choose"],
 }));
-Expect("exercise/one-step", q1: "reflection-q1-held-together");
+Expect("exercise/one-step", q1: "reflection-q1-expectation");
 
 // Two steps costing the same: either one is a right answer to "which took the most fight".
 scenarios.Add(("exercise/tied-steps", new ReflectionEvidence
@@ -219,7 +237,7 @@ Expect("exercise/tied-steps", q1: "reflection-q1-step-fight");
 
 // A goal whose window holds nothing yet.
 scenarios.Add(("goal/empty", new ReflectionEvidence { IsGoal = true, Focus = "solveOnOwn", InSet = 0 }));
-Expect("goal/empty", q1: "reflection-q1-held-together", q2: "reflection-q2-count-solo", q3: "reflection-q3-solo");
+Expect("goal/empty", q1: "reflection-q1-expectation", q2: "reflection-q2-count-solo", q3: "reflection-q3-solo");
 
 // ── The audit ────────────────────────────────────────────────────────────────
 
@@ -271,6 +289,14 @@ foreach (var (name, evidence) in scenarios)
             Fail(label, "a partial award on a question whose record can settle the answer");
         if (question.PartialChipIds.Count > 0 && evidence.HasHistory)
             Fail(label, "a partial award even though there was a previous attempt to compare with");
+
+        // A question that interpolates a slot must be given one, or the student reads a raw
+        // placeholder. This is the one failure mode a missing translation key cannot catch, because
+        // the key exists and resolves fine, it just resolves to "{{focus}}".
+        foreach (var slot in new[] { "total", "focus" })
+            if (question.TextKey.Contains($"-{slot}") || question.TextKey.EndsWith($"-{slot}", StringComparison.Ordinal))
+                if (!question.Values.ContainsKey(slot) && !question.Slots.ContainsKey(slot))
+                    Fail(label, $"the question text needs a {slot} value and was given none");
 
         foreach (var chip in question.Chips) chipKeys.Add(chip.TextKey);
 
@@ -347,6 +373,8 @@ foreach (var question in scenarios.SelectMany(s => ReflectionQuestionBank.Build(
         "reflection-q3-target" => "target",
         "reflection-q3-method" => "method",
         "reflection-q3-explain" => "explain",
+        "reflection-q3-explain-efficiency" => "explain",
+        "reflection-q3-explain-matching" => "explain",
         "reflection-q3-compare" => "compare",
         "reflection-q3-solo" => "solo",
         _ => "?",

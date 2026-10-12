@@ -47,10 +47,13 @@ foreach ($lang in @('en', 'de', 'ja')) {
     }
 }
 
-# Nothing should still point at the old chip ids.
+# Nothing should still point at a key a rename left behind. Every entry here was replaced by a
+# clearer one on 2026-10-12, so their presence means a locale still carries dead copy.
 $stale = @(
     'reflection-chip-act-myself', 'reflection-chip-act-myself-hint', 'reflection-chip-act-shown',
     'reflection-chip-act-focus-again', 'reflection-chip-act-other-method', 'reflection-chip-act-any-fit',
+    'reflection-chip-yn-yes', 'reflection-chip-yn-partly', 'reflection-chip-yn-shown',
+    'reflection-q1-held-together', 'reflection-q2-explained',
     'reflection-q2-decision', 'reflection-q2-self-explanation',
     'reflection-q2-method-comparison', 'reflection-q2-solve-on-own'
 )

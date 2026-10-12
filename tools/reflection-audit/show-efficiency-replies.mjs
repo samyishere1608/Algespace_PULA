@@ -1,0 +1,69 @@
+// Drives one real Efficiency reflection through the live endpoint and prints the model's reply
+// for each of the three questions, so the tone can be judged from actual output rather than
+// from the prompt. Writes to the database; follow with restore-baseline.mjs.
+
+import { DatabaseSync } from 'node:sqlite';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const conn = new DatabaseSync(path.join(ROOT, 'webapi/Data/databases/students.db'));
+const API = 'http://localhost:7273';
+const STUDENT = 7;
+
+function seedEfficiency(decisions) {
+    conn.prepare('DELETE FROM ReflectionQueue WHERE StudentId = ?').run(STUDENT);
+    conn.prepare(
+        'INSERT INTO ReflectionQueue (StudentId, ItemType, ItemId, ItemLabel, Status, Errors, Hints, PippinMessages, Method, Decisions, Focus, Evidence, CompletedAt) ' +
+        "VALUES (?, 'exercise', 'Efficiency', 'Efficiency', 'pending', 2, 1, 0, 'Efficiency', ?, '', '', datetime('now'))"
+    ).run(STUDENT, decisions);
+    return conn.prepare('SELECT Id FROM ReflectionQueue WHERE StudentId = ? ORDER BY Id DESC LIMIT 1').get(STUDENT).Id;
+}
+
+async function evaluate(queueItemId, questionNumber, questionId, choice, choiceLabel, answer) {
+    const response = await fetch(`${API}/student-progress/reflection/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            studentId: STUDENT,
+            queueItemId,
+            questionNumber,
+            questionId,
+            choice,
+            choiceLabel,
+            subjectTerms: [],
+            mode: 'self',
+            answer,
+            language: 'en',
+        }),
+    });
+    return await response.json();
+}
+
+async function turn(title, decisions, questionNumber, questionId, choice, choiceLabel, answer) {
+    const id = seedEfficiency(decisions);
+    const result = await evaluate(id, questionNumber, questionId, choice, choiceLabel, answer);
+    console.log(`\n=== ${title}`);
+    console.log(`student ${choice ? `tapped "${choiceLabel}"` : 'wrote'}${answer ? ` + "${answer}"` : ''}`);
+    console.log(`verdict: aligned=${result.aligned} insightXp=${result.insightXp}`);
+    console.log(`reply:   ${result.feedback}`);
+    if (result.nextStep) console.log(`next:    ${result.nextStep}`);
+}
+
+await turn('Q2, honest and aligned', 'SelfExplanation=Engaged;SolveOnOwn=Engaged',
+    2, 'q2-explained', 'yn-yes', 'I did it myself', '');
+
+await turn('Q2, answered not aligned', 'SelfExplanation=Declined;SolveOnOwn=Engaged',
+    2, 'q2-explained', 'yn-yes', 'I did it myself', '');
+
+await turn('Q2, free text that does not refer to explaining', 'SelfExplanation=Engaged;SolveOnOwn=Engaged',
+    2, 'q2-explained', '', '', 'it was fine, not too hard');
+
+await turn('Q2, free text that does', 'SelfExplanation=Engaged;SolveOnOwn=Engaged',
+    2, 'q2-explained', '', '', 'I wrote out why I moved the x term first');
+
+await turn('Q3, promise', 'SelfExplanation=Engaged;SolveOnOwn=Engaged',
+    3, 'q3-next-action', 'act-explain-hint', 'Explain it myself, and take a hint if I need one', '');
+
+conn.prepare('DELETE FROM ReflectionQueue WHERE StudentId = ?').run(STUDENT);
+console.log('\nqueue cleared');

@@ -20,14 +20,28 @@ dotnet run
 # 2. Every translation key the bank can emit, in all three languages.
 powershell -ExecutionPolicy Bypass -File .\check-keys.ps1
 
-# 3. Through the real endpoint, where the evidence is assembled from the database.
-#    Needs the API running on 7273 with ASPNETCORE_ENVIRONMENT=Development.
-node .\check-queue-routing.mjs
+# 3. Through the real endpoint, where the evidence is assembled from the database, AND the
+#    wording a student actually reads. Needs the API running on 7273 in Development.
+node .\check-queue-routing.mjs en
+node .\check-queue-routing.mjs de
+node .\check-queue-routing.mjs ja
 
 # 4. The follow-through award, end to end against the live API. Writes to the database;
 #    always follow it with the restore.
 node .\check-resolve-followthrough.mjs
 node .\restore-baseline.mjs
+```
+
+Two more, for when something looks wrong and you need to see the real thing rather than reason
+about it:
+
+```powershell
+# The model's actual reply to each of the three questions, aligned and not. Writes to the
+# database; follow with restore-baseline.mjs.
+node .\show-efficiency-replies.mjs
+
+# Whether the attempt the questions were built from is the one the reflection is about. Read-only.
+node .\show-attempt-match.mjs
 ```
 
 ## What each one is for
@@ -58,10 +72,17 @@ random gets**. If that rises, something in the bank got more generous.
 that no longer exists renders as the raw key in the student's face, and nothing else in the
 project would catch it. It also fails on keys left behind by a rename.
 
-**`check-queue-routing.mjs`** does the same routing check through the controller, where
-`BuildEvidence` reads the student's own rows. The two can disagree — a mistake in how the
-evidence is assembled is invisible to the bank in isolation — and that is not hypothetical:
-it is how the exercise-type question was found to be falling through to the wrong branch.
+**`check-queue-routing.mjs`** does two jobs. It checks the routing through the controller, where
+`BuildEvidence` reads the student's own rows, and it prints **the wording a student would read** for
+every exercise type and every goal category. The second is what makes it a copy review as well as a
+check: the bank harness only knows which key was chosen, and a key can be correct while the sentence
+it produces is confusing.
+
+Two things it catches that nothing else can: a question that interpolates a slot and is given no
+value for it (the student reads a raw `{{focus}}`), and a question that no longer names the moment
+it is about. The routing is verified through the controller rather than in the bank because the two
+can disagree, and that is not hypothetical: it is how the exercise-type question was found to be
+falling through to the wrong branch.
 
 **`check-resolve-followthrough.mjs`** seeds a promise, finishes an exercise through the real
 endpoint, and reads back what was paid. Fifteen checks: a kept promise pays, a promise cannot
@@ -93,3 +114,12 @@ For an exercise row, `ReflectionQueue.Method` holds the **exercise type**, not a
 method — that is what the completion call stores there. It is what decides which question an
 exercise gets, so a fixture that puts a real method name in that column will quietly exercise
 the wrong branch. `check-queue-routing.mjs` says so where it seeds.
+
+## Open problem, reproducible here
+
+`show-attempt-match.mjs` prints both halves of a mismatch that is **not fixed**: the evidence the
+questions are built from comes from the student's **most recent completed attempt**, while the queue
+row names the item the reflection is about. They are normally the same attempt, and nothing enforces
+it. If a student finishes two exercises before reflecting, the questions describe the second one, and
+the step chips can even come from a different exercise TYPE. The fix needs the attempt id stored on
+the queue row.

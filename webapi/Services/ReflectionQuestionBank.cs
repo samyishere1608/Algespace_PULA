@@ -169,34 +169,42 @@ namespace webapi.Services
                 Id = "q1-progress",
                 Kind = Observation,
                 ItemType = itemType,
-                TextKey = improved ? "reflection-q1-better-than-last" : "reflection-q1-held-together",
-                Chips =
-                [
-                    new ReflectionChip { Id = "band-yes", TextKey = "reflection-chip-band-yes" },
-                    new ReflectionChip { Id = "band-same", TextKey = "reflection-chip-band-same" },
-                    new ReflectionChip { Id = "band-no", TextKey = "reflection-chip-band-no" },
-                ],
-                AlignedChipIds = evidence.HasHistory
-                    ? [improved ? "band-yes" : worsened ? "band-no" : "band-same"]
-                    : [],
-                // Only when there is no previous attempt either. Then the row holds nothing that could
-                // confirm or deny the claim, and the partial amount is the honest ceiling: a question
-                // whose answer we cannot check should not pay full marks, but a student who answers it
-                // honestly should not be paid nothing either.
-                PartialChipIds = evidence.HasHistory ? [] : ["band-yes", "band-same", "band-no"],
-                Expectation = evidence.HasHistory
-                    ? $"they say how this run went against the one before it, which had {evidence.PreviousErrors} mistake(s)"
-                    : "they give a specific reason about the exercise rather than a general verdict",
             };
 
             if (evidence.HasHistory)
             {
-                fallback.Values = new Dictionary<string, string>
-                {
-                    ["before"] = evidence.PreviousErrors.ToString(),
-                    ["now"] = evidence.Errors.ToString(),
-                };
+                // One question, whether the run improved or not. The question is about the comparison and
+                // the chips answer it directly: "Yes" / "About the same" / "Not really". An earlier
+                // version asked "what went better?" and offered those same three chips, which is a
+                // question a yes/no chip cannot answer.
+                fallback.TextKey = "reflection-q1-better-than-last";
+                fallback.Chips =
+                [
+                    new ReflectionChip { Id = "band-yes", TextKey = "reflection-chip-band-yes" },
+                    new ReflectionChip { Id = "band-same", TextKey = "reflection-chip-band-same" },
+                    new ReflectionChip { Id = "band-no", TextKey = "reflection-chip-band-no" },
+                ];
+                fallback.AlignedChipIds = [improved ? "band-yes" : worsened ? "band-no" : "band-same"];
+                fallback.Expectation =
+                    $"they say whether this run went better than the previous one, and it {(improved ? "did" : worsened ? "did not" : "went about the same")}";
+
+                return fallback;
             }
+
+            // No previous attempt to compare with either. This is the one question in the bank whose
+            // answer the record cannot check, so it asks about the student's own expectation rather than
+            // pretending to know: the chips are a real answer to it, and every one of them pays the
+            // partial amount, because refusing to pay anything for an honest reflection is worse than
+            // paying a little for one we cannot verify.
+            fallback.TextKey = "reflection-q1-expectation";
+            fallback.Chips =
+            [
+                new ReflectionChip { Id = "expect-better", TextKey = "reflection-chip-expect-better" },
+                new ReflectionChip { Id = "expect-same", TextKey = "reflection-chip-expect-same" },
+                new ReflectionChip { Id = "expect-worse", TextKey = "reflection-chip-expect-worse" },
+            ];
+            fallback.PartialChipIds = ["expect-better", "expect-same", "expect-worse"];
+            fallback.Expectation = "they say whether it went better or worse than they expected";
 
             return fallback;
         }
@@ -216,7 +224,9 @@ namespace webapi.Services
             {
                 // Suitability is the only type that offers a comparison, and it is the decision that
                 // teaches the thing the exercise exists to teach. Asking whether they compared is a fact
-                // we hold, not a feeling.
+                // we hold, not a feeling. The chips name the DIMENSION ("yn-compare-…") because "I did it
+                // myself" is an answer to no question in particular; "I compared them myself" is an answer
+                // to this one.
                 return new ReflectionQuestion
                 {
                     Id = "q2-compared",
@@ -225,39 +235,43 @@ namespace webapi.Services
                     TextKey = "reflection-q2-compared",
                     Chips =
                     [
-                        new ReflectionChip { Id = "yn-yes", TextKey = "reflection-chip-yn-yes" },
-                        new ReflectionChip { Id = "yn-partly", TextKey = "reflection-chip-yn-partly" },
-                        new ReflectionChip { Id = "yn-shown", TextKey = "reflection-chip-yn-shown" },
+                        new ReflectionChip { Id = "yn-compare-yes", TextKey = "reflection-chip-yn-compare-yes" },
+                        new ReflectionChip { Id = "yn-compare-partly", TextKey = "reflection-chip-yn-compare-partly" },
+                        new ReflectionChip { Id = "yn-compare-shown", TextKey = "reflection-chip-yn-compare-shown" },
                     ],
-                    AlignedChipIds = [evidence.DidCompare ? "yn-yes" : "yn-shown"],
-                    // The record is a yes or a no, so "I did some of it" is never the accurate
+                    AlignedChipIds = [evidence.DidCompare ? "yn-compare-yes" : "yn-compare-shown"],
+                    // The record is a yes or a no, so "I compared part of it" is never the accurate
                     // description of it. The chip stays because it is a fair thing to want to say; it
                     // simply does not pay, and a wrong answer that pays is how guessing becomes rational.
                     PartialChipIds = [],
                     Expectation = evidence.DidCompare
-                        ? "they say they worked the comparison out, because they did"
+                        ? "they say they compared it themselves, because they did"
                         : "they say they asked to be shown, because that is what they did",
                 };
             }
 
             if (!evidence.IsGoal && evidence.DecisionDimension == "explain")
             {
-                // Efficiency and Matching both ask the student to put their reasoning into words first.
-                // They may take a hint and still be doing it themselves, which is why the middle chip
-                // exists and why it counts as doing it.
+                // Efficiency and Matching both ask the student to explain themselves first, but they ask
+                // about DIFFERENT things and the app words them differently: Efficiency asks why the
+                // chosen method suits the system, Matching asks why the system is the right one. Naming
+                // the moment the student actually saw is the difference between a question and a guess at
+                // one, so the wording follows the exercise type.
+                var matching = evidence.Focus == "Matching";
+
                 return new ReflectionQuestion
                 {
                     Id = "q2-explained",
                     Kind = Judgement,
                     ItemType = itemType,
-                    TextKey = "reflection-q2-explained",
+                    TextKey = matching ? "reflection-q2-explained-matching" : "reflection-q2-explained-efficiency",
                     Chips =
                     [
-                        new ReflectionChip { Id = "yn-yes", TextKey = "reflection-chip-yn-yes" },
-                        new ReflectionChip { Id = "yn-partly", TextKey = "reflection-chip-yn-partly" },
-                        new ReflectionChip { Id = "yn-shown", TextKey = "reflection-chip-yn-shown" },
+                        new ReflectionChip { Id = "yn-explain-yes", TextKey = "reflection-chip-yn-explain-yes" },
+                        new ReflectionChip { Id = "yn-explain-partly", TextKey = "reflection-chip-yn-explain-partly" },
+                        new ReflectionChip { Id = "yn-explain-shown", TextKey = "reflection-chip-yn-explain-shown" },
                     ],
-                    AlignedChipIds = [evidence.DidExplain ? "yn-yes" : "yn-shown"],
+                    AlignedChipIds = [evidence.DidExplain ? "yn-explain-yes" : "yn-explain-shown"],
                     PartialChipIds = [],
                     Expectation = evidence.DidExplain
                         ? "they say they explained it themselves, because they did"
@@ -275,18 +289,24 @@ namespace webapi.Services
                 "methodComparison" => (evidence.ComparedRuns, "reflection-q2-count-compared"),
                 "solveOnOwn" => (evidence.SolvedOnOwnRuns, "reflection-q2-count-solo"),
                 "hintsAndErrors" => (evidence.HintFreeRuns, "reflection-q2-count-hintfree"),
-                "method" => (evidence.UsedFocusRuns, "reflection-q2-count-focus"),
+                // Only when the goal actually names a method. A "practise N exercises" goal with no method
+                // chosen has no method to ask about, and the question that names one would render with an
+                // empty slot in it, so it falls through to the plain count of clean runs.
+                "method" when evidence.FocusLabelKey.Length > 0 => (evidence.UsedFocusRuns, "reflection-q2-count-focus"),
                 _ => (evidence.CleanRuns, "reflection-q2-count-clean"),
             };
 
             var band = BandFor(runs, evidence.InSet);
 
-            return new ReflectionQuestion
+            var question = new ReflectionQuestion
             {
                 Id = "q2-count",
                 Kind = Judgement,
                 ItemType = itemType,
                 TextKey = textKey,
+                // The set the count is over, so the question can say WHICH exercises it means instead of
+                // the bare "of those". A method goal can also name the method here, which is what makes
+                // the question about the goal the student actually set.
                 Values = new Dictionary<string, string> { ["total"] = evidence.InSet.ToString() },
                 Chips =
                 [
@@ -299,8 +319,13 @@ namespace webapi.Services
                 // The exact band only. The record is a count, so being one band out is not a hedge,
                 // it is a wrong answer, and the bands are coarse enough to hit after one honest look.
                 PartialChipIds = [],
-                Expectation = $"they are honest about how often it happened: {runs} of {evidence.InSet} runs",
+                Expectation = $"they are honest about how often it happened: {runs} of {evidence.InSet} exercises",
             };
+
+            if (evidence.Focus == "method" && evidence.FocusLabelKey.Length > 0)
+                question.Slots = new Dictionary<string, string> { ["focus"] = evidence.FocusLabelKey };
+
+            return question;
         }
 
         /// <summary>
@@ -325,7 +350,9 @@ namespace webapi.Services
             //
             // The ids carry the dimension they promise about, so the next exercise can be checked
             // against them without storing anything extra: "act-solo-myself" says by itself what to
-            // look for.
+            // look for. The three labels are the same shape in every set and read as a sentence under
+            // their own question ("Explain it myself / …and take a hint if I need one / Ask to see the
+            // explanation"), so a chip always answers the question it sits under.
             List<ReflectionChip> tryMyself(string dimension) =>
             [
                 new ReflectionChip { Id = $"act-{dimension}-myself", TextKey = $"reflection-chip-act-{dimension}-myself" },
@@ -344,7 +371,6 @@ namespace webapi.Services
                 ];
                 return question;
             }
-
             // Q3 offers the same dimension Q2 asked about, wherever that dimension is something the
             // student does. Naming a step the exercise does not contain would be asking for a promise
             // that cannot be kept: Suitability has no self-explanation state, so telling a student who
@@ -362,7 +388,13 @@ namespace webapi.Services
 
             if (explain)
             {
-                question.TextKey = "reflection-q3-explain";
+                // The exercise types word their explanation differently, and so does the goal (which is
+                // about explaining in general rather than about one type's version of it).
+                question.TextKey = evidence.IsGoal
+                    ? "reflection-q3-explain"
+                    : evidence.Focus == "Matching"
+                        ? "reflection-q3-explain-matching"
+                        : "reflection-q3-explain-efficiency";
                 question.Chips = tryMyself("explain");
                 return question;
             }
@@ -371,7 +403,6 @@ namespace webapi.Services
             if (evidence.FocusLabelKey.Length > 0)
             {
                 question.TextKey = "reflection-q3-method";
-                question.Slots = new Dictionary<string, string> { ["focus"] = evidence.FocusLabelKey };
                 question.Chips =
                 [
                     new ReflectionChip { Id = "act-method-same", TextKey = "reflection-chip-act-method-same" },
