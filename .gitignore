@@ -28,3 +28,6 @@ REFLECTION_DESIGN_PROPOSAL.md
 # sibling — or without a checkpoint — can capture a database that is missing recent commits.
 webapi/Data/databases/*.db-wal
 webapi/Data/databases/*.db-shm
+
+tools/reflection-audit/bin
+tools/reflection-audit/obj

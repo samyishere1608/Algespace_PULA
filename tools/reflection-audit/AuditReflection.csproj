@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AuditReflection</RootNamespace>
+    <AssemblyName>AuditReflection</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\webapi\Models\Student\ReflectionQuestions.cs" Link="ReflectionQuestions.cs" />
+    <Compile Include="..\..\webapi\Models\Student\StudentProgress.cs" Link="StudentProgress.cs" />
+    <Compile Include="..\..\webapi\Services\ReflectionQuestionBank.cs" Link="ReflectionQuestionBank.cs" />
+  </ItemGroup>
+
+</Project>
