@@ -95,9 +95,25 @@ namespace webapi.Controllers
             // Safe to run repeatedly — the ALTER fails once the column exists.
             try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionQueueTable} ADD COLUMN Decisions TEXT NOT NULL DEFAULT ''"); } catch { }
 
+            // What the goal was narrowed to, so a question about a method goal can name the method and
+            // check the answer against it. Until now it existed only inside the display label.
+            try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionQueueTable} ADD COLUMN Focus TEXT NOT NULL DEFAULT ''"); } catch { }
+
+            // The counts a goal's questions are built from, worked out once when the goal completes.
+            try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionQueueTable} ADD COLUMN Evidence TEXT NOT NULL DEFAULT ''"); } catch { }
+
             conn.Execute(
                 $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.ReflectionHistoryTable} " +
                 $"({StudentProgressDBSettings.ReflectionHistoryScheme})");
+
+            // Which question was asked, and which chip was tapped. The first makes it possible to
+            // compare questions later; the second is the evidence the Insight award was decided from.
+            try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionHistoryTable} ADD COLUMN QuestionId TEXT NOT NULL DEFAULT ''"); } catch { }
+            try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionHistoryTable} ADD COLUMN Choice TEXT NOT NULL DEFAULT ''"); } catch { }
+
+            // Whether a next-action commitment has already been checked against an exercise. One
+            // promise is judged by the very next exercise, once.
+            try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionHistoryTable} ADD COLUMN FollowedUp INTEGER NOT NULL DEFAULT 0"); } catch { }
 
             // Only after every statement above has succeeded, so a partial failure is retried on the
             // next request rather than leaving the schema permanently half-built.
@@ -132,12 +148,14 @@ namespace webapi.Controllers
             int hints,
             int pippinMessages,
             string method,
-            string decisions = "")
+            string decisions = "",
+            string focus = "",
+            string evidence = "")
         {
             conn.Execute(
                 $"INSERT INTO {StudentProgressDBSettings.ReflectionQueueTable} " +
-                "(StudentId, ItemType, ItemId, ItemLabel, Status, Errors, Hints, PippinMessages, Method, Decisions, CompletedAt) " +
-                "VALUES (@StudentId, @ItemType, @ItemId, @ItemLabel, 'pending', @Errors, @Hints, @PippinMessages, @Method, @Decisions, @CompletedAt)",
+                "(StudentId, ItemType, ItemId, ItemLabel, Status, Errors, Hints, PippinMessages, Method, Decisions, Focus, Evidence, CompletedAt) " +
+                "VALUES (@StudentId, @ItemType, @ItemId, @ItemLabel, 'pending', @Errors, @Hints, @PippinMessages, @Method, @Decisions, @Focus, @Evidence, @CompletedAt)",
                 new
                 {
                     StudentId = studentId,
@@ -149,6 +167,8 @@ namespace webapi.Controllers
                     PippinMessages = pippinMessages,
                     Method = method,
                     Decisions = decisions ?? string.Empty,
+                    Focus = focus ?? string.Empty,
+                    Evidence = evidence ?? string.Empty,
                     CompletedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
                 });
 
@@ -397,9 +417,14 @@ namespace webapi.Controllers
                 "ON CONFLICT(StudentId) DO UPDATE SET TotalXP = TotalXP + @Xp",
                 new { StudentId = request.StudentId, Xp = request.XpEarned });
 
-            // Queue a reflection for this completed goal
+            // Queue a reflection for this completed goal.
+            //
+            // The evidence is worked out HERE, at the moment the goal completes, because the questions
+            // ask about the exercises inside the goal's own window and that window is not recoverable
+            // later: the goal has just been claimed and is about to stop existing.
             EnqueueReflection(conn, request.StudentId, "goal", request.GoalId, request.GoalLabel,
-                request.TotalErrors, request.TotalHints, 0, request.ExerciseType);
+                request.TotalErrors, request.TotalHints, 0, request.ExerciseType, "", request.Focus,
+                BuildGoalEvidence(conn, request.StudentId, request.Since, request.Focus));
 
             var newTotal = conn.ExecuteScalar<int>(
                 $"SELECT TotalXP FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId = @StudentId",
@@ -478,7 +503,99 @@ namespace webapi.Controllers
                     request.Errors, request.Hints, 0, request.ExerciseType, request.Decisions);
             }
 
-            return Ok();
+            // Did this exercise keep the promise the student made at the end of the last reflection?
+            //
+            // Checked HERE because this call is what tells us an exercise finished, and it carries the
+            // decisions and hints the promise is about. A promise is judged by the very NEXT exercise
+            // and then closed either way, so a stale one cannot pay out weeks later, and the same
+            // promise cannot be paid twice.
+            var resolveAwarded = SettleReflectionCommitment(conn, request);
+
+            return Ok(new { resolveAwarded });
+        }
+
+        /// <summary>Resolve for following through on the next action the reflection asked for.</summary>
+        private const int FollowThroughResolveXp = 5;
+
+        /// <summary>
+        /// Judges the student's last next-action promise against the exercise they just finished.
+        ///
+        /// Returns the Resolve awarded, which is normally 0. The promise chips carry the dimension they
+        /// are about in their own id, so nothing extra had to be stored to be able to check them.
+        ///
+        /// TWO CHIPS DELIBERATELY PAY NOTHING even when they come true:
+        ///   * the "let it show me" options, because Resolve is for following through on something that
+        ///     moves you forward, and a promise to be shown is a promise to be helped; paying it would
+        ///     make the reward ambivalent about the thing it exists to encourage.
+        ///   * the method promises, because the chip does not name the method, so there is nothing to
+        ///     compare against. Left as recorded data rather than guessed at.
+        /// </summary>
+        private static int SettleReflectionCommitment(Microsoft.Data.Sqlite.SqliteConnection conn, LogExerciseRequest request)
+        {
+            var promise = conn.QueryFirstOrDefault<PromiseRow>(
+                $"SELECT Id, Choice FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
+                "WHERE StudentId = @StudentId AND FollowedUp = 0 AND Choice LIKE 'act-%' " +
+                "ORDER BY Id DESC LIMIT 1",
+                new { StudentId = request.StudentId });
+
+            if (promise is null) return 0;
+
+            var decisions = request.Decisions ?? "";
+            bool Engaged(string element) => decisions.Contains($"{element}=Engaged", StringComparison.OrdinalIgnoreCase);
+
+            var kept = promise.Choice switch
+            {
+                // Taking a hint is still doing it. The two chips differ in wording, not in what they promise.
+                "act-explain-myself" or "act-explain-hint" => Engaged("SelfExplanation"),
+                "act-compare-myself" or "act-compare-hint" => Engaged("MethodComparison"),
+                "act-solo-myself" or "act-solo-hint" => Engaged("SolveOnOwn"),
+                "act-target-none" => request.Hints == 0,
+                "act-target-one" => request.Hints <= 1,
+                // "The same as last time" is judged against the run before this one, which is the only
+                // reading of it that means anything.
+                "act-target-same" => request.Hints <= PreviousHints(conn, request.StudentId),
+                _ => false,
+            };
+
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ReflectionHistoryTable} SET FollowedUp = 1 WHERE Id = @Id",
+                new { promise.Id });
+
+            if (!kept) return 0;
+
+            var now = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss");
+
+            conn.Execute(
+                "INSERT INTO AgencyLog (StudentId, XpType, Amount, Source, LoggedAt) " +
+                "VALUES (@StudentId, 'resolve', @Amount, 'reflection-follow-through', @Now)",
+                new { request.StudentId, Amount = FollowThroughResolveXp, Now = now });
+
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ProgressTable} " +
+                "SET ResolveXP = ResolveXP + @Amount, LifetimeAgencyXP = LifetimeAgencyXP + @Amount " +
+                "WHERE StudentId = @StudentId",
+                new { request.StudentId, Amount = FollowThroughResolveXp });
+
+            return FollowThroughResolveXp;
+        }
+
+        /// <summary>Hints on the exercise before the newest one, for a "same as last time" promise.</summary>
+        private static int PreviousHints(Microsoft.Data.Sqlite.SqliteConnection conn, long studentId)
+        {
+            // The per-attempt table, which is the one that carries TotalHints; the record table
+            // underneath it counts hints per phase, not per exercise.
+            var previous = conn.ExecuteScalar<int?>(
+                $"SELECT TotalHints FROM {AnchorStoreSettings.Table} " +
+                "WHERE StudentId = @StudentId AND CompletedAt <> '' ORDER BY Id DESC LIMIT 1 OFFSET 1",
+                new { StudentId = studentId });
+
+            return previous ?? 0;
+        }
+
+        private sealed class PromiseRow
+        {
+            public long Id { get; set; }
+            public string Choice { get; set; } = "";
         }
 
         // ── POST /student-progress/spend-xp ──────────────────────────────────
@@ -1571,9 +1688,9 @@ RULES:
 
         // ── Reflection endpoints ──────────────────────────────────────────────
 
-        /// <summary>Returns up to 3 pending reflection items for the student.</summary>
+        /// <summary>Returns up to 3 pending reflection items for the student, each with its questions.</summary>
         [HttpGet("reflection-queue/{studentId}")]
-        public ActionResult<List<ReflectionQueueRecord>> GetReflectionQueue(long studentId)
+        public ActionResult<List<ReflectionQueueItemResponse>> GetReflectionQueue(long studentId)
         {
             using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
             conn.Open();
@@ -1585,7 +1702,247 @@ RULES:
                 "ORDER BY Id DESC LIMIT 3",
                 new { StudentId = studentId }).ToList();
 
-            return Ok(items);
+            return Ok(items.Select(item =>
+            {
+                var response = new ReflectionQueueItemResponse();
+                foreach (var property in typeof(ReflectionQueueRecord).GetProperties())
+                    property.SetValue(response, property.GetValue(item));
+
+                response.Questions = ReflectionQuestionBank.Build(BuildEvidence(conn, item));
+
+                return response;
+            }).ToList());
+        }
+
+        /// <summary>
+        /// The counts a goal's questions are built from, as one compact line.
+        ///
+        /// Worked out when the goal completes, because the set it describes is "the completed exercises
+        /// since the goal was set" and that window closes the moment the goal is claimed. The cap of
+        /// five is the same window the goal maths itself uses, so a question can never describe a larger
+        /// set than the goal actually counted.
+        ///
+        /// Shape: set=5;errors=7;hints=2;clean=1;hintfree=3;solo=2;explain=0;compare=5;focus=4
+        /// </summary>
+        private static string BuildGoalEvidence(
+            Microsoft.Data.Sqlite.SqliteConnection conn, long studentId, string since, string focus)
+        {
+            var attempts = conn.Query<GoalAttemptRow>(
+                $"SELECT Id, TotalErrors, TotalHints, SelectedMethod FROM {AnchorStoreSettings.Table} " +
+                "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
+                (string.IsNullOrWhiteSpace(since) ? "" : "AND CompletedAt >= @Since ") +
+                "ORDER BY Id DESC LIMIT 5",
+                string.IsNullOrWhiteSpace(since)
+                    ? new { StudentId = studentId }
+                    : new { StudentId = studentId, Since = since })
+                .ToList();
+
+            if (attempts.Count == 0) return "";
+
+            var ids = attempts.Select(attempt => attempt.Id).ToList();
+            var records = conn.Query<DecisionRecordRow>(
+                $"SELECT AttemptId, Name, Choice FROM {AnchorStoreSettings.RecordTable} WHERE AttemptId IN @Ids",
+                new { Ids = ids }).ToList();
+
+            bool Engaged(long attemptId, string[] names) => records.Any(record =>
+                record.AttemptId == attemptId
+                && names.Contains(record.Name, StringComparer.Ordinal)
+                && record.Choice.StartsWith("Yes", StringComparison.OrdinalIgnoreCase));
+
+            var set = attempts.Count;
+            var clean = attempts.Count(a => a.TotalErrors == 0 && a.TotalHints == 0);
+            var hintFree = attempts.Count(a => a.TotalHints == 0);
+            var solo = attempts.Count(a => Engaged(a.Id, AnchorDimension.SolveOnOwn));
+            var explain = attempts.Count(a => Engaged(a.Id, AnchorDimension.SelfExplanation));
+            var compare = attempts.Count(a => Engaged(a.Id, AnchorDimension.MethodComparison));
+            var usedFocus = focus.Length > 0
+                ? attempts.Count(a => string.Equals(a.SelectedMethod, focus, StringComparison.OrdinalIgnoreCase))
+                : 0;
+
+            return $"set={set};errors={attempts.Sum(a => a.TotalErrors)};hints={attempts.Sum(a => a.TotalHints)};" +
+                   $"clean={clean};hintfree={hintFree};solo={solo};explain={explain};compare={compare};focus={usedFocus}";
+        }
+
+        /// <summary>
+        /// Everything the questions need about one item.
+        ///
+        /// The step breakdown is summed from the anchor records, which are written per PHASE, onto the
+        /// four steps the questions use. For an exercise item the attempt is the most recent completed
+        /// one, which is the one just finished: the reflection row is created by the very call that
+        /// follows it. For a goal the most recent few stand in for the goal's own window, which is no
+        /// longer recoverable once the goal has been claimed.
+        /// </summary>
+        private static ReflectionEvidence BuildEvidence(Microsoft.Data.Sqlite.SqliteConnection conn, ReflectionQueueRecord item)
+        {
+            var isGoal = item.ItemType == "goal";
+
+            var evidence = new ReflectionEvidence
+            {
+                IsGoal = isGoal,
+                // For a goal this is its category, which decides the question. For an exercise it is the
+                // type, which decides which decision the student actually saw.
+                Focus = isGoal ? item.ItemId : item.Method,
+                Errors = item.Errors,
+                Hints = item.Hints,
+                InSet = 1,
+            };
+
+            if (isGoal && item.ItemId == "method" && item.Focus.Length > 0)
+                evidence.FocusLabelKey = $"flexibility:{item.Focus.ToLowerInvariant()}-method";
+
+            evidence.DecisionDimension =
+                evidence.Focus == "Suitability" ? "compare" :
+                evidence.Focus is "Efficiency" or "Matching" ? "explain" : "";
+
+            // What the student chose, from the snapshot the row already carries.
+            foreach (var chunk in (item.Decisions ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var bits = chunk.Split('=');
+                if (bits.Length != 2) continue;
+
+                var engaged = !bits[1].StartsWith("Declined", StringComparison.OrdinalIgnoreCase);
+
+                switch (bits[0])
+                {
+                    case "SolveOnOwn":
+                        evidence.HasDecisions = true;
+                        evidence.DidSolveOnOwn |= engaged;
+                        evidence.WasShownAnswer |= !engaged;
+                        break;
+                    case "SelfExplanation":
+                        evidence.HasDecisions = true;
+                        evidence.DidExplain |= engaged;
+                        evidence.WasShownExplanation |= !engaged;
+                        break;
+                    case "MethodComparison":
+                        evidence.HasDecisions = true;
+                        evidence.DidCompare |= engaged;
+                        evidence.WasShownComparison |= !engaged;
+                        break;
+                }
+            }
+
+            var set = 1;
+
+            if (isGoal && !string.IsNullOrWhiteSpace(item.Evidence))
+            {
+                var counts = item.Evidence.Split(';')
+                    .Select(chunk => chunk.Split('='))
+                    .Where(bits => bits.Length == 2)
+                    .ToDictionary(bits => bits[0], bits => int.TryParse(bits[1], out var parsed) ? parsed : 0);
+
+                counts.TryGetValue("set", out set);
+                if (set < 1) set = 1;
+
+                evidence.InSet = set;
+                counts.TryGetValue("clean", out var clean);
+                counts.TryGetValue("hintfree", out var hintFree);
+                counts.TryGetValue("solo", out var solo);
+                counts.TryGetValue("explain", out var explain);
+                counts.TryGetValue("compare", out var compare);
+                counts.TryGetValue("focus", out var usedFocus);
+
+                evidence.CleanRuns = clean;
+                evidence.HintFreeRuns = hintFree;
+                evidence.SolvedOnOwnRuns = solo;
+                evidence.ExplainedSelfRuns = explain;
+                evidence.ComparedRuns = compare;
+                evidence.UsedFocusRuns = usedFocus;
+            }
+            else
+            {
+                // One exercise, so every count is the decision itself.
+                evidence.CleanRuns = item.Errors == 0 && item.Hints == 0 ? 1 : 0;
+                evidence.HintFreeRuns = item.Hints == 0 ? 1 : 0;
+                evidence.SolvedOnOwnRuns = evidence.DidSolveOnOwn ? 1 : 0;
+                evidence.ExplainedSelfRuns = evidence.DidExplain ? 1 : 0;
+                evidence.ComparedRuns = evidence.DidCompare ? 1 : 0;
+                evidence.UsedFocusRuns = 1;
+            }
+
+            var attemptIds = conn.Query<long>(
+                $"SELECT Id FROM {AnchorStoreSettings.Table} " +
+                "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
+                "ORDER BY Id DESC LIMIT @Take",
+                new { StudentId = item.StudentId, Take = set }).ToList();
+
+            if (attemptIds.Count > 0)
+            {
+                var rows = conn.Query<StepRow>(
+                    $"SELECT Name, Time, Errors, Hints FROM {AnchorStoreSettings.RecordTable} WHERE AttemptId IN @Ids",
+                    new { Ids = attemptIds }).ToList();
+
+                var byStep = new Dictionary<string, ReflectionStepStat>();
+
+                foreach (var row in rows)
+                {
+                    var stepId = ReflectionQuestionBank.StepIdFor(row.Name);
+                    if (stepId.Length == 0) continue;
+
+                    if (!byStep.TryGetValue(stepId, out var stat))
+                    {
+                        stat = new ReflectionStepStat
+                        {
+                            Id = stepId,
+                            LabelKey = ReflectionQuestionBank.StepLabelKey(stepId),
+                        };
+                        byStep[stepId] = stat;
+                    }
+
+                    stat.Time += row.Time;
+                    stat.Errors += row.Errors;
+                    stat.Hints += row.Hints;
+                }
+
+                evidence.Steps = [.. byStep.Values];
+                evidence.CleanStepIds = [.. evidence.Steps.Where(s => s.Errors == 0 && s.Hints == 0).Select(s => s.Id)];
+
+                // "Cost the most" is errors first, then hints, then time: a step with mistakes in it cost
+                // more than one that was merely slow.
+                evidence.CostliestStepId = evidence.Steps
+                    .OrderByDescending(s => s.Errors)
+                    .ThenByDescending(s => s.Hints)
+                    .ThenByDescending(s => s.Time)
+                    .Select(s => s.Id)
+                    .FirstOrDefault() ?? "";
+            }
+
+            // The run before this one, for the fallback question when there is no step breakdown.
+            var previous = conn.ExecuteScalar<int?>(
+                $"SELECT TotalErrors FROM {AnchorStoreSettings.Table} " +
+                "WHERE StudentId = @StudentId AND CompletedAt <> '' ORDER BY Id DESC LIMIT 1 OFFSET @Skip",
+                new { StudentId = item.StudentId, Skip = set });
+
+            if (previous.HasValue)
+            {
+                evidence.PreviousErrors = previous.Value;
+                evidence.HasHistory = true;
+            }
+
+            return evidence;
+        }
+
+        private sealed class GoalAttemptRow
+        {
+            public long Id { get; set; }
+            public int TotalErrors { get; set; }
+            public int TotalHints { get; set; }
+            public string SelectedMethod { get; set; } = "";
+        }
+
+        private sealed class DecisionRecordRow
+        {
+            public long AttemptId { get; set; }
+            public string Name { get; set; } = "";
+            public string Choice { get; set; } = "";
+        }
+
+        private sealed class StepRow
+        {
+            public string Name { get; set; } = "";
+            public double Time { get; set; }
+            public int Errors { get; set; }
+            public int Hints { get; set; }
         }
 
         /// <summary>Evaluates one reflection answer against the student's actual performance.</summary>
@@ -1626,8 +1983,11 @@ RULES:
 
             // Off-topic gate. Runs before the model so that an unrelated answer is never graded,
             // never praised and never earns XP — the student is asked to write it again instead.
-            // Asking Pippin for a model answer is exempt: there is no student answer to judge.
-            if (request.Mode != "pippin" && OffTopicDetector.IsOffTopic(request.Answer, answerFeatures))
+            // Asking Pippin for a model answer is exempt: there is no student answer to judge, and so
+            // is a chip-only answer, which has no text to be off-topic about.
+            if (request.Mode != "pippin"
+                && !string.IsNullOrWhiteSpace(request.Answer)
+                && OffTopicDetector.IsOffTopic(request.Answer, answerFeatures))
             {
                 Console.WriteLine($"[Reflection] Off-topic gate — rejected answer=\"{request.Answer}\"");
                 return Ok(new ReflectionEvaluateResponse
@@ -1651,6 +2011,28 @@ RULES:
                 : "(none)";
 
             var fallback = BuildReflectionFallback(request, item, weakness);
+
+            // ── The record decides when it can ────────────────────────────────
+            //
+            // The question is REBUILT here rather than trusted from the client, so the chips graded
+            // against are the ones we actually offered. A chip answer is therefore settled entirely by
+            // the student's own record, and the model is left to do the one thing it is better at than
+            // any rule: writing a reply worth reading.
+            var evidence = BuildEvidence(conn, item);
+            var questions = ReflectionQuestionBank.Build(evidence);
+            var asked = questions.FirstOrDefault(candidate => candidate.Id == request.QuestionId)
+                        ?? questions[Math.Clamp(request.QuestionNumber - 1, 0, questions.Count - 1)];
+            var verdict = ReflectionQuestionBank.Grade(asked, request.Choice ?? "");
+            var questionLine = ReflectionQuestionBank.DescribeForPrompt(asked, request.SubjectTerms);
+
+            Console.WriteLine($"[Reflection] Question {asked.Id} ({asked.Kind}) — choice=\"{request.Choice}\"{(string.IsNullOrWhiteSpace(request.ChoiceLabel) ? "" : $" (\"{request.ChoiceLabel}\")")} => {verdict.Status} ({verdict.InsightXp} XP){(verdict.FromRecord ? "" : ", the text has to decide")}");
+
+            if (verdict.FromRecord)
+            {
+                fallback.Aligned = verdict.Status == "aligned";
+                fallback.InsightXp = verdict.InsightXp;
+            }
+
             Console.WriteLine($"[Reflection] Fallback ready — errors={item.Errors}, hints={item.Hints} (fallback: aligned={fallback.Aligned}, insight={fallback.InsightXp})");
 
             var apiKey = _configuration["OpenAI:ApiKey"];
@@ -1675,7 +2057,7 @@ RULES:
                         $"uncertainty={promptFeatures.UncertaintyMarkers.Count}, affect={promptFeatures.AffectMarkers.Count}");
                 }
 
-                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures);
+                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures, questionLine);
 
                 var raw = await CallOpenAI(apiKey,
                     "You are Pippin, a warm encouraging study coach chatting with a student. Compare their reflection answer to their real performance, but keep it conversational and kind — like a friend checking in. Always output valid JSON with exactly these keys: feedback (string), aligned (boolean), insightXp (integer 0-3), nextStep (string, filled only for the final question otherwise empty).",
@@ -1753,6 +2135,15 @@ RULES:
                     insightXp = 0;
                 }
 
+                // A chip answer was already settled against the record before the model was ever
+                // called, so its verdict is restored here. The prompt asks the model not to change
+                // these, and it does anyway often enough that asking is not enough.
+                if (verdict.FromRecord)
+                {
+                    aligned = verdict.Status == "aligned";
+                    insightXp = verdict.InsightXp;
+                }
+
                 Console.WriteLine($"[Reflection] AI result — aligned={aligned}, insightXp={insightXp}, feedback=\"{feedback}\", nextStep=\"{nextStep}\"");
 
                 return Ok(new ReflectionEvaluateResponse
@@ -1798,8 +2189,8 @@ RULES:
             {
                 conn.Execute(
                     $"INSERT INTO {StudentProgressDBSettings.ReflectionHistoryTable} " +
-                    "(StudentId, ItemType, ItemId, Role, Text, InsightXp, CreatedAt) " +
-                    "VALUES (@StudentId, @ItemType, @ItemId, @Role, @Text, @InsightXp, @CreatedAt)",
+                    "(StudentId, ItemType, ItemId, Role, Text, InsightXp, QuestionId, Choice, CreatedAt) " +
+                    "VALUES (@StudentId, @ItemType, @ItemId, @Role, @Text, @InsightXp, @QuestionId, @Choice, @CreatedAt)",
                     new
                     {
                         StudentId = request.StudentId,
@@ -1808,6 +2199,8 @@ RULES:
                         h.Role,
                         h.Text,
                         h.InsightXp,
+                        h.QuestionId,
+                        h.Choice,
                         CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
                     });
             }
@@ -1874,15 +2267,16 @@ RULES:
             ReflectionQueueRecord item,
             WeaknessResponse weakness,
             string historyText,
-            NlpFeatures? features = null)
+            NlpFeatures? features = null,
+            string questionLine = "")
         {
             var signalBlock = features is null ? string.Empty : BuildSignalBlock(features);
 
             var questionLabel = request.QuestionNumber switch
             {
-                1 => "Q1 - overall self-assessment",
-                2 => "Q2 - method/decision reflection",
-                _ => "Q3 - concrete next step"
+                1 => "Q1 - what went well",
+                2 => "Q2 - the question this goal or exercise is actually about",
+                _ => "Q3 - one concrete next step"
             };
             var mode = request.Mode == "pippin" ? "Pippin told them (model answer requested)" : "They answered themselves";
             var weakest = weakness.Weakest;
@@ -1905,6 +2299,8 @@ Previous reflection turns (for context):
 {historyText}
 
 Current question: {questionLabel}
+{questionLine}
+Quick answer they tapped (empty when they wrote instead): {(string.IsNullOrWhiteSpace(request.Choice) ? "(none)" : string.IsNullOrWhiteSpace(request.ChoiceLabel) ? request.Choice : request.ChoiceLabel)}
 Mode: {mode}
 Student answer: {(string.IsNullOrWhiteSpace(request.Answer) ? "(empty)" : request.Answer)}
 {signalBlock}
@@ -1913,12 +2309,11 @@ Instructions:
 TONE (very important): Be warm, brief and conversational — like a friend, not a report. NEVER say things like ""I saw on your performance..."", ""according to your data..."", or list their exact error/hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
 NO FOLLOW-UP QUESTIONS (very important): This reflection is ONE question and ONE answer. The student cannot reply again. Never ask them anything, never probe for more detail, never invite them to explain further, and never end your feedback with a question mark. Deliver your feedback as a complete statement and stop.
 - If mode is 'Pippin told them': the student pressed ""Pippin, tell me"" instead of writing an answer, so there is no answer to judge. NEVER grade them, never say they answered correctly, and never praise their answer — there is nothing to praise, and doing so would be dishonest. Instead, use what actually happened on this exercise (the errors, hints and Pippin messages stated above) to give ONE concrete piece of guidance: what their pattern suggests about where they got stuck, and what specifically to try differently next time. Speak directly to the student as Pippin. Set aligned=false and insightXp=0 — requesting help never earns XP.
-- If Q1 or Q2 and they answered themselves: judge ALIGNMENT by whether their answer honestly acknowledges their actual performance:
-  * If they were SHOWN the answer — check ""what they decided"" above and look for them choosing to be shown instead of working it out — then a low error count is NOT evidence that it was easy. They did not solve it, they were handed it. So if they say it felt easy or they found it simple, they are NOT aligned (aligned=false, insightXp=0). Acknowledge that this was one where the solution was shown, warmly and without scolding, and keep it brief.
-  * If errors+hints are 2 or more: they are ALIGNED whenever they mention making any mistakes/errors or difficulty (for example 'I made 2 errors' or 'it was a bit hard'). Even if they also say it felt 'fine' or 'good', mentioning the mistakes means they are ALIGNED → aligned=true, insightXp=3. Only mark NOT aligned if they clearly claim it was easy/perfect and mention no mistakes at all.
-  * If errors+hints are 0 AND they were not shown the answer: they are ALIGNED if they say it felt easy/good/confident.
-  * If they declined to explain their own reasoning (see ""what they decided""), treat a confident claim about how they reasoned with more caution, but do not punish it merely for that.
-  * For Q2 (method/decision): they are ALIGNED if their answer is specific and thoughtful — names the method they chose and reflects on it (e.g. 'I chose substitution and it felt right') — even though you cannot verify the correct method → aligned=true, insightXp=3.
+- If Q1 or Q2 and they answered themselves: judge ALIGNMENT against the thing the question asked about, which is stated above as ""Expected of a correct answer"". They are ALIGNED when their answer refers to that one thing, in their own words, and says something about it. An answer that only gives a general verdict — ""it was fine"", ""it was good"", ""I don't know"" — is NOT aligned, however warm it sounds.
+- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED. It is stated above. Copy it exactly: do not change it, do not second-guess it, and do not award or withhold XP yourself. Write only the reply, and if the answer does not match, say warmly what actually happened and name something that genuinely went well.
+- A TAPPED QUICK ANSWER IS A COMPLETE ANSWER. If the answer text is empty but a quick answer is stated above, they answered: quote or refer to what they chose. NEVER say they did not answer, did not share their thoughts, or missed the question, and never remark on the empty box. There is nothing missing.
+  * If they DID NOT tap a quick answer AND wrote nothing usable, then there is genuinely no answer, and the reply should simply invite them to have a go at the next one.
+  * What they were SHOWN matters: check ""what they decided"" above, and if the solution was handed to them, a low error count is NOT evidence that it was easy. They did not solve it.
   If aligned → aligned=true, insightXp=3, with 1-2 warm celebrating sentences. If not → aligned=false, insightXp=0, and gently offer a warm observation instead (e.g. ""That's interesting — sometimes the tricky spots sneak up on us."") without quoting stats, without scolding, and without asking the student anything.
 - If Q3: ignore alignment. Generate ONE concrete, friendly next step targeting the weakest area and put it in nextStep. Set aligned=false, insightXp=0.
 - OFF-TOPIC: if the answer is clearly unrelated to maths and to this exercise (a random word, a different topic entirely, keyboard mashing), set offTopic=true, aligned=false, insightXp=0, and leave feedback empty — the app shows its own message asking the student to write the reflection again. Use this ONLY when the answer is genuinely unrelated: a short, vague, unsure or partly incoherent answer that is still about the exercise is a valid reflection and is NOT off-topic. When in doubt, do not flag it.

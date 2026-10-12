@@ -52,6 +52,22 @@ namespace webapi.Models.Student
         /// <summary>One of the six goal categories. The client owns the goal model.</summary>
         public string GoalId { get; set; } = "";
         public string GoalLabel { get; set; } = "";
+        /// <summary>
+        /// What the goal was narrowed to, e.g. "Elimination", or empty for "any".
+        ///
+        /// Carried separately because until now it existed ONLY inside `GoalLabel`, which is a display
+        /// string. A reflection question about a method goal has to be able to name the method and
+        /// check the answer against it, and neither is possible off a sentence.
+        /// </summary>
+        public string Focus { get; set; } = "";
+        /// <summary>
+        /// When the goal was created.
+        ///
+        /// The goal window, and the reason it is sent rather than inferred: the exercises that counted
+        /// towards this goal are the completed ones since it was set, and nothing on the server knows
+        /// where that boundary is. With it, the reflection questions can be about the actual set.
+        /// </summary>
+        public string Since { get; set; } = "";
         /// <summary>Resolve XP awarded for following through on the goal.</summary>
         public int XpEarned { get; set; }
         public string ExerciseType { get; set; } = "";
@@ -233,6 +249,24 @@ namespace webapi.Models.Student
         public string Method { get; set; } = "";
 
         /// <summary>
+        /// What the goal was narrowed to, e.g. "Elimination". Empty for an exercise item.
+        ///
+        /// A SNAPSHOT, like the error count beside it, because the question is built from it and the
+        /// goal it came from may since have been completed and removed.
+        /// </summary>
+        public string Focus { get; set; } = "";
+
+        /// <summary>
+        /// The counts the questions are built from, for a goal: how many exercises were in the set and
+        /// how many of them the student did each thing in.
+        ///
+        /// Written once when the goal is completed, because working it out needs the exercises inside
+        /// the goal's own window and that window is gone by the time the reflection is opened. Kept
+        /// apart from `Decisions`, which is a different shape and is read by the feedback prompt.
+        /// </summary>
+        public string Evidence { get; set; } = "";
+
+        /// <summary>
         /// What the student decided on this exercise, e.g. "SolveOnOwn=Declined".
         ///
         /// Stored as a snapshot, like the error and hint counts beside it, because the reflection is
@@ -257,6 +291,16 @@ namespace webapi.Models.Student
         public string Text { get; set; } = "";
         public int InsightXp { get; set; }
         public string CreatedAt { get; set; } = "";
+
+        /// <summary>
+        /// Which question this turn answered, and which chip was tapped.
+        ///
+        /// The question id is stored so questions can be compared later, which the earlier design
+        /// called for and which is impossible while only the question NUMBER is kept. The chip is
+        /// stored because it is what the Insight award was actually decided from.
+        /// </summary>
+        public string QuestionId { get; set; } = "";
+        public string Choice { get; set; } = "";
     }
 
     /// <summary>Request to evaluate one reflection answer.</summary>
@@ -266,6 +310,30 @@ namespace webapi.Models.Student
         public long QueueItemId { get; set; }
         /// <summary>1 | 2 | 3 (3 = final "next steps" question)</summary>
         public int QuestionNumber { get; set; }
+        /// <summary>
+        /// Which question from the bank this is, e.g. "q1-step-sure".
+        ///
+        /// The NUMBER is not enough once questions differ by goal category: two items can both be on
+        /// question two and be asking entirely different things, so a grader working from the position
+        /// would apply the wrong rule.
+        /// </summary>
+        public string QuestionId { get; set; } = "";
+        /// <summary>The chip the student tapped, or empty when they wrote an answer instead.</summary>
+        public string Choice { get; set; } = "";
+        /// <summary>
+        /// What the tapped chip actually said, in the student's language.
+        ///
+        /// Sent as well as the id because the id is an internal name: a reply built from it says
+        /// "step-solve" at a student who never saw that word anywhere. The client already holds the
+        /// localised label it rendered, so it costs nothing to say which words were on the chip.
+        /// </summary>
+        public string ChoiceLabel { get; set; } = "";
+        /// <summary>
+        /// The localised words the question is about, resolved by the client from the question's own
+        /// slots. Sent so the grader can tell the model what to look for in the student's own language
+        /// without the server keeping a second copy of the app's copy.
+        /// </summary>
+        public List<string> SubjectTerms { get; set; } = [];
         /// <summary>"self" | "pippin"</summary>
         public string Mode { get; set; } = "self";
         public string Answer { get; set; } = "";

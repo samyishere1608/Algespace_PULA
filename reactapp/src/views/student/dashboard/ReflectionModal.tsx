@@ -9,6 +9,7 @@ import {
     completeReflection,
     evaluateReflection,
     ReflectionHistoryEntry,
+    ReflectionQuestion,
     ReflectionQueueItem,
 } from "@utils/reflectionUtils.ts";
 
@@ -25,19 +26,35 @@ interface Props {
 type Phase = "answering" | "feedback";
 
 /**
- * The second question is about the decision the student was working on, so a goal about comparing
- * methods is asked about comparing methods rather than about choosing one.
+ * The question the student is on, with its text and its chips ready to render.
  *
- * Keyed by the goal CATEGORY, which is what a goal reflection now stores in `itemId`.
+ * The BANK lives on the server, so nothing here decides what to ask or which chip is right. The
+ * server sends the wording as a translation key plus slot keys; this resolves them with the app's
+ * own copy and hands back whatever was tapped. That is what keeps the question the student reads and
+ * the rule that grades it the same object.
  */
-const Q2_KEY_BY_CATEGORY: Record<string, string> = {
-    selfExplanation: "reflection-q2-self-explanation",
-    methodComparison: "reflection-q2-method-comparison",
-    solveOnOwn: "reflection-q2-solve-on-own",
-};
+function resolveQuestion(
+    question: ReflectionQuestion | undefined,
+    t: (key: string, options?: Record<string, unknown>) => string
+): { text: string; chips: (ReflectionQuestion["chips"][number] & { label: string })[]; id: string; terms: string[] } {
+    if (!question) return { text: "", chips: [], id: "", terms: [] };
 
-/** Exercise types whose whole point is the choice of method. */
-const DECISION_EXERCISE_TYPES = ["Suitability", "Efficiency", "Matching"];
+    // Slot values are translation KEYS (a step label, a method name) or literals (the student's own
+    // numbers). Resolving the keys here is what lets the server describe a question without holding a
+    // copy of the app's copy in three languages.
+    const slotWords = Object.fromEntries(
+        Object.entries(question.slots ?? {}).map(([name, key]) => [name, t(key)])
+    );
+
+    return {
+        id: question.id,
+        text: t(question.textKey, { ...slotWords, ...(question.values ?? {}) }),
+        // The label travels with the chip so the answer we send back can name the words the student
+        // actually read, rather than the internal id.
+        chips: (question.chips ?? []).map((chip) => ({ ...chip, label: t(chip.textKey) })),
+        terms: Object.values(slotWords),
+    };
+}
 
 /**
  * One turn of the conversation, spoken by the student's own companion.
@@ -71,6 +88,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const [question, setQuestion] = useState<1 | 2 | 3>(1);
     const [phase, setPhase] = useState<Phase>("answering");
     const [answer, setAnswer] = useState("");
+    const [choice, setChoice] = useState("");
     const [feedback, setFeedback] = useState("");
     const [nextStep, setNextStep] = useState("");
     const [loading, setLoading] = useState(false);
@@ -81,30 +99,11 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const item = items[itemIndex];
     const totalQuestions = 3;
 
-    const q2Key = useMemo(() => {
-        if (!item) return "reflection-q2-generic";
-
-        // A goal item carries its category in `itemId`, so the second question can be about the
-        // decision the student was actually working on rather than a generic one. The old
-        // hard-coded solo goal ids are gone: solo mode was removed with the free-text chat, so that
-        // branch could never fire again.
-        if (item.itemType === "goal") {
-            const byCategory = Q2_KEY_BY_CATEGORY[item.itemId];
-            if (byCategory) return byCategory;
-
-            // A method or exercise-type goal is about choosing, which is what the decision question
-            // asks. Hints and errors has no decision to ask about, so the generic question fits it
-            // better than the decision one.
-            return item.itemId === "method" || item.itemId === "exerciseType"
-                ? "reflection-q2-decision"
-                : "reflection-q2-generic";
-        }
-
-        // Exercise items carry the exercise type in `method`.
-        if (DECISION_EXERCISE_TYPES.includes(item.method)) return "reflection-q2-decision";
-        return "reflection-q2-generic";
-    }, [item]);
-
+    // The server sends three, in order: observe, judge, look forward.
+    const asked = useMemo(
+        () => resolveQuestion(item?.questions?.[question - 1], t),
+        [item, question, t]
+    );
     if (!item) {
         return (
             <div className="modal-overlay">
@@ -116,10 +115,13 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
         );
     }
 
-    const questionText =
-        question === 1 ? t("reflection-q1")
-        : question === 2 ? t(q2Key)
-        : t("reflection-q3");
+    // The server's wording when it sent one, and the old generic keys only if it did not. The fallback
+    // is a safety net for a row read before this shipped, not a second design.
+    const questionText = asked.text
+        || (question === 1 ? t("reflection-q1") : question === 2 ? t("reflection-q2-generic") : t("reflection-q3"));
+
+    // A chip on its own is a complete answer, so the button cannot require text as well.
+    const hasAnswer = answer.trim().length > 0 || choice.length > 0;
 
     async function handleAnswer(mode: "self" | "pippin"): Promise<void> {
         if (loading) return;
@@ -129,6 +131,8 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             studentId,
             queueItemId: item.id,
             question,
+            questionId: asked.id,
+            choice,
             mode,
             answer: mode === "self" ? answer : "(pippin model answer)",
             itemLabel: item.itemLabel,
@@ -144,7 +148,11 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 question,
                 mode,
                 mode === "self" ? answer : "",
-                i18n.language?.slice(0, 2) ?? "en"
+                i18n.language?.slice(0, 2) ?? "en",
+                asked.id,
+                mode === "self" ? choice : "",
+                asked.terms,
+                mode === "self" ? (asked.chips.find((chip) => chip.id === choice)?.label ?? "") : ""
             );
             // ── Debug log: what the backend/AI decided ───────────────────
             console.log("[Reflection] RESULT", JSON.stringify({
@@ -171,9 +179,9 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
 
             const newEntries: ReflectionHistoryEntry[] = [];
             if (mode === "self" && answer.trim()) {
-                newEntries.push({ role: "student", text: answer.trim(), insightXp: 0, itemType: item.itemType, itemId: item.itemId });
+                newEntries.push({ role: "student", text: answer.trim(), insightXp: 0, itemType: item.itemType, itemId: item.itemId, questionId: asked.id, choice });
             }
-            newEntries.push({ role: "pippin", text: result.feedback, insightXp: result.insightXp, itemType: item.itemType, itemId: item.itemId });
+            newEntries.push({ role: "pippin", text: result.feedback, insightXp: result.insightXp, itemType: item.itemType, itemId: item.itemId, questionId: asked.id, choice });
             setHistory((prev) => [...prev, ...newEntries]);
 
             if (result.insightXp > 0) {
@@ -191,6 +199,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
         if (question < totalQuestions) {
             setQuestion((q) => (q + 1) as 1 | 2 | 3);
             setAnswer("");
+            setChoice("");
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
@@ -206,6 +215,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setItemIndex((i) => i + 1);
             setQuestion(1);
             setAnswer("");
+            setChoice("");
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
@@ -270,6 +280,27 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                             maxLength={400}
                             autoFocus
                         />
+                        {/* Quick answers, deliberately UNDER the box. The writing is the reply; a row of pills
+                            above it would read as the expected answer and quietly turn a reflection into a
+                            multiple choice. Nothing here is required, and the question never mentions them. */}
+                        {asked.chips.length > 0 && (
+                            <div className="reflection-modal__quick">
+                                <span className="reflection-modal__quick-label">{t("reflection-quick-answer")}</span>
+                                <div className="reflection-modal__chips" role="group" aria-label={t("reflection-quick-answer")}>
+                                    {asked.chips.map((chip) => (
+                                        <button
+                                            key={chip.id}
+                                            type="button"
+                                            className={`reflection-modal__chip${choice === chip.id ? " reflection-modal__chip--on" : ""}`}
+                                            aria-pressed={choice === chip.id}
+                                            onClick={() => setChoice(choice === chip.id ? "" : chip.id)}
+                                        >
+                                            {chip.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         {retryNotice && (
                             <div className="reflection-modal__retry" role="status">
                                 <FontAwesomeIcon icon={faRotateRight} />
@@ -288,7 +319,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                             <button
                                 className="button primary-button"
                                 onClick={() => handleAnswer("self")}
-                                disabled={!answer.trim() || loading}
+                                disabled={!hasAnswer || loading}
                             >
                                 {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faPen} />}
                                 {t("reflection-answer-myself")}

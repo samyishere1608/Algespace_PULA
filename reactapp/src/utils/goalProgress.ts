@@ -204,6 +204,11 @@ async function logCompletion(studentId: number, goal: StudyGoal, label: string, 
             exerciseType: event?.exerciseType ?? "",
             totalErrors: event?.errors ?? 0,
             totalHints: event?.hints ?? 0,
+            // The goal's own window, and the one method it was narrowed to. Without these the server
+            // has no way to tell which exercises the goal was about, and would substitute the student's
+            // five most recent, which may have nothing to do with the goal being celebrated.
+            since: dateToServerStamp(new Date(goal.createdAt)),
+            focus: goal.focus ?? "",
         });
     } catch {
         // The student keeps the XP locally either way; only the server-side record is lost.
