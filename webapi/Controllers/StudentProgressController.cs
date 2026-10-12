@@ -115,6 +115,19 @@ namespace webapi.Controllers
             // promise is judged by the very next exercise, once.
             try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionHistoryTable} ADD COLUMN FollowedUp INTEGER NOT NULL DEFAULT 0"); } catch { }
 
+            // WHICH attempt this reflection is about.
+            //
+            // The evidence used to come from "the student's most recent completed attempt", which is
+            // normally the one just finished but is not guaranteed to be: the queue holds up to three
+            // items, so a student who skips the prompt twice and then reflects on the oldest one gets
+            // questions built from the newest exercise. The step chips could even come from a different
+            // exercise TYPE, which is how a Suitability attempt once produced the wording for a
+            // reflection on an Efficiency exercise. Storing the id makes the pairing exact.
+            //
+            // 0 means "not recorded" (a row enqueued before this shipped), and the reader falls back
+            // to the old behaviour for those rather than failing.
+            try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionQueueTable} ADD COLUMN AttemptId INTEGER NOT NULL DEFAULT 0"); } catch { }
+
             // Only after every statement above has succeeded, so a partial failure is retried on the
             // next request rather than leaving the schema permanently half-built.
             _schemaChecked = true;
@@ -150,12 +163,13 @@ namespace webapi.Controllers
             string method,
             string decisions = "",
             string focus = "",
-            string evidence = "")
+            string evidence = "",
+            long attemptId = 0)
         {
             conn.Execute(
                 $"INSERT INTO {StudentProgressDBSettings.ReflectionQueueTable} " +
-                "(StudentId, ItemType, ItemId, ItemLabel, Status, Errors, Hints, PippinMessages, Method, Decisions, Focus, Evidence, CompletedAt) " +
-                "VALUES (@StudentId, @ItemType, @ItemId, @ItemLabel, 'pending', @Errors, @Hints, @PippinMessages, @Method, @Decisions, @Focus, @Evidence, @CompletedAt)",
+                "(StudentId, ItemType, ItemId, ItemLabel, Status, Errors, Hints, PippinMessages, Method, Decisions, Focus, Evidence, AttemptId, CompletedAt) " +
+                "VALUES (@StudentId, @ItemType, @ItemId, @ItemLabel, 'pending', @Errors, @Hints, @PippinMessages, @Method, @Decisions, @Focus, @Evidence, @AttemptId, @CompletedAt)",
                 new
                 {
                     StudentId = studentId,
@@ -169,6 +183,7 @@ namespace webapi.Controllers
                     Decisions = decisions ?? string.Empty,
                     Focus = focus ?? string.Empty,
                     Evidence = evidence ?? string.Empty,
+                    AttemptId = attemptId,
                     CompletedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
                 });
 
@@ -500,7 +515,8 @@ namespace webapi.Controllers
             if (!string.IsNullOrWhiteSpace(request.ExerciseType))
             {
                 EnqueueReflection(conn, request.StudentId, "exercise", request.ExerciseType, request.ExerciseType,
-                    request.Errors, request.Hints, 0, request.ExerciseType, request.Decisions);
+                    request.Errors, request.Hints, 0, request.ExerciseType, request.Decisions,
+                    attemptId: request.AttemptId);
             }
 
             // Did this exercise keep the promise the student made at the end of the last reflection?
@@ -1860,11 +1876,17 @@ RULES:
                 evidence.UsedFocusRuns = 1;
             }
 
-            var attemptIds = conn.Query<long>(
-                $"SELECT Id FROM {AnchorStoreSettings.Table} " +
-                "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
-                "ORDER BY Id DESC LIMIT @Take",
-                new { StudentId = item.StudentId, Take = set }).ToList();
+            // For an exercise this is the row's OWN attempt, so the step numbers and the decisions can
+            // never come from a different exercise than the one the queue item names. Rows written
+            // before the id was recorded carry 0, and for those the newest completed attempt is the old
+            // behaviour and the best guess available.
+            var attemptIds = item.AttemptId > 0
+                ? [item.AttemptId]
+                : conn.Query<long>(
+                    $"SELECT Id FROM {AnchorStoreSettings.Table} " +
+                    "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
+                    "ORDER BY Id DESC LIMIT @Take",
+                    new { StudentId = item.StudentId, Take = set }).ToList();
 
             if (attemptIds.Count > 0)
             {
@@ -2025,6 +2047,15 @@ RULES:
             var verdict = ReflectionQuestionBank.Grade(asked, request.Choice ?? "");
             var questionLine = ReflectionQuestionBank.DescribeForPrompt(asked, request.SubjectTerms);
 
+            // What the record says they actually did, in plain words, for the prompt.
+            //
+            // Without this the model has nothing to check a claim against, so when a student taps
+            // "I worked it out myself" on an attempt where they asked to be shown, it AGREES with them
+            // and then states their claim back as fact — congratulating them for the one thing they got
+            // wrong. The prompt asked it to "say what actually happened" and never told it what that
+            // was, so it mirrored the student instead.
+            var recordLine = ReflectionQuestionBank.DescribeRecord(evidence);
+
             Console.WriteLine($"[Reflection] Question {asked.Id} ({asked.Kind}) — choice=\"{request.Choice}\"{(string.IsNullOrWhiteSpace(request.ChoiceLabel) ? "" : $" (\"{request.ChoiceLabel}\")")} => {verdict.Status} ({verdict.InsightXp} XP){(verdict.FromRecord ? "" : ", the text has to decide")}");
 
             if (verdict.FromRecord)
@@ -2057,7 +2088,7 @@ RULES:
                         $"uncertainty={promptFeatures.UncertaintyMarkers.Count}, affect={promptFeatures.AffectMarkers.Count}");
                 }
 
-                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures, questionLine);
+                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures, questionLine, recordLine);
 
                 var raw = await CallOpenAI(apiKey,
                     "You are Pippin, a warm encouraging study coach chatting with a student. Compare their reflection answer to their real performance, but keep it conversational and kind — like a friend checking in. Always output valid JSON with exactly these keys: feedback (string), aligned (boolean), insightXp (integer 0-3), nextStep (string, filled only for the final question otherwise empty).",
@@ -2268,7 +2299,8 @@ RULES:
             WeaknessResponse weakness,
             string historyText,
             NlpFeatures? features = null,
-            string questionLine = "")
+            string questionLine = "",
+            string recordLine = "")
         {
             var signalBlock = features is null ? string.Empty : BuildSignalBlock(features);
 
@@ -2300,6 +2332,7 @@ Previous reflection turns (for context):
 
 Current question: {questionLabel}
 {questionLine}
+What actually happened on this exercise, from the record: {recordLine}
 Quick answer they tapped (empty when they wrote instead): {(string.IsNullOrWhiteSpace(request.Choice) ? "(none)" : string.IsNullOrWhiteSpace(request.ChoiceLabel) ? request.Choice : request.ChoiceLabel)}
 Mode: {mode}
 Student answer: {(string.IsNullOrWhiteSpace(request.Answer) ? "(empty)" : request.Answer)}
@@ -2310,7 +2343,8 @@ TONE (very important): Be warm, brief and conversational — like a friend, not 
 NO FOLLOW-UP QUESTIONS (very important): This reflection is ONE question and ONE answer. The student cannot reply again. Never ask them anything, never probe for more detail, never invite them to explain further, and never end your feedback with a question mark. Deliver your feedback as a complete statement and stop.
 - If mode is 'Pippin told them': the student pressed ""Pippin, tell me"" instead of writing an answer, so there is no answer to judge. NEVER grade them, never say they answered correctly, and never praise their answer — there is nothing to praise, and doing so would be dishonest. Instead, use what actually happened on this exercise (the errors, hints and Pippin messages stated above) to give ONE concrete piece of guidance: what their pattern suggests about where they got stuck, and what specifically to try differently next time. Speak directly to the student as Pippin. Set aligned=false and insightXp=0 — requesting help never earns XP.
 - If Q1 or Q2 and they answered themselves: judge ALIGNMENT against the thing the question asked about, which is stated above as ""Expected of a correct answer"". They are ALIGNED when their answer refers to that one thing, in their own words, and says something about it. An answer that only gives a general verdict — ""it was fine"", ""it was good"", ""I don't know"" — is NOT aligned, however warm it sounds.
-- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED. It is stated above. Copy it exactly: do not change it, do not second-guess it, and do not award or withhold XP yourself. Write only the reply, and if the answer does not match, say warmly what actually happened and name something that genuinely went well.
+- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED. It is stated above. Copy it exactly: do not change it, do not second-guess it, and do not award or withhold XP yourself. Write only the reply, and if the answer does not match, say warmly what ACTUALLY happened, using the record line stated above, and do NOT repeat their version of it.
+- NEVER AGREE WITH SOMETHING THE RECORD CONTRADICTS. If they say they worked it out themselves but the record says they asked to be shown, do not congratulate them for working it out and never state their claim as fact — that teaches them the reflection is a box to type anything into. Say what they did in a warm, matter-of-fact way, and if there is something to celebrate about it, celebrate that instead (they asked for help, which is a real skill). Do not scold, and do not point out that they were wrong.
 - A TAPPED QUICK ANSWER IS A COMPLETE ANSWER. If the answer text is empty but a quick answer is stated above, they answered: quote or refer to what they chose. NEVER say they did not answer, did not share their thoughts, or missed the question, and never remark on the empty box. There is nothing missing.
   * If they DID NOT tap a quick answer AND wrote nothing usable, then there is genuinely no answer, and the reply should simply invite them to have a go at the next one.
   * What they were SHOWN matters: check ""what they decided"" above, and if the solution was handed to them, a low error count is NOT evidence that it was easy. They did not solve it.

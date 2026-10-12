@@ -16,8 +16,6 @@ $literal = [regex]::Matches($bank, '"(reflection-[a-z0-9-]+)"') |
 # reflection-q2-count-{x}.
 $generated = @(
     'reflection-step-choose', 'reflection-step-setup', 'reflection-step-solve', 'reflection-step-explain',
-    'reflection-q2-count-clean', 'reflection-q2-count-explained', 'reflection-q2-count-compared',
-    'reflection-q2-count-solo', 'reflection-q2-count-hintfree', 'reflection-q2-count-focus',
     'reflection-chip-act-explain-myself', 'reflection-chip-act-explain-hint', 'reflection-chip-act-explain-shown',
     'reflection-chip-act-compare-myself', 'reflection-chip-act-compare-hint', 'reflection-chip-act-compare-shown',
     'reflection-chip-act-solo-myself', 'reflection-chip-act-solo-hint', 'reflection-chip-act-solo-shown'
@@ -54,6 +52,8 @@ $stale = @(
     'reflection-chip-act-focus-again', 'reflection-chip-act-other-method', 'reflection-chip-act-any-fit',
     'reflection-chip-yn-yes', 'reflection-chip-yn-partly', 'reflection-chip-yn-shown',
     'reflection-q1-held-together', 'reflection-q2-explained',
+    'reflection-q2-count-clean', 'reflection-q2-count-explained', 'reflection-q2-count-compared',
+    'reflection-q2-count-focus',
     'reflection-q2-decision', 'reflection-q2-self-explanation',
     'reflection-q2-method-comparison', 'reflection-q2-solve-on-own'
 )

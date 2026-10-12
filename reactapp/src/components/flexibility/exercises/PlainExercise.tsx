@@ -41,7 +41,8 @@ export function PlainExercise({ flexibilityExerciseId, exercise, condition, hand
     flexibilityExerciseId: number,
     exercise: PlainExerciseProps;
     condition: AgentCondition;
-    handleEnd: () => void;
+    /** Called on finish, with the attempt id our tracker owns so the reflection can be paired with it. */
+    handleEnd: (attemptId?: number) => void;
     isStudy?: boolean;
     studyId?: number;
 }): ReactElement {
@@ -76,6 +77,7 @@ export function PlainExercise({ flexibilityExerciseId, exercise, condition, hand
         setNextTrackingPhase,
         endTrackingPhase,
         endTracking,
+        ourEntryId,
         decideCalculationIntervention
     } = useFlexibilityTracker(
         // Logged-in students track too, not only study participants.
@@ -359,7 +361,7 @@ export function PlainExercise({ flexibilityExerciseId, exercise, condition, hand
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
             logFlexibilityMethodChoice(selectedMethod, flexibilityExerciseId);
         }
-        handleEnd();
+        handleEnd(ourEntryId);
     }
 }
 

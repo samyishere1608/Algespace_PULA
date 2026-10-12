@@ -171,11 +171,12 @@ export async function logExerciseCompletion(
     exerciseType: string,
     errors = 0,
     hints = 0,
-    decisions = ""
+    decisions = "",
+    attemptId = 0
 ): Promise<void> {
     try {
         await axios.post(`${BACKEND}/student-progress/log-exercise`, {
-            studentId, exerciseType, errors, hints, decisions
+            studentId, exerciseType, errors, hints, decisions, attemptId
         });
     } catch {
         // Non-critical — don't block navigation

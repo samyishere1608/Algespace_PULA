@@ -60,12 +60,16 @@ const expected = {
     'exercise/Suitability': { q2: 'reflection-q2-compared', q3: 'reflection-q3-compare' },
     'exercise/Efficiency': { q2: 'reflection-q2-explained-efficiency', q3: 'reflection-q3-explain-efficiency' },
     'exercise/Matching': { q2: 'reflection-q2-explained-matching', q3: 'reflection-q3-explain-matching' },
-    'goal/method': { q2: 'reflection-q2-count-focus', q3: 'reflection-q3-method' },
-    'goal/exerciseType': { q2: 'reflection-q2-count-clean', q3: 'reflection-q3-solo' },
-    'goal/selfExplanation': { q2: 'reflection-q2-count-explained', q3: 'reflection-q3-explain' },
-    'goal/methodComparison': { q2: 'reflection-q2-count-compared', q3: 'reflection-q3-compare' },
-    'goal/solveOnOwn': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-solo' },
-    'goal/hintsAndErrors': { q2: 'reflection-q2-count-hintfree', q3: 'reflection-q3-target' },
+    // A COMPLETED GOAL CANNOT BE ASKED ABOUT ITS OWN CRITERION. "Practise the elimination method three
+    // times" cannot complete without three exercises solved with elimination, so the question asks
+    // about working it out unaided instead, which the goal does not prove. The exception is the goal
+    // that IS about working unaided, which asks about hints.
+    'goal/method': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-method' },
+    'goal/exerciseType': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-solo' },
+    'goal/selfExplanation': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-explain' },
+    'goal/methodComparison': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-compare' },
+    'goal/solveOnOwn': { q2: 'reflection-q2-count-hintfree', q3: 'reflection-q3-solo' },
+    'goal/hintsAndErrors': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-target' },
 };
 
 const failures = [];

@@ -778,5 +778,8 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
         endTrackingPhase,
         endTracking,
         decideExplainIntervention,
-        trackType
+        trackType,
+        // The id our own store gave this attempt. Exposed so the completion log can name the attempt
+        // the reflection will be about, instead of the server assuming the newest one is it.
+        ourEntryId
     };}

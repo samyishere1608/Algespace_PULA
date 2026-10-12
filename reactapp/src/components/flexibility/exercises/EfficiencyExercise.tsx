@@ -40,7 +40,8 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
     flexibilityExerciseId: number,
     exercise: EfficiencyExerciseProps;
     condition: AgentCondition;
-    handleEnd: () => void;
+    /** Called on finish, with the attempt id our tracker owns so the reflection can be paired with it. */
+    handleEnd: (attemptId?: number) => void;
     isStudy?: boolean;
     studyId?: number;
 }): ReactElement {
@@ -72,6 +73,7 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
         setNextTrackingPhase,
         endTrackingPhase,
         endTracking,
+        ourEntryId,
         decideCalculationIntervention,
         decideExplainIntervention,
     } = useFlexibilityTracker(
@@ -411,7 +413,7 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
             logFlexibilityMethodChoice(selectedMethod, flexibilityExerciseId);
         }
-        handleEnd();
+        handleEnd(ourEntryId);
     }
 }
 

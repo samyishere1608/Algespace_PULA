@@ -53,11 +53,16 @@ var scenarios = new List<(string Name, ReflectionEvidence Evidence)>();
 
 foreach (var (category, q2) in new[]
 {
-    ("method", "reflection-q2-count-focus"),    ("exerciseType", "reflection-q2-count-clean"),
-    ("selfExplanation", "reflection-q2-count-explained"),
-    ("methodComparison", "reflection-q2-count-compared"),
-    ("solveOnOwn", "reflection-q2-count-solo"),
-    ("hintsAndErrors", "reflection-q2-count-hintfree"),
+    // A completed goal is never asked about the criterion it just proved: "practise the elimination
+    // method three times" cannot complete without three exercises solved with elimination, so the
+    // question would always have the same answer. Every category except solveOnOwn therefore asks
+    // about working it out unaided, and solveOnOwn asks about hints.
+    ("method", "reflection-q2-count-solo"),
+    ("exerciseType", "reflection-q2-count-solo"),
+    ("selfExplanation", "reflection-q2-count-solo"),
+    ("methodComparison", "reflection-q2-count-solo"),
+    ("solveOnOwn", "reflection-q2-count-hintfree"),
+    ("hintsAndErrors", "reflection-q2-count-solo"),
 })
 {
     var evidence = new ReflectionEvidence
@@ -82,9 +87,7 @@ foreach (var (category, q2) in new[]
 
     var name = $"goal/{category}";
     scenarios.Add((name, evidence));
-    // A method goal that names no method cannot ask about one, so it gets the plain count of clean
-    // runs instead of a question with an empty slot in it.
-    Expect(name, q2: category == "method" ? "reflection-q2-count-clean" : q2, q3: category switch
+    Expect(name, q2: q2, q3: category switch
     {
         "hintsAndErrors" => "reflection-q3-target",
         "selfExplanation" => "reflection-q3-explain",
@@ -100,7 +103,7 @@ foreach (var (category, q2) in new[]
         var narrowed = Clone(evidence);
         narrowed.FocusLabelKey = "flexibility:elimination-method";
         scenarios.Add(("goal/method+narrowed", narrowed));
-        Expect("goal/method+narrowed", q2: "reflection-q2-count-focus", q3: "reflection-q3-method");
+        Expect("goal/method+narrowed", q2: "reflection-q2-count-solo", q3: "reflection-q3-method");
     }
 }
 
@@ -237,7 +240,7 @@ Expect("exercise/tied-steps", q1: "reflection-q1-step-fight");
 
 // A goal whose window holds nothing yet.
 scenarios.Add(("goal/empty", new ReflectionEvidence { IsGoal = true, Focus = "solveOnOwn", InSet = 0 }));
-Expect("goal/empty", q1: "reflection-q1-expectation", q2: "reflection-q2-count-solo", q3: "reflection-q3-solo");
+Expect("goal/empty", q1: "reflection-q1-expectation", q2: "reflection-q2-count-hintfree", q3: "reflection-q3-solo");
 
 // ── The audit ────────────────────────────────────────────────────────────────
 
@@ -404,6 +407,76 @@ foreach (var question in scenarios.SelectMany(s => ReflectionQuestionBank.Build(
             Fail($"q3/{question.TextKey}", $"chip \"{chip.Id}\" is about {dimension}, but the question is about {expected}");
     }
 }
+
+// ── The relevance gate ───────────────────────────────────────────────────────
+//
+// The gate runs before the model and discards an answer outright, so a false positive loses real
+// work and tells the student their reflection was irrelevant. It used to be a missing-signal test,
+// which threw away "I wrote out why I moved the x term first" because a bare "x" was not a maths
+// signal and none of its words were on the list.
+//
+// The cases below are the ones that matter, not an exhaustive sample: every answer a student
+// plausibly writes must pass, and obvious junk must not.
+
+var gateCases = new (string Answer, bool ShouldReject, string Why)[]
+{
+    // MUST PASS. Real answers, including the one the old gate threw away.
+    ("I wrote out why I moved the x term first", false, "a sentence about the algebra"),
+    ("it was fine, not too hard", false, "short but a real answer"),
+    ("I solved for y and then substituted", false, "names a variable and the work"),
+    ("I found it hard", false, "a feeling word"),
+    ("I got stuck on the first step", false, "describes where they got stuck"),
+    ("it took me a while but I got there", false, "a sentence with no domain word at all"),
+    ("I asked to be shown", false, "the truth about a chip-only turn"),
+    ("ok cool", false, "lazy, but a real answer: the gate rejects non-answers, the model grades quality"),
+    ("x", false, "a lone variable letter is a maths signal"),
+    ("7", false, "a bare number is a maths signal even at one character"),
+    ("9", false, "ditto"),
+    ("2x + 3 = 7", false, "an expression"),
+    ("Ich habe zuerst die Gleichung umgestellt", false, "German sentence"),
+    ("es war schwer", false, "German, three words and no domain word: was rejected before"),
+    ("erst war ich verwirrt", false, "German, no domain word"),
+    ("schwer", false, "the most common German word for hard, which was simply missing"),
+    ("むずかしかった", false, "Japanese past tense in HIRAGANA, which the kanji entries miss"),
+    ("やり方がわからなかった", false, "Japanese sentence"),
+    ("最初は意味が分からなかった", false, "Japanese, longer than the character threshold"),
+
+    // MUST NOT PASS. This is the whole reason the gate exists.
+    ("burger", true, "the original report"),
+    ("asdf", true, "keyboard mashing"),
+    ("hello", true, "a greeting"),
+    ("blah blah", true, "noise"),
+    ("k", true, "one character and nothing else"),
+};
+
+foreach (var (answer, shouldReject, why) in gateCases)
+{
+    foreach (var language in new[] { "en", "de", "ja" })
+    {
+        // The real call site passes extracted features, so both paths are exercised: the text-only
+        // path is what the gate degrades to when the NLP flag is off.
+        var features = NlpFeatureExtractor.Extract(answer, language);
+        var withFeatures = OffTopicDetector.IsOffTopic(answer, features);
+        var textOnly = OffTopicDetector.IsOffTopic(answer, null);
+
+        if (withFeatures != shouldReject)
+            Fail($"gate/{language}", $"\"{answer}\" ({why}) was {(withFeatures ? "REJECTED" : "accepted")}, expected {(shouldReject ? "rejection" : "acceptance")}");
+
+        // The text-only path is deliberately weaker but must never be STRICTER than the full path:
+        // a gate that rejects more when it knows less is the wrong way round.
+        if (textOnly && !withFeatures)
+            Fail($"gate/{language}", $"\"{answer}\" was rejected without features but accepted with them");
+    }
+}
+
+// Free text is never graded from the record alone, and an empty answer is never the gate's business:
+// a chip-only turn has no text to be off-topic about, which is handled by the caller.
+if (!OffTopicDetector.IsOffTopic("", null)) Fail("gate", "an empty answer was accepted");
+if (!OffTopicDetector.IsOffTopic("   ", null)) Fail("gate", "whitespace was accepted");
+
+Console.WriteLine();
+Console.WriteLine($"relevance gate: {gateCases.Length * 3} answer/language pairs checked, " +
+                  $"{gateCases.Count(c => c.ShouldReject)} of them junk");
 
 // ── The report ───────────────────────────────────────────────────────────────
 

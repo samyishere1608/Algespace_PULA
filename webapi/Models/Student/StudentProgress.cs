@@ -153,6 +153,18 @@ namespace webapi.Models.Student
         /// which must be read as "unknown" rather than "engaged".
         /// </summary>
         public string Decisions { get; set; } = "";
+
+        /// <summary>
+        /// The attempt this completion is about, as the tracker knows it.
+        ///
+        /// Sent so the reflection queued for this exercise can read ITS OWN attempt. Without it the
+        /// reader has to assume the student's most recent completed attempt is the one being reflected
+        /// on, which holds only until they finish another exercise before answering.
+        ///
+        /// 0 when the caller does not know it, which the reader treats as "unknown" and falls back
+        /// to the assumption rather than failing.
+        /// </summary>
+        public long AttemptId { get; set; }
     }
 
     public class SpendXpRequest
@@ -265,6 +277,19 @@ namespace webapi.Models.Student
         /// apart from `Decisions`, which is a different shape and is read by the feedback prompt.
         /// </summary>
         public string Evidence { get; set; } = "";
+
+        /// <summary>
+        /// The attempt this item is about.
+        ///
+        /// The questions are built from this attempt's per-step numbers and decisions, so the pairing
+        /// has to be exact. It used to be assumed: the reader took the student's most recent completed
+        /// attempt, which is the right one only while they answer the prompt before doing anything
+        /// else, and the queue holds up to three items.
+        ///
+        /// 0 for a row written before this was recorded, which the reader treats as "unknown" and
+        /// falls back to the assumption rather than failing.
+        /// </summary>
+        public long AttemptId { get; set; }
 
         /// <summary>
         /// What the student decided on this exercise, e.g. "SolveOnOwn=Declined".

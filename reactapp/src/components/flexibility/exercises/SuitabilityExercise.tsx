@@ -45,7 +45,7 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
     flexibilityExerciseId: number,
     exercise: SuitabilityExerciseProps;
     condition: AgentCondition;
-    handleEnd: () => void;
+    handleEnd: (attemptId?: number) => void;
     isStudy?: boolean;
     studyId?: number;
 }): ReactElement {
@@ -80,6 +80,7 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
         setNextTrackingPhase,
         endTrackingPhase,
         endTracking,
+        ourEntryId,
         decideCalculationIntervention,
         decideComparisonIntervention,
         decideResolvingIntervention
@@ -576,7 +577,10 @@ export function SuitabilityExercise({ flexibilityExerciseId, exercise, condition
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
             logFlexibilityMethodChoice(selectedMethod, flexibilityExerciseId);
         }
-        handleEnd();
+        // The id our own tracker was given for this attempt, so the reflection queued by this
+        // completion describes THIS exercise. Undefined before the tracker has it, which the server
+        // reads as "unknown".
+        handleEnd(ourEntryId);
     }
 }
 

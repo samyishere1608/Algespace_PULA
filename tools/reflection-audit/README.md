@@ -30,6 +30,11 @@ node .\check-queue-routing.mjs ja
 #    always follow it with the restore.
 node .\check-resolve-followthrough.mjs
 node .\restore-baseline.mjs
+
+# 5. The relevance gate (in `dotnet run`) plus two behavioural checks against the live model.
+#    (a) and (b) write to the database; follow them with restore-baseline.mjs.
+node .\check-replies.mjs          # a real answer is not discarded; a contradicted claim is not agreed with
+node .\check-attempt-link.mjs     # a reflection reads its own attempt (uses a throwaway student)
 ```
 
 Two more, for when something looks wrong and you need to see the real thing rather than reason
@@ -115,11 +120,21 @@ method — that is what the completion call stores there. It is what decides whi
 exercise gets, so a fixture that puts a real method name in that column will quietly exercise
 the wrong branch. `check-queue-routing.mjs` says so where it seeds.
 
+## The rule the goal questions follow
+
+**A completed goal is never asked about the criterion it just proved.** "Practise the elimination
+method three times" cannot complete without three exercises solved with elimination, so asking how
+many of them used elimination has one possible answer and tells the student nothing. The same holds
+for every category: a goal to explain your reasoning cannot complete without explaining it.
+
+So the goal question asks about the thing the goal does NOT prove — whether they worked it out
+unaided — and the one goal that IS about working unaided asks about hints instead. The goal audit
+case in `dotnet run` and the `goal/*` entries in `check-queue-routing.mjs` both encode this.
+
 ## Open problem, reproducible here
 
-`show-attempt-match.mjs` prints both halves of a mismatch that is **not fixed**: the evidence the
-questions are built from comes from the student's **most recent completed attempt**, while the queue
-row names the item the reflection is about. They are normally the same attempt, and nothing enforces
-it. If a student finishes two exercises before reflecting, the questions describe the second one, and
-the step chips can even come from a different exercise TYPE. The fix needs the attempt id stored on
-the queue row.
+`show-attempt-match.mjs` prints both halves of the mismatch that used to exist between the attempt
+the questions were built from and the attempt the queue row named. It is **fixed**: the queue row now
+carries `AttemptId`, captured when the reflection is queued, and `check-attempt-link.mjs` proves a
+reflection reads its own attempt even when a newer one exists. Rows written before the column existed
+carry `0` and fall back to the newest attempt, which `check-attempt-link.mjs` also covers.

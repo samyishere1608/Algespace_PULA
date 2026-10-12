@@ -100,8 +100,8 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
      * `moduleHome` is the flexibility module's own list. It is the destination when there is no
      * account — see `leaveTo` above for why a logged-in student goes somewhere else.
      */
-    function buildHandleEnd(moduleHome: string, exerciseTypeName: string): () => void {
-        return function () {
+    function buildHandleEnd(moduleHome: string, exerciseTypeName: string): (attemptId?: number) => void {
+        return function (attemptId?: number) {
             const navigateTo = student ? Paths.StudentDashboardPath : moduleHome;
             const errors = getExerciseErrorCount();
             const hints = getExerciseHintCount();
@@ -121,8 +121,9 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
 
             // Always log exercise completion for stats (non-blocking). The decisions ride along so
             // the reflection can tell what the student actually chose, not just how many times they
-            // slipped.
-            void logExerciseCompletion(student.id, exerciseTypeName, errors, hints, decisions);
+            // slipped — and so does the attempt id, which is what pairs the reflection with THIS
+            // exercise rather than with whichever one happens to be newest when it is opened.
+            void logExerciseCompletion(student.id, exerciseTypeName, errors, hints, decisions, attemptId);
             addAccuracyEntry(student.id, errors, hints);
 
             // This exercise just changed the avoidance profile, so the cached reading is stale. The
@@ -219,7 +220,7 @@ export function ExerciseRouter({ concreteExerciseType, concreteExerciseId, flexi
     concreteExerciseId: number;
     flexibilityId: number;
     navigateBackTo: string;
-    buildHandleEnd: (navigateTo: string, exerciseTypeName: string) => () => void;
+    buildHandleEnd: (navigateTo: string, exerciseTypeName: string) => (attemptId?: number) => void;
 }): ReactElement {
     switch (concreteExerciseType) {
         case FlexibilityStudyExerciseType.Suitability:

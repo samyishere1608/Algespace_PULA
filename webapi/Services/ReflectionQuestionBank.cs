@@ -283,30 +283,30 @@ namespace webapi.Services
             // the thing, which is the one fact we can count across a set of exercises, and it is the
             // honest question about a goal, because a goal is a promise about a pattern rather than
             // about one run.
-            var (runs, textKey) = evidence.Focus switch
-            {
-                "selfExplanation" => (evidence.ExplainedSelfRuns, "reflection-q2-count-explained"),
-                "methodComparison" => (evidence.ComparedRuns, "reflection-q2-count-compared"),
-                "solveOnOwn" => (evidence.SolvedOnOwnRuns, "reflection-q2-count-solo"),
-                "hintsAndErrors" => (evidence.HintFreeRuns, "reflection-q2-count-hintfree"),
-                // Only when the goal actually names a method. A "practise N exercises" goal with no method
-                // chosen has no method to ask about, and the question that names one would render with an
-                // empty slot in it, so it falls through to the plain count of clean runs.
-                "method" when evidence.FocusLabelKey.Length > 0 => (evidence.UsedFocusRuns, "reflection-q2-count-focus"),
-                _ => (evidence.CleanRuns, "reflection-q2-count-clean"),
-            };
+            // A COMPLETED GOAL HAS ALREADY PROVED ITS OWN CRITERION. "Practise the elimination method
+            // three times" cannot complete without three exercises solved with elimination, so asking
+            // how many of them used elimination is asking the student to confirm what the celebration
+            // just told them, and the answer is always "all of them". The same holds for every other
+            // category: a goal to explain your reasoning cannot complete without explaining it.
+            //
+            // So the question asks about the one thing the goal does NOT prove: whether they worked it
+            // out themselves. Every goal is about choosing to do something, and none of them requires
+            // doing it unaided. The exception is the goal that IS about working unaided, which asks
+            // about hints instead, for exactly the same reason.
+            var (runs, textKey) = evidence.Focus == "solveOnOwn"
+                ? (evidence.HintFreeRuns, "reflection-q2-count-hintfree")
+                : (evidence.SolvedOnOwnRuns, "reflection-q2-count-solo");
 
             var band = BandFor(runs, evidence.InSet);
 
-            var question = new ReflectionQuestion
+            return new ReflectionQuestion
             {
                 Id = "q2-count",
                 Kind = Judgement,
                 ItemType = itemType,
                 TextKey = textKey,
                 // The set the count is over, so the question can say WHICH exercises it means instead of
-                // the bare "of those". A method goal can also name the method here, which is what makes
-                // the question about the goal the student actually set.
+                // the bare "of those".
                 Values = new Dictionary<string, string> { ["total"] = evidence.InSet.ToString() },
                 Chips =
                 [
@@ -321,11 +321,6 @@ namespace webapi.Services
                 PartialChipIds = [],
                 Expectation = $"they are honest about how often it happened: {runs} of {evidence.InSet} exercises",
             };
-
-            if (evidence.Focus == "method" && evidence.FocusLabelKey.Length > 0)
-                question.Slots = new Dictionary<string, string> { ["focus"] = evidence.FocusLabelKey };
-
-            return question;
         }
 
         /// <summary>
@@ -487,6 +482,56 @@ namespace webapi.Services
 
             // No chip chosen, so the free text is the answer and only the model can read it.
             return new ReflectionVerdict { Status = "unjudged", InsightXp = 0, FromRecord = false };
+        }
+
+        /// <summary>
+        /// What the record says the student actually did, in plain sentences, for the model to check a
+        /// claim against.
+        ///
+        /// This exists because the prompt's instruction to "say what actually happened" is useless
+        /// without it: given only the student's own claim, the model agrees with it and then repeats it
+        /// as fact. A student who tapped "I worked it out myself" on an attempt where they asked to be
+        /// shown was congratulated for self-reliance in the same reply that said "since you chose to
+        /// solve it yourself".
+        ///
+        /// Only things we actually hold are stated. An absence is reported as an absence rather than as
+        /// a negative, because "they did not explain it" and "we never saw them at the explanation
+        /// step" are different facts and only one of them is ours to assert.
+        /// </summary>
+        public static string DescribeRecord(ReflectionEvidence evidence)
+        {
+            var parts = new List<string>();
+
+            if (evidence.IsGoal)
+                parts.Add($"This is a goal they completed, over {evidence.InSet} exercise(s).");
+
+            if (evidence.HasDecisions)
+            {
+                parts.Add(evidence.DidExplain
+                    ? "They chose to explain their own reasoning."
+                    : evidence.WasShownExplanation
+                        ? "They asked to be shown the explanation instead of explaining it themselves."
+                        : "Nothing was recorded about whether they explained their reasoning.");
+
+                if (evidence.DidCompare || evidence.WasShownComparison)
+                    parts.Add(evidence.DidCompare
+                        ? "They compared the two methods themselves."
+                        : "They asked to be shown the comparison instead of working it out themselves.");
+
+                parts.Add(evidence.DidSolveOnOwn
+                    ? "They chose to work the solution out themselves."
+                    : evidence.WasShownAnswer
+                        ? "They asked to be shown the solution. A low error count is therefore NOT evidence that this was easy: they did not solve it unaided."
+                        : "Nothing was recorded about whether they worked the solution out themselves.");
+            }
+            else
+            {
+                parts.Add("No decision point was recorded for this item, so nothing is known about what they chose.");
+            }
+
+            parts.Add($"{evidence.Errors} mistake(s) and {evidence.Hints} hint(s) were counted.");
+
+            return string.Join(" ", parts);
         }
 
         /// <summary>

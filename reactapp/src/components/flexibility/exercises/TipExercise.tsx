@@ -23,7 +23,8 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
     flexibilityExerciseId: number,
     exercise: TipExerciseProps;
     condition: AgentCondition;
-    handleEnd: () => void;
+    /** Called on finish, with the attempt id our tracker owns so the reflection can be paired with it. */
+    handleEnd: (attemptId?: number) => void;
     isStudy?: boolean;
     studyId?: number;
 }): ReactElement {
@@ -56,6 +57,7 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
         setNextTrackingPhase,
         endTrackingPhase,
         endTracking,
+        ourEntryId,
         decideCalculationIntervention
 
     } = useFlexibilityTracker(
@@ -265,7 +267,7 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
             logFlexibilityMethodChoice(exercise.method, flexibilityExerciseId);
         }
-        handleEnd();
+        handleEnd(ourEntryId);
     }
 }
 

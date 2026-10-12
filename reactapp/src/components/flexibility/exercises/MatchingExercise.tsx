@@ -26,7 +26,8 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
     flexibilityExerciseId: number,
     exercise: MatchingExerciseProps;
     condition: AgentCondition;
-    handleEnd: () => void;
+    /** Called on finish, with the attempt id our tracker owns so the reflection can be paired with it. */
+    handleEnd: (attemptId?: number) => void;
     isStudy?: boolean;
     studyId?: number;
 }): ReactElement {
@@ -59,6 +60,7 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
         setNextTrackingPhase,
         endTrackingPhase,
         endTracking,
+        ourEntryId,
         decideCalculationIntervention,
         decideExplainIntervention
 
@@ -387,7 +389,7 @@ export function MatchingExercise({ flexibilityExerciseId, exercise, condition, h
             setPKExerciseCompleted(flexibilityExerciseId, "flexibility-training");
             logFlexibilityMethodChoice(exercise.method, flexibilityExerciseId);
         }
-        handleEnd();
+        handleEnd(ourEntryId);
     }
 }
 

@@ -22,7 +22,8 @@ export function WorkedExamples({ flexibilityExerciseId, exerciseId, condition, h
     flexibilityExerciseId: number,
     exerciseId: number;
     condition: AgentCondition;
-    handleEnd: () => void;
+    /** Called on finish, with the attempt id our tracker owns so the reflection can be paired with it. */
+    handleEnd: (attemptId?: number) => void;
     isStudy?: boolean;
     studyId?: number;
 }): ReactElement {
