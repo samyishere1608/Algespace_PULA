@@ -299,12 +299,12 @@ namespace webapi.Services
             // just told them, and the answer is always "all of them". The same holds for every other
             // category: a goal to explain your reasoning cannot complete without explaining it.
             //
-            // So the question asks about the one thing the goal does NOT prove: whether they worked it
-            // out themselves. Every goal is about choosing to do something, and none of them requires
-            // doing it unaided. The exception is the goal that IS about working unaided, which asks
-            // about hints instead, for exactly the same reason.
+            // So the question asks about something the goal does NOT prove. Working it out unaided is
+            // unproven for every goal that is not about it, and the goal that IS about it — solve on
+            // own, which means reaching the solution yourself rather than being shown it, NOT avoiding
+            // hints — asks about accuracy instead, which nothing about that goal settles.
             var (runs, textKey) = evidence.Focus == "solveOnOwn"
-                ? (evidence.HintFreeRuns, "reflection-q2-count-hintfree")
+                ? (evidence.CleanRuns, "reflection-q2-count-clean")
                 : (evidence.SolvedOnOwnRuns, "reflection-q2-count-solo");
 
             var band = BandFor(runs, evidence.InSet);
@@ -504,16 +504,27 @@ namespace webapi.Services
         /// shown was congratulated for self-reliance in the same reply that said "since you chose to
         /// solve it yourself".
         ///
+        /// The QUESTION is passed in because a count question needs the count it is asking about. Without
+        /// it the model had no number for that dimension and invented one — a goal covering three
+        /// exercises produced a reply about four, because the only figure in the prompt was the sum of
+        /// the mistakes.
+        ///
         /// Only things we actually hold are stated. An absence is reported as an absence rather than as
         /// a negative, because "they did not explain it" and "we never saw them at the explanation
         /// step" are different facts and only one of them is ours to assert.
         /// </summary>
-        public static string DescribeRecord(ReflectionEvidence evidence)
+        public static string DescribeRecord(ReflectionEvidence evidence, ReflectionQuestion? question = null)
         {
             var parts = new List<string>();
 
             if (evidence.IsGoal)
-                parts.Add($"This is a goal they completed, over {evidence.InSet} exercise(s).");
+            {
+                parts.Add($"This is a goal they completed, covering {evidence.InSet} exercise(s).");
+                // Said outright, because the number in the row is a TOTAL and reads like a count of
+                // something. "4 errors" over a three-exercise goal became "4 exercises" in a reply.
+                parts.Add("The mistake and hint numbers below are TOTALS across all of those, not one " +
+                          "exercise's numbers.");
+            }
 
             if (evidence.HasDecisions)
             {
@@ -529,7 +540,7 @@ namespace webapi.Services
                         : "They asked to be shown the comparison instead of working it out themselves.");
 
                 parts.Add(evidence.DidSolveOnOwn
-                    ? "They chose to work the solution out themselves."
+                    ? "They chose to work the solution out themselves rather than being shown it."
                     : evidence.WasShownAnswer
                         ? "They asked to be shown the solution. A low error count is therefore NOT evidence that this was easy: they did not solve it unaided."
                         : "Nothing was recorded about whether they worked the solution out themselves.");
@@ -540,6 +551,21 @@ namespace webapi.Services
             }
 
             parts.Add($"{evidence.Errors} mistake(s) and {evidence.Hints} hint(s) were counted.");
+
+            // The figure the question is actually about. For a count question this IS the answer, and
+            // the model is meant to check the student's claim against it.
+            switch (question?.TextKey)
+            {
+                case "reflection-q2-count-solo":
+                    parts.Add($"Of those {evidence.InSet} exercises, they worked {evidence.SolvedOnOwnRuns} out before seeing the answer.");
+                    break;
+                case "reflection-q2-count-hintfree":
+                    parts.Add($"Of those {evidence.InSet} exercises, {evidence.HintFreeRuns} were got through with no hints at all.");
+                    break;
+                case "reflection-q2-count-clean":
+                    parts.Add($"Of those {evidence.InSet} exercises, {evidence.CleanRuns} went by without a single mistake.");
+                    break;
+            }
 
             return string.Join(" ", parts);
         }

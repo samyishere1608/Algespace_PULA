@@ -2054,7 +2054,21 @@ RULES:
             // and then states their claim back as fact — congratulating them for the one thing they got
             // wrong. The prompt asked it to "say what actually happened" and never told it what that
             // was, so it mirrored the student instead.
-            var recordLine = ReflectionQuestionBank.DescribeRecord(evidence);
+            var recordLine = ReflectionQuestionBank.DescribeRecord(evidence, asked);
+
+            // THE VERDICT THE MODEL IS TOLD TO COPY WAS NEVER ACTUALLY GIVEN TO IT.
+            //
+            // The prompt said "alignment is already decided, it is stated above" and then stated only
+            // the expectation, not the decision. So the model judged for itself and freely contradicted
+            // the award — a reply reading "that matches up perfectly with how you did" was sent on an
+            // answer the record had scored as not matching. The verdict is now printed, so "copy it
+            // exactly" has something to copy.
+            var verdictLine = !verdict.FromRecord
+                ? "No quick answer was tapped, so the free-text answer above decides: judge it yourself against the stated expectation."
+                : verdict.InsightXp > 0
+                    ? $"They tapped a quick answer and the record CONFIRMS it: aligned=true, insightXp={verdict.InsightXp}. Copy this exactly."
+                    : "They tapped a quick answer and the record says it does NOT match what happened: aligned=false, " +
+                      "insightXp=0. Copy this exactly, do NOT agree with their version, and do NOT invent a reason why it was right.";
 
             Console.WriteLine($"[Reflection] Question {asked.Id} ({asked.Kind}) — choice=\"{request.Choice}\"{(string.IsNullOrWhiteSpace(request.ChoiceLabel) ? "" : $" (\"{request.ChoiceLabel}\")")} => {verdict.Status} ({verdict.InsightXp} XP){(verdict.FromRecord ? "" : ", the text has to decide")}");
 
@@ -2088,7 +2102,7 @@ RULES:
                         $"uncertainty={promptFeatures.UncertaintyMarkers.Count}, affect={promptFeatures.AffectMarkers.Count}");
                 }
 
-                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures, questionLine, recordLine);
+                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures, questionLine, recordLine, verdictLine);
 
                 var raw = await CallOpenAI(apiKey,
                     "You are Pippin, a warm encouraging study coach chatting with a student. Compare their reflection answer to their real performance, but keep it conversational and kind — like a friend checking in. Always output valid JSON with exactly these keys: feedback (string), aligned (boolean), insightXp (integer 0-3), nextStep (string, filled only for the final question otherwise empty).",
@@ -2300,7 +2314,8 @@ RULES:
             string historyText,
             NlpFeatures? features = null,
             string questionLine = "",
-            string recordLine = "")
+            string recordLine = "",
+            string verdictLine = "")
         {
             var signalBlock = features is null ? string.Empty : BuildSignalBlock(features);
 
@@ -2333,6 +2348,7 @@ Previous reflection turns (for context):
 Current question: {questionLabel}
 {questionLine}
 What actually happened on this exercise, from the record: {recordLine}
+What the record decided about the answer: {verdictLine}
 Quick answer they tapped (empty when they wrote instead): {(string.IsNullOrWhiteSpace(request.Choice) ? "(none)" : string.IsNullOrWhiteSpace(request.ChoiceLabel) ? request.Choice : request.ChoiceLabel)}
 Mode: {mode}
 Student answer: {(string.IsNullOrWhiteSpace(request.Answer) ? "(empty)" : request.Answer)}
@@ -2343,7 +2359,7 @@ TONE (very important): Be warm, brief and conversational — like a friend, not 
 NO FOLLOW-UP QUESTIONS (very important): This reflection is ONE question and ONE answer. The student cannot reply again. Never ask them anything, never probe for more detail, never invite them to explain further, and never end your feedback with a question mark. Deliver your feedback as a complete statement and stop.
 - If mode is 'Pippin told them': the student pressed ""Pippin, tell me"" instead of writing an answer, so there is no answer to judge. NEVER grade them, never say they answered correctly, and never praise their answer — there is nothing to praise, and doing so would be dishonest. Instead, use what actually happened on this exercise (the errors, hints and Pippin messages stated above) to give ONE concrete piece of guidance: what their pattern suggests about where they got stuck, and what specifically to try differently next time. Speak directly to the student as Pippin. Set aligned=false and insightXp=0 — requesting help never earns XP.
 - If Q1 or Q2 and they answered themselves: judge ALIGNMENT against the thing the question asked about, which is stated above as ""Expected of a correct answer"". They are ALIGNED when their answer refers to that one thing, in their own words, and says something about it. An answer that only gives a general verdict — ""it was fine"", ""it was good"", ""I don't know"" — is NOT aligned, however warm it sounds.
-- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED. It is stated above. Copy it exactly: do not change it, do not second-guess it, and do not award or withhold XP yourself. Write only the reply, and if the answer does not match, say warmly what ACTUALLY happened, using the record line stated above, and do NOT repeat their version of it.
+- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED, and it is stated above as what the record decided about the answer. Copy it exactly: do not change it, do not second-guess it, and do not award or withhold XP yourself. Write only the reply, and if it does not match, say warmly what ACTUALLY happened, using the record line stated above, and do NOT repeat their version of it. NEVER write that their answer was right, close, or matches when the record says it does not.
 - ALWAYS FIND SOMETHING GENUINELY GOOD, AND ESPECIALLY ON Q1. Q1 asks what was good, so never answer it with what they did NOT do. Never write that they did not get to work it out, that there is no win to celebrate, or that being shown the answer means the result does not count. The record line above says what happened; use it to find something true and positive and LEAD with that — they chose to work it out themselves, they made no mistakes on a part, they did better than last time, they asked for help rather than giving up, or they finished something they found hard. If the answer does not match, say what happened in a warm, matter-of-fact way and then name the good thing. Do not scold, and do not point out that they were wrong.
 - NEVER AGREE WITH SOMETHING THE RECORD CONTRADICTS. If they say they worked it out themselves but the record says they asked to be shown, do not congratulate them for working it out and never state their claim as fact: that teaches them the reflection is a box to type anything into. Say what they did in a warm, matter-of-fact way, and celebrate the thing that is actually true instead (asking for help is a real skill).
 - A TAPPED QUICK ANSWER IS A COMPLETE ANSWER. If the answer text is empty but a quick answer is stated above, they answered: quote or refer to what they chose. NEVER say they did not answer, did not share their thoughts, or missed the question, and never remark on the empty box. There is nothing missing.

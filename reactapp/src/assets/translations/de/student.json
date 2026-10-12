@@ -84,6 +84,7 @@
   "reflection-q2-compared": "Es hat gefragt, ob du deine Lösung mit der deines Mitschülers vergleichen willst. Was hast du gemacht?",
   "reflection-q2-explained-efficiency": "Es hat dich gebeten zu erklären, warum dein Weg zum LGS passt. Was hast du gemacht?",
   "reflection-q2-explained-matching": "Es hat dich gebeten zu erklären, warum dieses System das richtige ist. Was hast du gemacht?",
+  "reflection-q2-count-clean": "Von deinen letzten {{total}} Aufgaben: wie viele liefen ganz ohne Fehler?",
   "reflection-q2-count-hintfree": "Von deinen letzten {{total}} Aufgaben: wie viele hast du ganz ohne Tipp geschafft?",
   "reflection-q2-count-solo": "Von deinen letzten {{total}} Aufgaben: wie viele hast du gelöst, bevor du die Antwort gesehen hast?",
   "reflection-q3-solo": "Wenn es das nächste Mal fragt, ob du die Lösung selbst finden willst: was machst du?",

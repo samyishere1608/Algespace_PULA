@@ -63,7 +63,7 @@ foreach (var (category, q2) in new[]
     ("exerciseType", "reflection-q2-count-solo"),
     ("selfExplanation", "reflection-q2-count-solo"),
     ("methodComparison", "reflection-q2-count-solo"),
-    ("solveOnOwn", "reflection-q2-count-hintfree"),
+    ("solveOnOwn", "reflection-q2-count-clean"),
     ("hintsAndErrors", "reflection-q2-count-solo"),
 })
 {
@@ -242,7 +242,7 @@ Expect("exercise/tied-steps", q1: "reflection-q1-step-fight");
 
 // A goal whose window holds nothing yet.
 scenarios.Add(("goal/empty", new ReflectionEvidence { IsGoal = true, Focus = "solveOnOwn", InSet = 0 }));
-Expect("goal/empty", q1: "reflection-q1-expectation", q2: "reflection-q2-count-hintfree", q3: "reflection-q3-solo");
+Expect("goal/empty", q1: "reflection-q1-expectation", q2: "reflection-q2-count-clean", q3: "reflection-q3-solo");
 
 // ── The audit ────────────────────────────────────────────────────────────────
 

@@ -84,6 +84,7 @@
   "reflection-q2-compared": "「自分の解き方とクラスメートの解き方をくらべてみる？」と聞かれたとき、どうした？",
   "reflection-q2-explained-efficiency": "「なぜそのやり方がこの連立方程式に合うのか説明してみる？」と聞かれたとき、どうした？",
   "reflection-q2-explained-matching": "「なぜその式の組み合わせが正しいのか説明してみる？」と聞かれたとき、どうした？",
+  "reflection-q2-count-clean": "最近の{{total}}回のうち、まったくミスがなかったのは何回？",
   "reflection-q2-count-hintfree": "最近の{{total}}回のうち、ヒントなしでできたのは何回？",
   "reflection-q2-count-solo": "最近の{{total}}回のうち、答えを見る前に自分で解けたのは何回？",
   "reflection-q3-solo": "次に「自分で答えを求めてみる？」と聞かれたら、どうする？",

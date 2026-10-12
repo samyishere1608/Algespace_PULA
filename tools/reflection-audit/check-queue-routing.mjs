@@ -62,13 +62,14 @@ const expected = {
     'exercise/Matching': { q2: 'reflection-q2-explained-matching', q3: 'reflection-q3-explain-matching' },
     // A COMPLETED GOAL CANNOT BE ASKED ABOUT ITS OWN CRITERION. "Practise the elimination method three
     // times" cannot complete without three exercises solved with elimination, so the question asks
-    // about working it out unaided instead, which the goal does not prove. The exception is the goal
-    // that IS about working unaided, which asks about hints.
+    // about working it out unaided instead, which the goal does not prove. Solve-on-own IS about
+    // working unaided — it means reaching the solution yourself rather than being shown it — so it
+    // asks about accuracy, which nothing about that goal settles.
     'goal/method': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-method' },
     'goal/exerciseType': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-solo' },
     'goal/selfExplanation': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-explain' },
     'goal/methodComparison': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-compare' },
-    'goal/solveOnOwn': { q2: 'reflection-q2-count-hintfree', q3: 'reflection-q3-solo' },
+    'goal/solveOnOwn': { q2: 'reflection-q2-count-clean', q3: 'reflection-q3-solo' },
     'goal/hintsAndErrors': { q2: 'reflection-q2-count-solo', q3: 'reflection-q3-target' },
 };
 

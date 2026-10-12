@@ -84,6 +84,7 @@
   "reflection-q2-compared": "It asked if you wanted to compare your solution with your classmate's. What did you do?",
   "reflection-q2-explained-efficiency": "It asked you to explain why your method fits the LSE. What did you do?",
   "reflection-q2-explained-matching": "It asked you to explain why that system was the right one. What did you do?",
+  "reflection-q2-count-clean": "Of your last {{total}} exercises, how many went by without a single mistake?",
   "reflection-q2-count-hintfree": "Of your last {{total}} exercises, how many did you get through with no hints at all?",
   "reflection-q2-count-solo": "Of your last {{total}} exercises, how many did you work out before seeing the answer?",
   "reflection-q3-solo": "Next time it asks if you want to find the solution yourself, what will you do?",
