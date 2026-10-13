@@ -188,15 +188,22 @@ namespace webapi.Controllers
                     CompletedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
                 });
 
-            // Cap at 3 pending: keep the latest 3, skip the rest
+            // Cap at 3 pending: keep the latest 3, skip the rest.
+            //
+            // Session reflections are left out of both halves of this. They are not queued by the work
+            // the student does, they are opened from the end-of-session dialog, and letting them into the
+            // count would mean that opening one quietly threw away an exercise reflection they had not
+            // answered yet. There is at most one of them live at a time, retired by the call that starts
+            // the next one.
             conn.Execute(
                 $@"UPDATE {StudentProgressDBSettings.ReflectionQueueTable}
                    SET Status = 'skipped'
                    WHERE StudentId = @StudentId
                      AND Status = 'pending'
+                     AND ItemType <> 'session'
                      AND Id NOT IN (
                          SELECT Id FROM {StudentProgressDBSettings.ReflectionQueueTable}
-                         WHERE StudentId = @StudentId AND Status = 'pending'
+                         WHERE StudentId = @StudentId AND Status = 'pending' AND ItemType <> 'session'
                          ORDER BY Id DESC LIMIT 3
                      )",
                 new { StudentId = studentId });
@@ -591,9 +598,14 @@ namespace webapi.Controllers
         /// </summary>
         private static int SettleReflectionCommitment(Microsoft.Data.Sqlite.SqliteConnection conn, LogExerciseRequest request)
         {
+            // ItemId comes along because the same chip means different promises. "pick-elimination" is
+            // "compare in elimination next" when it was offered by a method-comparison goal and "work it
+            // out yourself in elimination next" when it was offered by a solve-on-own one, and the chip id
+            // alone cannot tell the two apart.
             var promise = conn.QueryFirstOrDefault<PromiseRow>(
-                $"SELECT Id, Choice FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
-                "WHERE StudentId = @StudentId AND FollowedUp = 0 AND Choice LIKE 'act-%' " +
+                $"SELECT Id, ItemId, Choice FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
+                "WHERE StudentId = @StudentId AND FollowedUp = 0 " +
+                "  AND (Choice LIKE 'act-%' OR Choice LIKE 'pick-%') " +
                 "ORDER BY Id DESC LIMIT 1",
                 new { StudentId = request.StudentId });
 
@@ -601,6 +613,14 @@ namespace webapi.Controllers
 
             var decisions = request.Decisions ?? "";
             bool Engaged(string element) => decisions.Contains($"{element}=Engaged", StringComparison.OrdinalIgnoreCase);
+
+            // The method of the exercise they have just finished, which several promises are about. Read
+            // from the attempt itself, so it cannot come from a different exercise than the one logged.
+            var method = request.AttemptId > 0
+                ? conn.ExecuteScalar<string?>(
+                    $"SELECT SelectedMethod FROM {AnchorStoreSettings.Table} WHERE Id = @Id",
+                    new { Id = request.AttemptId })
+                : null;
 
             var kept = promise.Choice switch
             {
@@ -613,6 +633,31 @@ namespace webapi.Controllers
                 // "The same as last time" is judged against the run before this one, which is the only
                 // reading of it that means anything.
                 "act-target-same" => request.Hints <= PreviousHints(conn, request.StudentId),
+
+                // The goal menus. Flat commitments, each naming the field it will be checked against.
+                "act-no-hints" => request.Hints == 0,
+                "act-no-errors" => request.Errors == 0,
+                "act-solve-alone" => Engaged("SolveOnOwn"),
+                "act-explain" => Engaged("SelfExplanation"),
+                "act-compare" => Engaged("MethodComparison"),
+                // Fewer mistakes than the average they were carrying when they made the promise. The
+                // average is taken from the attempts BEFORE this one, because including this one would
+                // move the target towards whatever they just did.
+                "act-beat-average" => request.Errors < AverageErrors(conn, request.StudentId),
+                // "Pick a suitable method" is a promise only a Suitability exercise can keep, so an
+                // exercise of another type cannot settle it and is read as not kept.
+                "act-suitable-choice" => request.ExerciseType == "Suitability" && ChoseAllowedMethod(conn, request),
+                "act-best-choice" => request.ExerciseType == "Efficiency" && ChoseAllowedMethod(conn, request),
+
+                // The two question-type promises: explain your reasoning in that kind of exercise next.
+                "pick-efficiency" => request.ExerciseType == "Efficiency" && Engaged("SelfExplanation"),
+                "pick-matching" => request.ExerciseType == "Matching" && Engaged("SelfExplanation"),
+
+                // A named method, and what was promised about it, which ItemId is what tells us.
+                _ when promise.Choice.StartsWith("pick-", StringComparison.Ordinal) =>
+                    MethodMatches(method, promise.Choice, request)
+                    && (promise.ItemId == "methodComparison" ? Engaged("MethodComparison") : Engaged("SolveOnOwn")),
+
                 _ => false,
             };
 
@@ -638,6 +683,53 @@ namespace webapi.Controllers
             return FollowThroughResolveXp;
         }
 
+        /// <summary>Whether the promise's method is the one this exercise was solved with.</summary>
+        private static bool MethodMatches(string? selected, string choice, LogExerciseRequest request) =>
+            !string.IsNullOrWhiteSpace(selected)
+            && choice.EndsWith(selected.Trim().ToLowerInvariant(), StringComparison.Ordinal);
+
+        /// <summary>
+        /// Whether the method they chose was one the exercise allowed, for the two promises that are about
+        /// making a good choice rather than about doing the work.
+        /// </summary>
+        private static bool ChoseAllowedMethod(Microsoft.Data.Sqlite.SqliteConnection conn, LogExerciseRequest request)
+        {
+            if (request.AttemptId <= 0) return false;
+
+            var attempt = conn.QueryFirstOrDefault<GoalAttemptRow>(
+                $"SELECT Id, ExerciseType, ExerciseId, TotalErrors, TotalHints, TotalTime, SelectedMethod " +
+                $"FROM {AnchorStoreSettings.Table} WHERE Id = @Id",
+                new { Id = request.AttemptId });
+
+            if (attempt is null) return false;
+
+            var type = ExerciseTypeNumber(attempt.ExerciseType);
+            var allowed = AllowedMethodsByExercise([attempt]);
+
+            return allowed.TryGetValue((type, attempt.ExerciseId), out var permitted)
+                   && permitted.Contains((int)MethodFromName(attempt.SelectedMethod));
+        }
+
+        /// <summary>
+        /// Their average mistakes per exercise, over the runs BEFORE the one settling the promise.
+        ///
+        /// The newest attempt is left out because by the time an exercise is logged it IS that exercise,
+        /// and averaging it in would move the target towards whatever they just did: a promise to beat
+        /// your average would be judged against an average you had dragged to meet your own score.
+        ///
+        /// Bounded to the recent twenty, so "my average" keeps meaning their current form rather than
+        /// everything they have ever done. Zero when there is no history at all, which no score can beat.
+        /// </summary>
+        private static int AverageErrors(Microsoft.Data.Sqlite.SqliteConnection conn, long studentId)
+        {
+            var recent = conn.Query<double>(
+                $"SELECT TotalErrors FROM {AnchorStoreSettings.Table} " +
+                "WHERE StudentId = @StudentId AND CompletedAt <> '' ORDER BY Id DESC LIMIT 20 OFFSET 1",
+                new { StudentId = studentId }).ToList();
+
+            return recent.Count == 0 ? 0 : (int)Math.Round(recent.Average());
+        }
+
         /// <summary>Hints on the exercise before the newest one, for a "same as last time" promise.</summary>
         private static int PreviousHints(Microsoft.Data.Sqlite.SqliteConnection conn, long studentId)
         {
@@ -654,6 +746,14 @@ namespace webapi.Controllers
         private sealed class PromiseRow
         {
             public long Id { get; set; }
+
+            /// <summary>
+            /// The goal category the promise came from. Needed because a chip id can mean two different
+            /// things: "pick-elimination" promises a comparison when a method-comparison goal offered it
+            /// and a solo attempt when a solve-on-own goal did.
+            /// </summary>
+            public string ItemId { get; set; } = "";
+
             public string Choice { get; set; } = "";
         }
 
@@ -1755,22 +1855,18 @@ RULES:
             conn.Open();
             EnsureTables(conn);
 
+            // The session reflection is deliberately absent. This list is what the dashboard badges and
+            // what its prompt bubble offers, and that prompt is about work the student has just finished;
+            // the session reflection is opened from the end-of-session dialog, on purpose and at the end
+            // of the session. Warning about it in the middle of one would be asking them to summarise a
+            // day that is not over.
             var items = conn.Query<ReflectionQueueRecord>(
                 $"SELECT * FROM {StudentProgressDBSettings.ReflectionQueueTable} " +
-                "WHERE StudentId = @StudentId AND Status = 'pending' " +
+                "WHERE StudentId = @StudentId AND Status = 'pending' AND ItemType <> 'session' " +
                 "ORDER BY Id DESC LIMIT 3",
                 new { StudentId = studentId }).ToList();
 
-            return Ok(items.Select(item =>
-            {
-                var response = new ReflectionQueueItemResponse();
-                foreach (var property in typeof(ReflectionQueueRecord).GetProperties())
-                    property.SetValue(response, property.GetValue(item));
-
-                response.Questions = ReflectionQuestionBank.Build(BuildEvidence(conn, item));
-
-                return response;
-            }).ToList());
+            return Ok(items.Select(item => ToQueueResponse(conn, item)).ToList());
         }
 
         /// <summary>
@@ -2030,13 +2126,16 @@ RULES:
         private static ReflectionEvidence BuildEvidence(Microsoft.Data.Sqlite.SqliteConnection conn, ReflectionQueueRecord item)
         {
             var isGoal = item.ItemType == "goal";
+            var isSession = item.ItemType == "session";
 
             var evidence = new ReflectionEvidence
             {
                 IsGoal = isGoal,
+                IsSession = isSession,
                 // For a goal this is its category, which decides the question. For an exercise it is the
-                // type, which decides which decision the student actually saw.
-                Focus = isGoal ? item.ItemId : item.Method,
+                // type, which decides which decision the student actually saw. A session has neither: it
+                // is not narrowed to a category or a type, so it decides nothing.
+                Focus = isSession ? "" : isGoal ? item.ItemId : item.Method,
                 Errors = item.Errors,
                 Hints = item.Hints,
                 InSet = 1,
@@ -2090,7 +2189,12 @@ RULES:
             // against. Stored as JSON so the questions can ask about ORDER — did the errors go down,
             // were the later ones faster, which method had the most errors — none of which a total
             // can answer.
-            if (isGoal)
+            //
+            // A session is read the same way, and for the same reason: its first question is a menu read
+            // from the day's own exercises, so it needs them one by one rather than summed. Its window is
+            // today's exercises rather than a goal's set, which is the only difference, and it carries no
+            // limit and no prior-history lists because it asks nothing that would use them.
+            if (isGoal || isSession)
             {
                 var window = ParseGoalWindow(item.Evidence);
 
@@ -2150,13 +2254,20 @@ RULES:
             // never come from a different exercise than the one the queue item names. Rows written
             // before the id was recorded carry 0, and for those the newest completed attempt is the old
             // behaviour and the best guess available.
-            var attemptIds = item.AttemptId > 0
-                ? [item.AttemptId]
-                : conn.Query<long>(
-                    $"SELECT Id FROM {AnchorStoreSettings.Table} " +
-                    "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
-                    "ORDER BY Id DESC LIMIT @Take",
-                    new { StudentId = item.StudentId, Take = set }).ToList();
+            // A session item is given none of them. Its questions read the window, not the steps, and
+            // "the newest attempts" is exactly the unfounded guess this lookup exists to avoid for
+            // everything else — for a session it would read steps from exercises the question is not about.
+            var attemptIds = new List<long>();
+            if (!isSession)
+            {
+                attemptIds = item.AttemptId > 0
+                    ? [item.AttemptId]
+                    : conn.Query<long>(
+                        $"SELECT Id FROM {AnchorStoreSettings.Table} " +
+                        "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
+                        "ORDER BY Id DESC LIMIT @Take",
+                        new { StudentId = item.StudentId, Take = set }).ToList();
+            }
 
             if (attemptIds.Count > 0)
             {
@@ -2209,6 +2320,36 @@ RULES:
             {
                 evidence.PreviousErrors = previous.Value;
                 evidence.HasHistory = true;
+            }
+
+            // Whether the method they chose for THIS exercise was one it allowed. The single exercise's
+            // own row is read rather than the newest one, so the answer cannot come from a different
+            // exercise than the one the queue item names.
+            //
+            // Only the two types that ask the student to pick have a right answer here: Matching hands
+            // the method over, so it has nothing to be right about and is left unset, which the question
+            // reads as "do not offer this option".
+            //
+            // A session is left out for the same reason it is given no steps: it names no single exercise
+            // whose method choice could be checked, so there is nothing here for it to be right about.
+            if (!isGoal && !isSession && attemptIds.Count > 0)
+            {
+                var attempt = conn.QueryFirstOrDefault<GoalAttemptRow>(
+                    $"SELECT Id, ExerciseType, ExerciseId, TotalErrors, TotalHints, TotalTime, SelectedMethod " +
+                    $"FROM {AnchorStoreSettings.Table} WHERE Id = @Id",
+                    new { Id = attemptIds[0] });
+
+                if (attempt is not null)
+                {
+                    var type = ExerciseTypeNumber(attempt.ExerciseType);
+                    var allowed = AllowedMethodsByExercise([attempt]);
+
+                    if (type is 1 or 2 && allowed.TryGetValue((type, attempt.ExerciseId), out var permitted))
+                    {
+                        evidence.HasAllowedMethods = true;
+                        evidence.ChoseAllowedMethod = permitted.Contains((int)MethodFromName(attempt.SelectedMethod));
+                    }
+                }
             }
 
             return evidence;
@@ -2343,12 +2484,25 @@ RULES:
             // the award — a reply reading "that matches up perfectly with how you did" was sent on an
             // answer the record had scored as not matching. The verdict is now printed, so "copy it
             // exactly" has something to copy.
-            var verdictLine = !verdict.FromRecord
-                ? "No quick answer was tapped, so the free-text answer above decides: judge it yourself against the stated expectation."
+            //
+            // An end-of-session question is told something different again, and has to be: it is the one
+            // case where the answer was never checked, and both of the branches below would have the model
+            // either confirm or reject something no rule looked at. A session question has no verdict, so
+            // it is given none.
+            var verdictLine = asked.Kind == ReflectionQuestionBank.Session
+                ? "Nothing was checked here. This is an end-of-session question with no right answer, so " +
+                    "there is no verdict to give: aligned=false, insightXp=0, and no XP is expected either " +
+                    "way. Reply to what they said about their day; do not say that it matched or did not."
+                : !verdict.FromRecord
+                ? "No quick answer was tapped, so the free-text answer above decides: judge it yourself against the stated expectation. Whatever you decide, the reply has to SAY which way it went — the student cannot see the verdict, so a reply that leaves it open tells them nothing."
                 : verdict.InsightXp > 0
-                    ? $"They tapped a quick answer and the record CONFIRMS it: aligned=true, insightXp={verdict.InsightXp}. Copy this exactly."
+                    ? $"They tapped a quick answer and the record CONFIRMS it: aligned=true, insightXp={verdict.InsightXp}. Copy this exactly. The reply must read as a clear confirmation: one or two warm sentences that name what they picked and say it is what happened. Do not hedge, do not call it interesting, and NEVER write that the record tells a different story — they are being paid Insight because it is right, and a reply that sounds doubtful while the badge says +{verdict.InsightXp} is the one thing they will notice."
                     : "They tapped a quick answer and the record says it does NOT match what happened: aligned=false, " +
-                      "insightXp=0. Copy this exactly, do NOT agree with their version, and do NOT invent a reason why it was right.";
+                      "insightXp=0. Copy this exactly. The reply must still let them see which way it went: name what " +
+                      "they actually chose as the sensible thing it was, warmly and without judging it, so the " +
+                      "difference is theirs to notice. Do not agree with their version, do not invent a reason why " +
+                      "it was right, and do not deliver a verdict on it either — no 'but', no 'actually', no " +
+                      "'the record shows'.";
 
             Console.WriteLine($"[Reflection] Question {asked.Id} ({asked.Kind}) — choice=\"{request.Choice}\"{(string.IsNullOrWhiteSpace(request.ChoiceLabel) ? "" : $" (\"{request.ChoiceLabel}\")")} => {verdict.Status} ({verdict.InsightXp} XP){(verdict.FromRecord ? "" : ", the text has to decide")}");
 
@@ -2366,6 +2520,13 @@ RULES:
             {
                 fallback.Aligned = verdict.Status == "aligned";
                 fallback.InsightXp = verdict.InsightXp;
+
+                // The badge and the reply have to agree. The fallback's own wording is a keyword guess at
+                // the free text and knows nothing about which question was asked; once the record's
+                // verdict replaced its own, a student could be paid three Insight next to "the data tells
+                // a slightly different story". This is the path a student sees whenever the AI provider
+                // is unavailable, which is often, so it is not a rare branch.
+                fallback.Feedback = VerdictFeedback(asked, verdict, request.ChoiceLabel);
             }
 
             Console.WriteLine($"[Reflection] Fallback ready — errors={item.Errors}, hints={item.Hints} (fallback: aligned={fallback.Aligned}, insight={fallback.InsightXp})");
@@ -2464,7 +2625,12 @@ RULES:
                 // there is nothing to be aligned with and nothing to earn. Same reasoning as the
                 // pippin case above: the fallback already returns 0 here, but the model handed out
                 // full marks anyway, so the rule is enforced in code rather than requested.
-                if (request.QuestionNumber == 3)
+                //
+                // Keyed on the QUESTION rather than on its number, which it used to be. That held only
+                // while every item had three questions; the end-of-session reflection has two, and its
+                // first one would have been graded by a rule written for a third question it does not
+                // have.
+                if (asked.Kind is ReflectionQuestionBank.NextAction or ReflectionQuestionBank.Session)
                 {
                     aligned = false;
                     insightXp = 0;
@@ -2543,6 +2709,331 @@ RULES:
             return Ok();
         }
 
+        /// <summary>
+        /// Today's exercises, as the end-of-session reflection's window.
+        ///
+        /// Read when the reflection is opened rather than stored when something completes: a session is
+        /// not an event, it is the day so far. The row keeps this snapshot so the questions are built from
+        /// the same window every time they are asked, including on the evaluate call — otherwise a student
+        /// who did one more exercise between opening and answering would be asked about a different day.
+        /// </summary>
+        private static string BuildSessionEvidence(Microsoft.Data.Sqlite.SqliteConnection conn, long studentId)
+        {
+            // The app writes its timestamps in UTC, and the client keys the daily intention by the same
+            // UTC date, so "today" here is the day the rest of the app means by it.
+            var since = DateTime.UtcNow.ToString("yyyy-MM-ddT00:00:00");
+
+            // The newest twenty of the day, then turned oldest-first below: every option on the menu reads
+            // the session in order, and a session cannot reasonably be longer than this.
+            var attempts = conn.Query<GoalAttemptRow>(
+                $"SELECT Id, ExerciseType, ExerciseId, TotalErrors, TotalHints, TotalTime, SelectedMethod " +
+                $"FROM {AnchorStoreSettings.Table} " +
+                "WHERE StudentId = @StudentId AND CompletedAt <> '' AND CompletedAt >= @Since " +
+                "ORDER BY Id DESC LIMIT 20",
+                new { StudentId = studentId, Since = since }).ToList();
+
+            var window = new ReflectionGoalWindow();
+            if (attempts.Count == 0) return System.Text.Json.JsonSerializer.Serialize(window);
+
+            var ids = attempts.Select(attempt => attempt.Id).ToList();
+            var records = conn.Query<DecisionRecordRow>(
+                $"SELECT AttemptId, Name, Choice FROM {AnchorStoreSettings.RecordTable} WHERE AttemptId IN @Ids",
+                new { Ids = ids }).ToList();
+            var allowed = AllowedMethodsByExercise(attempts);
+
+            foreach (var attempt in attempts.OrderBy(a => a.Id))
+                window.Exercises.Add(ToGoalExercise(attempt, records, allowed));
+
+            return System.Text.Json.JsonSerializer.Serialize(window);
+        }
+
+        /// <summary>
+        /// A queue row as the client receives it: the row itself, plus the questions built for it.
+        ///
+        /// The properties are copied across by reflection rather than by hand so that a column added to
+        /// the row does not have to be remembered here as well.
+        /// </summary>
+        private static ReflectionQueueItemResponse ToQueueResponse(
+            Microsoft.Data.Sqlite.SqliteConnection conn, ReflectionQueueRecord item)
+        {
+            var response = new ReflectionQueueItemResponse();
+            foreach (var property in typeof(ReflectionQueueRecord).GetProperties())
+                property.SetValue(response, property.GetValue(item));
+
+            response.Questions = ReflectionQuestionBank.Build(BuildEvidence(conn, item));
+
+            return response;
+        }
+
+        /// <summary>
+        /// Builds the end-of-session reflection: two questions about the day as a whole, ready to answer.
+        ///
+        /// Opened from the end-session dialog rather than earned by finishing one exercise, which is why
+        /// this is a call of its own rather than something the completion route queues. There is at most
+        /// one live session reflection at a time: an earlier one that was opened and left unanswered is
+        /// retired here, because it describes a day that has since moved on.
+        /// </summary>
+        [HttpPost("session-reflection/{studentId}")]
+        public ActionResult<ReflectionQueueItemResponse> StartSessionReflection(long studentId, [FromQuery] string? label = null)
+        {
+            if (studentId <= 0) return BadRequest("Invalid student.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ReflectionQueueTable} SET Status = 'skipped' " +
+                "WHERE StudentId = @StudentId AND ItemType = 'session' AND Status = 'pending'",
+                new { StudentId = studentId });
+
+            var evidence = BuildSessionEvidence(conn, studentId);
+            var window = ParseGoalWindow(evidence);
+            var exercises = window?.Exercises ?? [];
+
+            // The item id is what the promise is filed under later. It has to be unique per session,
+            // because the settlement reads a promise back as the group of turns that share one, and
+            // "session" would make two sessions' promises look like one.
+            var itemId = $"session-{DateTime.UtcNow.Ticks}";
+
+            EnqueueReflection(conn, studentId, "session", itemId,
+                string.IsNullOrWhiteSpace(label) ? "Today's session" : label,
+                errors: exercises.Sum(e => e.Errors),
+                hints: exercises.Sum(e => e.Hints),
+                pippinMessages: 0,
+                method: "",
+                decisions: "",
+                focus: "",
+                evidence: evidence,
+                attemptId: 0);
+
+            var row = conn.QueryFirst<ReflectionQueueRecord>(
+                $"SELECT * FROM {StudentProgressDBSettings.ReflectionQueueTable} " +
+                "WHERE StudentId = @StudentId AND ItemType = 'session' ORDER BY Id DESC LIMIT 1",
+                new { StudentId = studentId });
+
+            Console.WriteLine($"[Reflection] Session reflection {row.Id} opened — student={studentId}, exercises={exercises.Count}");
+
+            return Ok(ToQueueResponse(conn, row));
+        }
+
+        /// <summary>
+        /// Judges the promise the student made at the end of their last session against the intention they
+        /// have just set for today.
+        ///
+        /// Called when the daily intention is chosen, which is the one moment both halves exist: the
+        /// intention is a note the client keeps for its own display, and the promise is a row written at
+        /// the end of the previous session. Checking them against each other is what makes a session
+        /// commitment worth Resolve at all — a promise nobody ever reads back is not a promise.
+        ///
+        /// Settled once. The rows are marked followed up when the promise is judged, whether or not it was
+        /// kept, so changing today's intention cannot have the same promise judged twice or paid twice.
+        /// The two cases where nothing is judged — no intention set, or a provider that cannot be reached —
+        /// leave it open instead, because neither of them is evidence about the promise.
+        /// </summary>
+        [HttpPost("session-reflection/settle")]
+        public async Task<ActionResult<SettleSessionPromiseResponse>> SettleSessionPromise(
+            [FromBody] SettleSessionPromiseRequest request)
+        {
+            if (request.StudentId <= 0) return BadRequest("Invalid student.");
+
+            // No intention, so there is nothing to judge the promise against. Left open rather than
+            // closed: skipping the check-in is not the same as breaking a commitment, and the next
+            // intention the student does set is still the next session's.
+            if (request.IntentionChoice.Length == 0 || request.IntentionChoice == "skip")
+                return Ok(new SettleSessionPromiseResponse());
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            // The promise, as the GROUP of turns one session recorded it in.
+            //
+            // Not "the newest two rows": a promise answered with a chip writes one row, and one that was
+            // written out writes two, so a fixed pair would attach a stranger's words to the chip. The
+            // item id makes the group exact.
+            //
+            // And not one made today. The intention for a session is set at its start and the promise is
+            // made at the end of one, so judging them on the same date would pay a student for promising
+            // what they are already in the middle of doing.
+            var promiseItem = conn.ExecuteScalar<string?>(
+                $"SELECT ItemId FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
+                "WHERE StudentId = @StudentId AND ItemType = 'session' AND QuestionId = 'session-q2-next' " +
+                "  AND FollowedUp = 0 AND CreatedAt < @Today " +
+                "GROUP BY ItemId ORDER BY MAX(Id) DESC LIMIT 1",
+                new { StudentId = request.StudentId, Today = DateTime.UtcNow.ToString("yyyy-MM-dd") });
+
+            if (string.IsNullOrEmpty(promiseItem)) return Ok(new SettleSessionPromiseResponse());
+
+            var promiseRows = conn.Query<SessionPromiseRow>(
+                $"SELECT Id, Role, Choice, Text FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
+                "WHERE StudentId = @StudentId AND ItemType = 'session' AND QuestionId = 'session-q2-next' " +
+                "  AND ItemId = @ItemId ORDER BY Id",
+                new { StudentId = request.StudentId, ItemId = promiseItem }).ToList();
+
+            var promiseChoice = promiseRows.FirstOrDefault(row => row.Choice.Length > 0)?.Choice ?? "";
+            var promiseText = promiseRows.FirstOrDefault(row => row.Role == "student")?.Text ?? "";
+
+            var named = ChipsForIntention(request.IntentionChoice, request.DetectedCategory);
+
+            bool kept;
+            if (promiseChoice.Length > 0 && named is not null)
+            {
+                // Both halves are ids the server itself chose, so the match is settled by the record and
+                // the model is never asked. This is the path a student takes by choosing an option on
+                // either side, which is most of them.
+                kept = named.Contains(promiseChoice);
+            }
+            else
+            {
+                // At least one half was written rather than chosen, and there is nothing to compare ids
+                // with — only the model can read it.
+                var judged = await JudgeSessionPromise(request, promiseChoice, promiseText);
+
+                // A provider that cannot be reached leaves the promise OPEN rather than closing it
+                // unpaid. "The model said no" and "the model was never asked" are different facts, and
+                // only one of them is a promise that was not kept; the next intention the student sets is
+                // still a fair chance to have kept this one.
+                if (judged is null) return Ok(new SettleSessionPromiseResponse());
+
+                kept = judged.Value;
+            }
+
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ReflectionHistoryTable} SET FollowedUp = 1 WHERE Id IN @Ids",
+                new { Ids = promiseRows.Select(row => row.Id).ToList() });
+
+            Console.WriteLine($"[Reflection] Session promise settled — student={request.StudentId}, promise=\"{promiseChoice}\", " +
+                              $"intention={request.IntentionChoice}/{request.DetectedCategory}, kept={kept}");
+
+            if (!kept) return Ok(new SettleSessionPromiseResponse());
+
+            var now = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss");
+
+            conn.Execute(
+                $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, Amount, Source, LoggedAt) " +
+                "VALUES (@StudentId, 'resolve', @Amount, 'session-promise-kept', @Now)",
+                new { request.StudentId, Amount = FollowThroughResolveXp, Now = now });
+
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ProgressTable} " +
+                "SET ResolveXP = ResolveXP + @Amount, LifetimeAgencyXP = LifetimeAgencyXP + @Amount " +
+                "WHERE StudentId = @StudentId",
+                new { request.StudentId, Amount = FollowThroughResolveXp });
+
+            return Ok(new SettleSessionPromiseResponse { ResolveAwarded = FollowThroughResolveXp });
+        }
+
+        /// <summary>
+        /// The promise chips today's intention names, or null when it names none.
+        ///
+        /// The intention and the session promise were given the same three options on purpose, so a chosen
+        /// intention can be matched against a chosen promise without reading either. A written intention
+        /// has no id of its own; the category the AI put it in stands in for one, and only where that
+        /// category is decisive.
+        /// </summary>
+        private static HashSet<string>? ChipsForIntention(string intentionChoice, string detectedCategory)
+        {
+            var wanted = new List<string>();
+
+            switch (intentionChoice)
+            {
+                case "practice":
+                    wanted.Add("session-next-practice");
+                    break;
+                case "goal":
+                    wanted.Add("session-next-goal");
+                    break;
+                case "review":
+                    wanted.Add("session-next-review");
+                    break;
+
+                // "Both" intends each of the two things it names, so a promise of either one has been kept.
+                // "unclear" and "no_xp" name nothing at all and are left to the model, which can at least
+                // read the words the student wrote rather than the category a classifier guessed.
+                case "custom" when detectedCategory == "practice":
+                    wanted.Add("session-next-practice");
+                    break;
+                case "custom" when detectedCategory == "goal":
+                    wanted.Add("session-next-goal");
+                    break;
+                case "custom" when detectedCategory == "both":
+                    wanted.Add("session-next-practice");
+                    wanted.Add("session-next-goal");
+                    break;
+            }
+
+            return wanted.Count == 0 ? null : [.. wanted];
+        }
+
+        /// <summary>What a session promise chip asks the student to do, in words, for the model to read.</summary>
+        private static string SessionPromiseMeaning(string choice) => choice switch
+        {
+            "session-next-practice" => "spend their next session doing more exercises",
+            "session-next-goal" => "work on finishing a goal in their next session",
+            "session-next-review" => "look at their progress before deciding what to work on",
+            _ => "",
+        };
+
+        /// <summary>
+        /// Whether today's intention is the thing they promised to work on, for the promises and intentions
+        /// that carry no comparable ids. Null when the provider could not be reached, which is NOT the same
+        /// answer as "no".
+        ///
+        /// One question, answered with one word. The alternative — a rule over keywords — is what the
+        /// reflection used to do to free text, and it is why "it was good" used to pass: there is no
+        /// keyword for "the same thing I meant".
+        /// </summary>
+        private async Task<bool?> JudgeSessionPromise(
+            SettleSessionPromiseRequest request, string promiseChoice, string promiseText)
+        {
+            var apiKey = _configuration["OpenAI:ApiKey"];
+            if (string.IsNullOrWhiteSpace(apiKey)) return null;
+
+            var promised = SessionPromiseMeaning(promiseChoice);
+            var promiseLine = promised.Length > 0
+                ? $"They promised to {promised}."
+                : "They did not choose one of the offered commitments, so what they promised is only in their own words.";
+
+            var intentionLine = request.IntentionChoice switch
+            {
+                "practice" => "Today they set their intention to doing more exercises.",
+                "goal" => "Today they set their intention to finishing a goal.",
+                "review" => "Today they set their intention to looking at their progress first.",
+                _ => "Today they wrote their intention in their own words.",
+            };
+
+            var prompt =
+                $"""
+                 At the end of their last session the student made a commitment about what to work on next.
+                 {promiseLine}
+                 Their words: {(promiseText.Length > 0 ? promiseText : "(none)")}
+
+                 {intentionLine}
+                 Their words: {(string.IsNullOrWhiteSpace(request.IntentionText) ? "(none)" : request.IntentionText)}
+
+                 Is today's intention the same thing they promised to work on? Answer with exactly one word:
+                 YES or NO.
+                 """;
+
+            var raw = await CallOpenAI(apiKey, "You compare one commitment with one intention and answer with one word.", prompt);
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+
+            var verdict = raw.Trim().Trim('"', '.', '!').ToUpperInvariant();
+            Console.WriteLine($"[Reflection] Session promise read by the model — \"{verdict}\"");
+
+            return verdict.StartsWith("YES", StringComparison.Ordinal);
+        }
+
+        /// <summary>One turn of a session reflection's promise, as stored in the history.</summary>
+        private sealed class SessionPromiseRow
+        {
+            public long Id { get; set; }
+            public string Role { get; set; } = "";
+            public string Choice { get; set; } = "";
+            public string Text { get; set; } = "";
+        }
+
         /// <summary>Computes the 6 weakness dimensions from the DB (shared by weakness + reflection).</summary>
         private static WeaknessResponse ComputeWeakness(Microsoft.Data.Sqlite.SqliteConnection conn, long studentId)
         {
@@ -2609,12 +3100,25 @@ RULES:
         {
             var signalBlock = features is null ? string.Empty : BuildSignalBlock(features);
 
-            var questionLabel = request.QuestionNumber switch
-            {
-                1 => "Q1 - what went well",
-                2 => "Q2 - the question this goal or exercise is actually about",
-                _ => "Q3 - one concrete next step"
-            };
+            // The end-of-session rule is a clause of its own rather than a sentence inside the shared
+            // instruction below, so that the prompt an exercise or a goal is given is exactly the prompt it
+            // was given before this existed — character for character.
+            var sessionOnlyRule = item.ItemType == "session"
+                ? " THIS IS THE END-OF-SESSION REFLECTION, SO NONE OF THAT APPLIES: it has no right answer "
+                  + "and nothing was checked, so never judge it, never say it matched or did not, and simply "
+                  + "reply to what they said about their day."
+                : string.Empty;
+
+            var questionLabel = item.ItemType == "session"
+                ? request.QuestionNumber == 1
+                    ? "Q1 - what went well today"
+                    : "Q2 - what to work on next session"
+                : request.QuestionNumber switch
+                {
+                    1 => "Q1 - what went well",
+                    2 => "Q2 - the question this goal or exercise is actually about",
+                    _ => "Q3 - one concrete next step"
+                };
             var mode = request.Mode == "pippin" ? "Pippin told them (model answer requested)" : "They answered themselves";
             var weakest = weakness.Weakest;
             var weakestText = weakest != null
@@ -2629,7 +3133,7 @@ RULES:
 
             return $@"Student completed: {item.ItemLabel} (item type: {item.ItemType}, method/exercise type: {item.Method}).
 Actual performance on it: {item.Errors} errors, {item.Hints} hints, {item.PippinMessages} Pippin messages.
-What they decided during it: {DescribeDecisions(item.Decisions)}.
+What they decided during it is stated below, but ONLY the part this question is about: the decisions are listed once, next to the record line, so nothing from a different question can leak into this reply.
 Weakest area: {weakestText}.
 
 Previous reflection turns (for context):
@@ -2645,18 +3149,23 @@ Student answer: {(string.IsNullOrWhiteSpace(request.Answer) ? "(empty)" : reques
 {signalBlock}
 Instructions:
 {langInstruction}
-TONE (very important): Be warm, brief and conversational — like a friend, not a report. NEVER say things like ""I saw on your performance..."", ""according to your data..."", or list their exact error/hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
+TONE (very important): Be warm, brief and conversational — like a friend, not a report. NEVER say things like ""I saw on your performance..."", ""according to your data..."", ""the data tells..."", ""the record shows..."", or list their exact error/hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
+NEVER MENTION XP OR AWARDS (very important): never write the words Insight, Choice, Resolve, XP, points, award, or score, and never say that something counted, paid, earned, or did not. The badge already shows what was earned, and talking about it turns a reflection into a scoreboard. The JSON keys below contain the word insightXp: that is for the machine and must never appear in the feedback text. Never write ""the record shows"", ""the record says"", ""the data shows"" or ""according to"" either — describe what happened in the student's own terms.
+SAY WHICH WAY IT WENT (very important): the student cannot see the verdict, so the reply is the only place they learn whether their answer matched. A reply that only says ""interesting, take a look"" tells them nothing and reads as a brush-off. When it matches, say so plainly and warmly. When it does not, name what they actually did so the difference is visible to them — without ever framing it as a mistake.
+STAY INSIDE THE QUESTION (very important): the reply answers the ONE question above and nothing else. Do not bring in errors, hints, other decisions, or any other question from this reflection. If the question asked whether they compared two methods, the whole reply is about comparing two methods — a sentence about the solution, the method choice or their mistake count does not belong in it, however true it is. The record line above states only what this question is about; treat anything it does not mention as unknown to you and do not guess at it.
+NEVER TELL THEM THEY DID NOT DO SOMETHING (very important): do not write that their choice was wrong, that they did not work it out, that something was not quite what they did, or that their answer does not count. Those phrasings read as a telling-off even when they are accurate, and they make a student write what sounds right rather than look at their own work. Where they took the offered help, state what they did plainly and without judgement (""you skipped the comparison here""), then reassure them that asking for help is a real, sensible thing to do — and if there is something genuinely good to name, name it. Use their own words for their choice, never a verdict on it. NEVER reproach them for what their answer left out either: not ""you didn't share"", ""you didn't mention"", ""you didn't say"", ""you didn't tell me"". If the answer was too short or too vague to match against anything, do not point at the gap — say warmly that this is one to keep an eye on and invite them to have a go at the next one. THE AUDIT CATCHES THIS ONE REPEATEDLY, SO BE EXACT: the forbidden shapes are ""but you"", ""you didn't"", ""you did not"", ""you haven't"", ""you failed to"", ""you never"". When the answer was vague, or when it said outright that they ignored the step, the reply must not reach for any of them. State what the record shows as a plain fact with no contrast in front of it, and stop.
+NEVER INVENT WHAT THEY DID (very important): the record line is the only thing you know about their choices, and it says what it says. Never credit them with something it does not state — do not write that they read, opened, saw, studied or took the time to look at an explanation unless the record line says they did. If it says only that they did not explain their reasoning, then that is all that happened and the reply says nothing more about it. Where the record says nothing was recorded, you know nothing about that step: never guess, and never fill the gap with something flattering or otherwise.
 NO FOLLOW-UP QUESTIONS (very important): This reflection is ONE question and ONE answer. The student cannot reply again. Never ask them anything, never probe for more detail, never invite them to explain further, and never end your feedback with a question mark. Deliver your feedback as a complete statement and stop.
-- If mode is 'Pippin told them': the student pressed ""Pippin, tell me"" instead of writing an answer, so there is no answer to judge. NEVER grade them, never say they answered correctly, and never praise their answer — there is nothing to praise, and doing so would be dishonest. Instead, use what actually happened on this exercise (the errors, hints and Pippin messages stated above) to give ONE concrete piece of guidance: what their pattern suggests about where they got stuck, and what specifically to try differently next time. Speak directly to the student as Pippin. Set aligned=false and insightXp=0 — requesting help never earns XP.
-- If Q1 or Q2 and they answered themselves: judge ALIGNMENT against the thing the question asked about, which is stated above as ""Expected of a correct answer"". They are ALIGNED when their answer refers to that one thing, in their own words, and says something about it. An answer that only gives a general verdict — ""it was fine"", ""it was good"", ""I don't know"" — is NOT aligned, however warm it sounds.
-- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED, and it is stated above as what the record decided about the answer. Copy it exactly: do not change it, do not second-guess it, and do not award or withhold XP yourself. Write only the reply, and if it does not match, say warmly what ACTUALLY happened, using the record line stated above, and do NOT repeat their version of it. NEVER write that their answer was right, close, or matches when the record says it does not.
+- If mode is 'Pippin told them': the student pressed ""Pippin, tell me"" instead of writing an answer, so there is no answer to judge. NEVER grade them, never say they answered correctly, and never praise their answer — there is nothing to praise, and doing so would be dishonest. Give ONE concrete piece of guidance instead, and it must answer THE QUESTION ON SCREEN. For a question about one decision, that means saying plainly what the record shows they did with that decision — which is the thing they pressed the button to find out. For the promise question, suggest one concrete thing they might try next. If the question asks what they will do next, the guidance is about the next exercise — do not open by describing what they did earlier. If it asks about one thing (comparing two methods, explaining their reasoning, a part of the working), the guidance is about that one thing and nothing else. Use what actually happened on this exercise only as the record line above states it, which for some questions is only one decision and for the promise question is nothing at all: treat everything it does not mention as unknown and do not guess at it. Speak directly to the student as Pippin. Set aligned=false and insightXp=0 — requesting help never earns XP.
+- If Q1 or Q2 and they answered themselves: judge ALIGNMENT against the thing the question asked about, which is stated above as ""Expected of a correct answer"". They are ALIGNED when their answer refers to that one thing, in their own words, and says something about it. An answer that only gives a general verdict — ""it was fine"", ""it was good"", ""I don't know"" — is NOT aligned, however warm it sounds.{sessionOnlyRule}
+- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED, and it is stated above as what the record decided about the answer. Copy it exactly: do not change it, do not second-guess it, and do not award or withhold XP yourself. Write only the reply. Where the tap and the record differ, say what they actually chose the way the record line states it, and make it sound like the reasonable thing it was — no ""but"", no ""actually"", no ""the record shows"", no comparing it against what they tapped, and no sentence that could be read as marking them down. They do not need to be told the tap was wrong; the XP already reflects it, and the reply is there to end the reflection on something true and warm. Do not repeat their version either, and never write that their answer was right, close, or matches when the record says it does not.
 - ALWAYS FIND SOMETHING GENUINELY GOOD, AND ESPECIALLY ON Q1. Q1 asks what was good, so never answer it with what they did NOT do. Never write that they did not get to work it out, that there is no win to celebrate, or that being shown the answer means the result does not count. The record line above says what happened; use it to find something true and positive and LEAD with that — they chose to work it out themselves, they made no mistakes on a part, they did better than last time, they asked for help rather than giving up, or they finished something they found hard. If the answer does not match, say what happened in a warm, matter-of-fact way and then name the good thing. Do not scold, and do not point out that they were wrong.
-- NEVER AGREE WITH SOMETHING THE RECORD CONTRADICTS. If they say they worked it out themselves but the record says they asked to be shown, do not congratulate them for working it out and never state their claim as fact: that teaches them the reflection is a box to type anything into. Say what they did in a warm, matter-of-fact way, and celebrate the thing that is actually true instead (asking for help is a real skill).
+- NEVER AGREE WITH SOMETHING THE RECORD CONTRADICTS. If they say they worked it out themselves but the record says they skipped it, do not congratulate them for working it out and never state their claim as fact: that teaches them the reflection is a box to type anything into. Say what they did in a warm, matter-of-fact way, and celebrate the thing that is actually true instead (asking for help or skipping a step you did not need is a real skill).
 - A TAPPED QUICK ANSWER IS A COMPLETE ANSWER. If the answer text is empty but a quick answer is stated above, they answered: quote or refer to what they chose. NEVER say they did not answer, did not share their thoughts, or missed the question, and never remark on the empty box. There is nothing missing.
   * If they DID NOT tap a quick answer AND wrote nothing usable, then there is genuinely no answer, and the reply should simply invite them to have a go at the next one.
-  * What they were SHOWN matters: check ""what they decided"" above, and if the solution was handed to them, a low error count is NOT evidence that it was easy. They did not solve it.
+  * Where they SKIPPED the thing this question is about, that is what the record says and it decides the verdict. Say it plainly and warmly, without ranking it as a failure, and never carry it into a question it does not belong to. A decision here is a yes or a no: no means they skipped it, not that they asked for the answer to be revealed.
   If aligned → aligned=true, insightXp=3, with 1-2 warm celebrating sentences. If not → aligned=false, insightXp=0, and gently offer a warm observation instead (e.g. ""That's interesting — sometimes the tricky spots sneak up on us."") without quoting stats, without scolding, and without asking the student anything.
-- If Q3: ignore alignment. Generate ONE concrete, friendly next step targeting the weakest area and put it in nextStep. Set aligned=false, insightXp=0.
+- If Q3: ignore alignment. Put in nextStep ONE suggestion they might try, phrased as an offer rather than an instruction and shaped like a goal they could set: what to work on, and what it would help them get better at. Prefer what THEY just said they want to work on; fall back to the weakest area only when they did not say. One line. Set aligned=false, insightXp=0. The feedback text must not end with a question mark — the audit catches that here more than anywhere else, so end on a full stop.
 - OFF-TOPIC: if the answer is clearly unrelated to maths and to this exercise (a random word, a different topic entirely, keyboard mashing), set offTopic=true, aligned=false, insightXp=0, and leave feedback empty — the app shows its own message asking the student to write the reflection again. Use this ONLY when the answer is genuinely unrelated: a short, vague, unsure or partly incoherent answer that is still about the exercise is a valid reflection and is NOT off-topic. When in doubt, do not flag it.
 
 IMPORTANT: always include the ""aligned"", ""insightXp"" and ""offTopic"" keys with their exact boolean/integer values — never omit them and never quote the numbers as strings.
@@ -2705,38 +3214,37 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
         }
 
         /// <summary>
-        /// Turns the stored decision summary into a phrase the tutor can reason about.
+        /// The reply that goes beside a verdict the RECORD decided, for the path where the AI provider is
+        /// unavailable.
         ///
-        /// The stored form is machine-shaped ("SolveOnOwn=Declined") precisely so it is cheap to
-        /// write from the exercise. Saying "not recorded" rather than nothing matters: an exercise
-        /// with no decision points is not the same as one where the student engaged, and an absent
-        /// field would let the model read silence as a clean run.
+        /// It has to say the same thing as the Insight badge, because the badge is computed from the record
+        /// and this text is shown next to it. Nothing here names a decision the question was not about, so
+        /// a question about comparing two methods cannot come back talking about the solution.
         /// </summary>
-        private static string DescribeDecisions(string decisions)
+        private static string VerdictFeedback(ReflectionQuestion question, ReflectionVerdict verdict, string choiceLabel)
         {
-            if (string.IsNullOrWhiteSpace(decisions)) return "not recorded for this exercise";
+            var promise = question.Kind == ReflectionQuestionBank.NextAction;
+            var picked = string.IsNullOrWhiteSpace(choiceLabel) ? "that" : $"\"{choiceLabel}\"";
 
-            var parts = new List<string>();
+            // A session question is ungraded, and the two branches below would each say something about a
+            // claim nothing ever checked: one confirms it, the other quietly marks it down. Neither is
+            // true here, so it gets its own line — and for the second question, whose chip really is a
+            // commitment, the promise line is the right one.
+            if (question.Kind == ReflectionQuestionBank.Session)
+                return $"Thanks for giving that some thought. Nothing to score on this one — it is about "
+                     + "your own read of the session.";
 
-            foreach (var chunk in decisions.Split(';', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var bits = chunk.Split('=');
-                if (bits.Length != 2) continue;
+            if (promise)
+                return verdict.Status == "aligned"
+                    ? "That is a solid plan, and it is exactly the kind of thing that pays off next time."
+                    : "That is a solid plan for next time, and a promise worth keeping an eye on.";
 
-                var what = bits[0] switch
-                {
-                    "SelfExplanation" => "explaining their own reasoning",
-                    "MethodComparison" => "comparing two methods",
-                    "SolveOnOwn" => "working the solution out themselves",
-                    _ => bits[0]
-                };
+            if (verdict.Status == "aligned")
+                return $"Spot on — {picked} is what happened here. Reading your own work that closely is the whole point.";
 
-                parts.Add(bits[1] == "Declined"
-                    ? $"chose to be shown instead of {what}"
-                    : $"took up {what}");
-            }
-
-            return parts.Count == 0 ? "not recorded for this exercise" : string.Join("; ", parts);
+            return $"You picked {picked}, and that is a fair thing to say. What happened here reads a little "
+                 + "differently, which is worth a second glance — and asking for help when you need it is "
+                 + "still a good call.";
         }
 
         private static ReflectionEvaluateResponse BuildReflectionFallback(
@@ -2744,6 +3252,25 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
             ReflectionQueueRecord item,
             WeaknessResponse weakness)
         {
+            // The end-of-session reflection is ungraded, so none of the rules below fit it: the keyword
+            // guess reads a claim nothing checked, and the next-step plan belongs to the third question of
+            // an item that has only two. This text goes out whenever the provider is unavailable, which is
+            // often, so it is not a rare branch — and it is the only thing the student will read.
+            if (item.ItemType == "session")
+            {
+                return new ReflectionEvaluateResponse
+                {
+                    Feedback = request.QuestionNumber == 1
+                        ? "Thanks for taking a moment over today. However it went, stopping to look back at "
+                          + "it is what turns a session into progress."
+                        : "Thanks for choosing something to work on. That is exactly what the next session "
+                          + "is for.",
+                    Aligned = false,
+                    InsightXp = 0,
+                    NextStep = ""
+                };
+            }
+
             if (request.QuestionNumber == 3)
             {
                 var weakest = weakness.Weakest;
@@ -2760,9 +3287,12 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
 
             if (request.Mode == "pippin")
             {
+                // No numbers read back at the student, and no claim about what they did: this text goes
+                // out on the path where the AI is unavailable, and it is the only thing they will read.
                 return new ReflectionEvaluateResponse
                 {
-                    Feedback = $"Here's what the data shows: {item.Errors} errors and {item.Hints} hints on this one. That's a useful signal for what to focus on next.",
+                    Feedback = "Happy to help. Look at the part of the working that felt least certain, "
+                               + "and try that same kind of step once more on the next exercise.",
                     Aligned = false,
                     InsightXp = 0,
                     NextStep = ""
@@ -2770,6 +3300,34 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
             }
 
             var answer = request.Answer?.ToLowerInvariant() ?? "";
+
+            // The question is named on the request, and the decision is on the item's own summary, so
+            // this needs nothing that is built later in the caller.
+            var aboutADecision = request.QuestionId is "q2-compared" or "q2-explained";
+
+            if (aboutADecision)
+            {
+                var element = request.QuestionId == "q2-compared" ? "MethodComparison" : "SelfExplanation";
+                var decisions = item.Decisions ?? "";
+
+                var record = decisions.Contains($"{element}=Engaged", StringComparison.OrdinalIgnoreCase)
+                    ? "you did that here"
+                    : decisions.Contains($"{element}=Declined", StringComparison.OrdinalIgnoreCase)
+                        ? "you skipped that here"
+                        : "nothing was recorded about that here";
+
+                return new ReflectionEvaluateResponse
+                {
+                    // No mention of an award. The badge already says what the badge says, and telling a
+                    // student that something did not count is the one way this reply could still sting.
+                    Feedback = $"Thanks. The record for this exercise says {record}, which is the bit I "
+                               + "would normally line up against what you wrote.",
+                    Aligned = false,
+                    InsightXp = 0,
+                    NextStep = ""
+                };
+            }
+
             bool claimsStruggle = answer.Contains("hard") || answer.Contains("struggl") || answer.Contains("difficult")
                 || answer.Contains("mistake") || answer.Contains("error") || answer.Contains("wrong") || answer.Contains("hint");
             bool claimsEasy = answer.Contains("easy") || answer.Contains("good") || answer.Contains("great")
@@ -2787,9 +3345,12 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
 
             return new ReflectionEvaluateResponse
             {
+                // The free-text path, on the one occasion the AI cannot be reached. This text is shown to
+                // the student on its own, so it may not talk about "the data", may not read numbers back at
+                // them, and must still let them see which way it went.
                 Feedback = aligned
-                    ? "That matches what the data shows — great self-awareness!"
-                    : "Interesting! The data tells a slightly different story — take a look and see what you notice.",
+                    ? "That matches what happened, and reading your own work that closely is the whole point. Nicely done."
+                    : "Thanks for taking a look at that one. What happened here reads a little differently, so it is worth a second glance — and asking for help when you need it is still a good call.",
                 Aligned = aligned,
                 InsightXp = aligned ? 3 : 0,
                 NextStep = ""
@@ -2848,24 +3409,38 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await httpClient.PostAsync(AiProvider.ChatCompletionsUrl(_configuration), content);
+            // ASK AGAIN BEFORE GIVING UP. This used to make one attempt, so a single blip at the provider
+            // cost the student their reply and sent them the offline text instead. The failures we see are
+            // HTTP 500 with an EMPTY body, arriving in tens of milliseconds, while a good call takes about
+            // a second: that is the shape of a hiccup at their end, not of a bad request from ours. A bad
+            // request would fail every time and would say so in the body.
+            HttpResponseMessage? response = null;
+            var responseBody = "";
+
+            for (var attempt = 1; attempt <= 3; attempt++)
+            {
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                response = await httpClient.PostAsync(AiProvider.ChatCompletionsUrl(_configuration), content);
+                responseBody = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode) break;
+
+                Console.WriteLine(
+                    $"[AI] attempt {attempt}/3: {(int)response.StatusCode} from {AiProvider.BaseUrl(_configuration)} " +
+                    $"(model={AiProvider.Model(_configuration)}) — {responseBody[..Math.Min(300, responseBody.Length)]}");
+
+                // A 4xx is about this request and will fail identically; only 5xx is worth asking twice.
+                if ((int)response.StatusCode < 500) return null;
+                if (attempt < 3) await Task.Delay(250 * attempt);
+            }
 
             // Log the failure rather than silently returning null. A null here is indistinguishable at
             // the call site from "the model had nothing to say", and that ambiguity is exactly what made
             // a provider swap look like an unreachable server: the request had succeeded with 200, but
             // an empty `content` (a reasoning model that ran out of budget while thinking) came back as
             // a null and every caller quietly used its fallback.
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorBody = await response.Content.ReadAsStringAsync();
-                Console.WriteLine(
-                    $"[AI] {(int)response.StatusCode} from {AiProvider.BaseUrl(_configuration)} " +
-                    $"(model={AiProvider.Model(_configuration)}) — {errorBody[..Math.Min(300, errorBody.Length)]}");
-                return null;
-            }
+            if (response is null || !response.IsSuccessStatusCode) return null;
 
-            var responseBody = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(responseBody);
 
             var message = doc.RootElement.GetProperty("choices")[0].GetProperty("message");

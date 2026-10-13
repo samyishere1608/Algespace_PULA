@@ -184,6 +184,15 @@ namespace webapi.Models.Student
     {        public bool IsGoal { get; set; }
 
         /// <summary>
+        /// The end-of-session reflection, which is about the day rather than about one item.
+        ///
+        /// Its window is the exercises finished TODAY, carried in <see cref="GoalExercises"/> because it
+        /// is the same shape and the same questions are read from it. It has no category to be judged
+        /// against, which is why both of its questions are ungraded.
+        /// </summary>
+        public bool IsSession { get; set; }
+
+        /// <summary>
         /// For a goal: its category, which decides the question. For an exercise: the exercise type.
         /// </summary>
         public string Focus { get; set; } = "";
@@ -271,6 +280,16 @@ namespace webapi.Models.Student
         /// <summary>Errors on the attempt before this one, for the fallback question when steps are missing.</summary>
         public int PreviousErrors { get; set; }
         public bool HasHistory { get; set; }
+
+        /// <summary>
+        /// Whether this exercise is one we can check a method choice against. False for Matching, which
+        /// hands the method over rather than asking for one, and for any exercise whose own row cannot be
+        /// found, where we would be guessing.
+        /// </summary>
+        public bool HasAllowedMethods { get; set; }
+
+        /// <summary>The method they chose was one the exercise allowed. Only meaningful with the flag above.</summary>
+        public bool ChoseAllowedMethod { get; set; }
     }
 
     /// <summary>The verdict for one answer.</summary>

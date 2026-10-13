@@ -67,7 +67,7 @@ import { getOnboardingStep } from "@utils/storageUtils.ts";
 import { OnboardingTour } from "@components/shared/OnboardingTour.tsx";
 import { TOUR_STEPS, isTourActive, shouldAutoStartTour, startTour, type TourStep } from "@utils/onboardingTour.ts";
 import { seedDemoData } from "@utils/demoData.ts";
-import { fetchReflectionQueue, completeReflection, ReflectionQueueItem } from "@utils/reflectionUtils.ts";
+import { fetchReflectionQueue, completeReflection, startSessionReflection, settleSessionPromise, ReflectionQueueItem } from "@utils/reflectionUtils.ts";
 import { MilestoneCelebrationOverlay } from "@components/shared/MilestoneCelebrationOverlay.tsx";
 import { GrowingTree } from "@components/shared/GrowingTree.tsx";
 import { AgencyXpToast, showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
@@ -373,6 +373,11 @@ export default function StudentDashboard(): ReactElement {
     const [showReflectionPrompt, setShowReflectionPrompt] = useState(false);
     const [showReflectionModal, setShowReflectionModal] = useState(false);
 
+    // ── End-of-session reflection ─────────────────────────────────────────
+    // Held apart from the queue on purpose: it is not something the student finished, it is opened
+    // from the end-session dialog, and it must not appear in the prompt that offers the queue.
+    const [sessionReflectionItem, setSessionReflectionItem] = useState<ReflectionQueueItem | null>(null);
+
     const [activeBuddyId, setActiveBuddyId] = useState(() => getActiveBuddyId(student?.id ?? "guest"));
 
     // Empty until the server answers. The goals are a table read now, so there is nothing to seed
@@ -551,6 +556,7 @@ export default function StudentDashboard(): ReactElement {
     function handleDailyIntention(choice: string, customText?: string, detectedCategory?: string): void {
         if (!student) return;
         setDailyIntention(student.id, choice, customText ?? "", exercisesCompleted, detectedCategory ?? "unclear");
+        settleSessionPromiseIfAny(choice, customText ?? "", detectedCategory ?? "unclear");
 
         // Don't close modal for custom text — AI feedback shows inside modal
         if (choice !== "custom") {
@@ -612,6 +618,26 @@ export default function StudentDashboard(): ReactElement {
         setShowDailyIntention(false);
     }
 
+    /**
+     * Offers today's intention against the promise made at the end of the last session.
+     *
+     * This is the one moment both halves exist: the intention is kept here, in local storage, and the
+     * promise is a row the server wrote yesterday. The server does the judging and pays the Resolve
+     * itself — it is the only writer — so the wallets are re-read from it afterwards rather than paid
+     * here as well, which would pay the student twice.
+     */
+    function settleSessionPromiseIfAny(choice: string, customText: string, detectedCategory: string): void {
+        if (!student) return;
+        void settleSessionPromise(student.id, choice, customText, detectedCategory)
+            .then((resolveXp) => {
+                if (resolveXp <= 0) return;
+                void syncAgencyFromBackend(student.id).then((progress) => {
+                    setAgency(progress);
+                    showAgencyToast("resolve", resolveXp);
+                });
+            });
+    }
+
     // ── Reflection handlers ───────────────────────────────────────────────
     function handleReflectionYes(): void {
         if (!student) return;
@@ -637,6 +663,22 @@ export default function StudentDashboard(): ReactElement {
         addInsightXP(student.id, amount, "reflection-aligned");
         showAgencyToast("insight", amount);
         setAgency(getAgencyProgress(student.id));
+    }
+
+    /**
+     * Opens the end-of-session reflection from the end-session dialog.
+     *
+     * The dialog closes first: the reflection replaces it rather than stacking on top of it. When the
+     * server cannot build one there is nothing to show, and the student is left where they were rather
+     * than with an empty dialog.
+     */
+    function handleStartSessionReflection(): void {
+        if (!student) return;
+        const label = t("reflection-session-item-label");
+        setShowEndSession(false);
+        void startSessionReflection(student.id, label).then((item) => {
+            if (item) setSessionReflectionItem(item);
+        });
     }
 
     return (
@@ -1318,6 +1360,18 @@ export default function StudentDashboard(): ReactElement {
                     studentId={student?.id ?? "guest"}
                     onEndSession={handleLogout}
                     onClose={() => setShowEndSession(false)}
+                    onStartSessionReflection={handleStartSessionReflection}
+                />
+            )}
+            {sessionReflectionItem && student && (
+                <ReflectionModal
+                    studentId={student.id}
+                    items={[sessionReflectionItem]}
+                    buddyName={activeBuddy.name}
+                    buddyEmoji={activeBuddy.emoji}
+                    buddyImgSrc={buddyImgSrc}
+                    onAwardInsight={handleReflectionInsight}
+                    onClose={() => setSessionReflectionItem(null)}
                 />
             )}
             {showReflectionModal && student && (

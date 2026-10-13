@@ -85,7 +85,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const { t } = useTranslation(TranslationNamespaces.Student);
 
     const [itemIndex, setItemIndex] = useState(0);
-    const [question, setQuestion] = useState<1 | 2 | 3>(1);
+    const [question, setQuestion] = useState(1);
     const [phase, setPhase] = useState<Phase>("answering");
     const [answer, setAnswer] = useState("");
     const [choice, setChoice] = useState("");
@@ -97,9 +97,15 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const [retryNotice, setRetryNotice] = useState("");
 
     const item = items[itemIndex];
-    const totalQuestions = 3;
 
-    // The server sends three, in order: observe, judge, look forward.
+    // How many questions this item has, taken from the questions themselves.
+    //
+    // It used to be the number 3 in four places. That was true while every item was an exercise or a
+    // goal, and it is not true of the end-of-session reflection, which asks two. The server is the one
+    // that decides how many a question set has, so the count is read from what it sent.
+    const totalQuestions = item?.questions?.length ?? 3;
+
+    // The server sends them in order: observe, judge, look forward.
     const asked = useMemo(
         () => resolveQuestion(item?.questions?.[question - 1], t),
         [item, question, t]
@@ -197,7 +203,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
 
     async function handleNext(): Promise<void> {
         if (question < totalQuestions) {
-            setQuestion((q) => (q + 1) as 1 | 2 | 3);
+            setQuestion((q) => q + 1);
             setAnswer("");
             setChoice("");
             setFeedback("");
@@ -226,10 +232,25 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
         }
     }
 
+    /**
+     * Closing the reflection is a NO.
+     *
+     * It used to just hide the window, which left the item pending — so dismissing a reflection
+     * quietly meant "ask me again later" and the same one came back the next time the dashboard
+     * opened. A student who closes a reflection has answered it, and the honest record is that they
+     * did not want to take it. The server keeps the item out of the queue once it is skipped.
+     *
+     * If the item was already finished, the skip is harmless: it is out of the queue either way.
+     */
+    async function dismiss(): Promise<void> {
+        await completeReflection(studentId, item.id, [], true);
+        onClose();
+    }
+
     return (
         <div className="modal-overlay">
             <div className="modal-content reflection-modal buddy-panel" onClick={(e) => e.stopPropagation()}>
-                <button className="modal-close" onClick={onClose} title={t("dashboard-modal-close")}>
+                <button className="modal-close" onClick={dismiss} title={t("dashboard-modal-close")}>
                     <FontAwesomeIcon icon={faTimes} />
                 </button>
 
@@ -246,12 +267,12 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                     className="buddy-steps"
                     role="progressbar"
                     aria-valuemin={1}
-                    aria-valuemax={3}
+                    aria-valuemax={totalQuestions}
                     aria-valuenow={question}
                     aria-label={t(`reflection-step-${question}`)}
                 >
                     <span className="buddy-steps__bar">
-                        {[1, 2, 3].map((n) => (
+                        {Array.from({ length: totalQuestions }, (_, i) => i + 1).map((n) => (
                             <span
                                 key={n}
                                 className={`buddy-steps__seg${n < question ? " buddy-steps__seg--done" : n === question ? " buddy-steps__seg--active" : ""}`}
@@ -259,7 +280,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                         ))}
                     </span>
                     <span className="buddy-steps__caption">
-                        <strong>{t(`reflection-step-${question}`)}</strong> · {question}/3
+                        <strong>{t(`reflection-step-${question}`)}</strong> · {question}/{totalQuestions}
                     </span>
                 </div>
 
@@ -338,7 +359,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                 <span>+{earnedInsight} {t("agency-insight")} XP</span>
                             </div>
                         )}
-                        {question === 3 && nextStep && (
+                        {question === totalQuestions && nextStep && (
                             <div className="reflection-modal__next-step">
                                 <FontAwesomeIcon icon={faLightbulb} className="reflection-modal__next-step-icon" />
                                 <div>

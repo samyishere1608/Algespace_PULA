@@ -160,7 +160,7 @@ scenarios.Add(("exercise/no-steps-no-history", new ReflectionEvidence
     InSet = 1,
     Errors = 4,
 }));
-Expect("exercise/no-steps-no-history", q1: "reflection-q1-expectation", q2: "reflection-q2-explained-efficiency", q3: "reflection-q3-explain-efficiency");
+Expect("exercise/no-steps-no-history", q1: "reflection-q1-went-well-efficiency", q2: "reflection-q2-explained-efficiency", q3: "reflection-q3-explain-efficiency");
 
 // No step detail, but a previous attempt: the fallback question becomes checkable.
 scenarios.Add(("exercise/no-steps-with-history", new ReflectionEvidence
@@ -173,7 +173,7 @@ scenarios.Add(("exercise/no-steps-with-history", new ReflectionEvidence
     PreviousErrors = 6,
     HasHistory = true,
 }));
-Expect("exercise/no-steps-with-history", q1: "reflection-q1-better-than-last");
+Expect("exercise/no-steps-with-history", q1: "reflection-q1-went-well-efficiency");
 
 // No step detail, and the run was level with the last one.
 scenarios.Add(("exercise/no-steps-level", new ReflectionEvidence
@@ -186,7 +186,7 @@ scenarios.Add(("exercise/no-steps-level", new ReflectionEvidence
     PreviousErrors = 4,
     HasHistory = true,
 }));
-Expect("exercise/no-steps-level", q1: "reflection-q1-better-than-last");
+Expect("exercise/no-steps-level", q1: "reflection-q1-went-well-matching");
 
 // No step detail, and this run went worse than the last.
 scenarios.Add(("exercise/no-steps-worse", new ReflectionEvidence
@@ -199,7 +199,7 @@ scenarios.Add(("exercise/no-steps-worse", new ReflectionEvidence
     PreviousErrors = 4,
     HasHistory = true,
 }));
-Expect("exercise/no-steps-worse", q1: "reflection-q1-better-than-last");
+Expect("exercise/no-steps-worse", q1: "reflection-q1-went-well-efficiency");
 
 // Nothing clean: Q1 has to ask what took the most fight instead of what went well.
 scenarios.Add(("exercise/nothing-clean", new ReflectionEvidence
@@ -226,7 +226,102 @@ scenarios.Add(("exercise/one-step", new ReflectionEvidence
     Steps = stepyOne,
     CleanStepIds = ["choose"],
 }));
-Expect("exercise/one-step", q1: "reflection-q1-expectation");
+Expect("exercise/one-step", q1: "reflection-q1-went-well-efficiency");
+
+// The what-went-well menu an exercise now gets, with its criteria asserted exactly. Everything went
+// well here: the method was one the exercise allowed, nothing went wrong and no hint was needed.
+var exerciseAllWell = new ReflectionEvidence
+{
+    IsGoal = false,
+    Focus = "Suitability",
+    DecisionDimension = "compare",
+    InSet = 1,
+    HasAllowedMethods = true,
+    ChoseAllowedMethod = true,
+};
+scenarios.Add(("exercise/went-well-all", exerciseAllWell));
+Expect("exercise/went-well-all", q1: "reflection-q1-went-well-suitability");
+
+{
+    var question = ReflectionQuestionBank.Build(exerciseAllWell)[0];
+    var wanted = new[] { "went-suitable-choice", "went-clean", "went-nohints" };
+
+    if (!question.Chips.Select(c => c.Id).SequenceEqual(wanted))
+        Fail("exercise/went-well-all", $"offered [{string.Join(", ", question.Chips.Select(c => c.Id))}], expected [{string.Join(", ", wanted)}]");
+    if (!question.AlignedChipIds.OrderBy(id => id).SequenceEqual(wanted.OrderBy(id => id)))
+        Fail("exercise/went-well-all", $"accepted [{string.Join(", ", question.AlignedChipIds)}], expected all three");
+}
+
+// Nothing went well: a method the exercise did not allow, mistakes AND hints. The menu is still offered
+// and every option pays the partial amount, because the student answered honestly about a run that did
+// not go their way, and refusing to pay anything for that is worse than paying a little.
+var exerciseNothingWell = new ReflectionEvidence
+{
+    IsGoal = false,
+    Focus = "Suitability",
+    DecisionDimension = "compare",
+    InSet = 1,
+    Errors = 5,
+    Hints = 2,
+    HasAllowedMethods = true,
+    ChoseAllowedMethod = false,
+};
+scenarios.Add(("exercise/went-well-nothing", exerciseNothingWell));
+Expect("exercise/went-well-nothing", q1: "reflection-q1-went-well-suitability");
+
+{
+    var question = ReflectionQuestionBank.Build(exerciseNothingWell)[0];
+
+    if (question.AlignedChipIds.Count != 0)
+        Fail("exercise/went-well-nothing", $"accepted [{string.Join(", ", question.AlignedChipIds)}] on a run where nothing went well");
+    if (!question.PartialChipIds.SequenceEqual(question.Chips.Select(c => c.Id)))
+        Fail("exercise/went-well-nothing", "not every option pays the partial amount when nothing went well");
+}
+
+// An exercise whose own row cannot be found has no list of allowed methods, so the suitable-method
+// option is left off rather than put to a coin toss. No hints here, so there IS something to accept.
+var exerciseUnknown = new ReflectionEvidence
+{
+    IsGoal = false,
+    Focus = "Suitability",
+    DecisionDimension = "compare",
+    InSet = 1,
+    Errors = 1,
+};
+scenarios.Add(("exercise/went-well-unknown", exerciseUnknown));
+Expect("exercise/went-well-unknown", q1: "reflection-q1-went-well-suitability");
+
+{
+    var question = ReflectionQuestionBank.Build(exerciseUnknown)[0];
+
+    if (question.Chips.Any(c => c.Id == "went-suitable-choice"))
+        Fail("exercise/went-well-unknown", "the suitable-method option was offered with no method list to check it against");
+    if (!question.AlignedChipIds.SequenceEqual(["went-nohints"]))
+        Fail("exercise/went-well-unknown", $"accepted [{string.Join(", ", question.AlignedChipIds)}], expected only went-nohints");
+}
+
+// A Matching exercise has no right method to have picked, so its menu is about the decision instead.
+var exerciseMatchingClean = new ReflectionEvidence
+{
+    IsGoal = false,
+    Focus = "Matching",
+    DecisionDimension = "explain",
+    InSet = 1,
+    DidExplain = true,
+    HasAllowedMethods = false,
+};
+scenarios.Add(("exercise/went-well-matching", exerciseMatchingClean));
+Expect("exercise/went-well-matching", q1: "reflection-q1-went-well-matching");
+
+{
+    var question = ReflectionQuestionBank.Build(exerciseMatchingClean)[0];
+    var wanted = new[] { "went-clean", "went-nohints", "went-explained" };
+
+    if (!question.Chips.Select(c => c.Id).SequenceEqual(wanted))
+        Fail("exercise/went-well-matching", $"offered [{string.Join(", ", question.Chips.Select(c => c.Id))}], expected [{string.Join(", ", wanted)}]");
+    if (!question.AlignedChipIds.OrderBy(id => id).SequenceEqual(wanted.OrderBy(id => id)))
+        Fail("exercise/went-well-matching", $"accepted [{string.Join(", ", question.AlignedChipIds)}], expected all three");
+}
 
 // Two steps costing the same: either one is a right answer to "which took the most fight".
 scenarios.Add(("exercise/tied-steps", new ReflectionEvidence
@@ -290,9 +385,15 @@ foreach (var (name, evidence) in scenarios)
         if (question.TextKey.Length == 0) Fail(label, "no question text key");
         if (question.Kind != ReflectionQuestionBank.NextAction && question.Expectation.Length == 0)
             Fail(label, "no expectation, so a free-text answer could not be judged");
-        if (question.PartialChipIds.Count > 0 && question.Id != "q1-progress")
+
+        // Exactly two questions may pay every chip, and they are the two whose case really is that
+        // nothing checkable went well: the what-went-well menus, and the question a goal with no
+        // readable window is left with. Anywhere else a partial is what makes guessing profitable.
+        var paysEveryChip = question.Id is "q1-progress" or "q1-exercise-went-well";
+
+        if (question.PartialChipIds.Count > 0 && !paysEveryChip)
             Fail(label, "a partial award on a question whose record can settle the answer");
-        if (question.PartialChipIds.Count > 0 && evidence.HasHistory)
+        if (question.PartialChipIds.Count > 0 && evidence.HasHistory && !paysEveryChip)
             Fail(label, "a partial award even though there was a previous attempt to compare with");
 
         // A question that interpolates a slot must be given one, or the student reads a raw
@@ -716,7 +817,7 @@ var alwaysExplained = new ReflectionEvidence
 };
 
 CheckGoal("goal-window/self-explanation-always-explained", alwaysExplained,
-    "reflection-goal-q1-self-explanation", "reflection-q2-count-clean", "reflection-goal-q3-explain-type",
+    "reflection-goal-q1-self-explanation", "reflection-goal-q2-explain-method", "reflection-goal-q3-explain-type",
     q1Offered: ["went-explain-clean", "went-explain-new"]);
 
 // The same guard on the comparison goal, which is built from the same rule.
@@ -731,7 +832,7 @@ var alwaysCompared = new ReflectionEvidence
 };
 
 CheckGoal("goal-window/comparison-always-compared", alwaysCompared,
-    "reflection-goal-q1-comparison", "reflection-q2-count-clean", "reflection-goal-q3-compare-method",
+    "reflection-goal-q1-comparison", "reflection-goal-q2-compare-method", "reflection-goal-q3-compare-method",
     q1Offered: ["went-compare-clean", "went-compare-new"]);
 
 // A solve-on-own goal: they worked one out that they used to hand over, and the system was handed
@@ -798,6 +899,94 @@ CheckGoal("goal-window/hints-errors-asks-about-hints", hintsOnly,
 scenarios.Add(("goal/no-window", new ReflectionEvidence { IsGoal = true, Focus = "method", InSet = 3 }));
 Expect("goal/no-window", q1: "reflection-q1-better-than-last");
 
+// ── The end-of-session reflection ────────────────────────────────────────────
+//
+// The one item whose questions are NOT graded. Two questions, not three, and nothing anywhere in
+// either of them may pay Insight: there is no record of "what went well today" that could settle a
+// claim, and the second question is a commitment about tomorrow rather than an answer about today.
+//
+// Checked apart from the loop above, because every assertion in that loop is written for a question
+// set whose answers the record can settle — "nothing can ever earn Insight here" is a failure for an
+// exercise and the whole point of these.
+void CheckSession(string name, ReflectionEvidence evidence)
+{
+    List<ReflectionQuestion> questions;
+    try
+    {
+        questions = ReflectionQuestionBank.Build(evidence);
+    }
+    catch (Exception ex)
+    {
+        Fail(name, $"Build threw {ex.GetType().Name}: {ex.Message}");
+        return;
+    }
+
+    if (questions.Count != 2) { Fail(name, $"expected 2 questions, got {questions.Count}"); return; }
+
+    var (q1, q2) = (questions[0], questions[1]);
+
+    if (q1.Kind != ReflectionQuestionBank.Session) Fail(name, $"Q1 kind was {q1.Kind}, expected session");
+    if (q2.Kind != ReflectionQuestionBank.NextAction) Fail(name, $"Q2 kind was {q2.Kind}, expected next-action");
+    if (q1.TextKey != "reflection-session-q1") Fail(name, $"Q1 was {q1.TextKey}");
+    if (q2.TextKey != "reflection-session-q2") Fail(name, $"Q2 was {q2.TextKey}");
+    if (q1.ItemType != "session" || q2.ItemType != "session") Fail(name, "an item type is not session");
+
+    foreach (var question in questions)
+    {
+        var label = $"{name}/{question.Id}";
+
+        textKeys.Add(question.TextKey);
+        foreach (var chip in question.Chips) chipKeys.Add(chip.TextKey);
+
+        if (question.Chips.Count < 2) Fail(label, $"only {question.Chips.Count} chip(s)");
+        if (question.Chips.Select(c => c.Id).Distinct().Count() != question.Chips.Count)
+            Fail(label, "duplicate chip ids");
+        if (question.Chips.Any(c => c.TextKey.Length == 0)) Fail(label, "a chip has no text key");
+
+        // NEITHER QUESTION IS GRADED. Not one chip, and not the blank the free text arrives as.
+        if (question.AlignedChipIds.Count > 0 || question.PartialChipIds.Count > 0)
+            Fail(label, "a session question carries an answer key");
+
+        foreach (var chip in question.Chips)
+            if (ReflectionQuestionBank.Grade(question, chip.Id).InsightXp != 0)
+                Fail(label, $"chip \"{chip.Id}\" paid Insight on an ungraded question");
+
+        if (ReflectionQuestionBank.Grade(question, "").InsightXp != 0)
+            Fail(label, "a blank answer paid Insight on an ungraded question");
+    }
+}
+
+// A session with a bit of everything on the day.
+CheckSession("session/full-day", new ReflectionEvidence
+{
+    IsSession = true, InSet = 3, Errors = 2, Hints = 1,
+    GoalExercises =
+    [
+        Goal(Elimination, 2, 1, 60, own: true, type: Suitability),
+        Goal(Equalization, 0, 0, 45, explained: true, type: Efficiency),
+        Goal(Substitution, 0, 0, 30, compared: true, type: Matching),
+    ],
+});
+
+// A session whose only exercise was mistake-free but hint-heavy, so the menu has fewer options.
+CheckSession("session/one-clean-run", new ReflectionEvidence
+{
+    IsSession = true, InSet = 1, Errors = 0, Hints = 2,
+    GoalExercises = [Goal(Substitution, 0, 2, 70, type: Efficiency)],
+});
+
+// The hard day: every exercise cost both a mistake and a hint, so not one of the specific wins is
+// available and the menu is down to its floor. It still has to be a menu.
+CheckSession("session/nothing-specific-went-well", new ReflectionEvidence
+{
+    IsSession = true, InSet = 2, Errors = 3, Hints = 2,
+    GoalExercises = [Goal(Equalization, 2, 1, 80, type: Efficiency), Goal(Elimination, 1, 1, 90, type: Suitability)],
+});
+
+// A session with nothing finished in it. The menu is about making the time, because that is all that
+// happened — and it still needs two chips to be a menu rather than a single button.
+CheckSession("session/no-exercises", new ReflectionEvidence { IsSession = true, InSet = 0 });
+
 // ── The report ───────────────────────────────────────────────────────────────
 
 Console.WriteLine();
@@ -818,8 +1007,14 @@ var allPaid = byQuestion.Values.Sum(v => v.Sum(x => x.Paid));
 var allTotal = byQuestion.Values.Sum(v => v.Sum(x => x.Total));
 var insightPaid = byQuestion.Where(kv => kv.Key != "q3-next-action").SelectMany(kv => kv.Value).Sum(x => x.Paid);
 var insightTotal = byQuestion.Where(kv => kv.Key != "q3-next-action").SelectMany(kv => kv.Value).Sum(x => x.Total);
-var checkablePaid = byQuestion.Where(kv => kv.Key is not ("q3-next-action" or "q1-progress")).SelectMany(kv => kv.Value).Sum(x => x.Paid);
-var checkableTotal = byQuestion.Where(kv => kv.Key is not ("q3-next-action" or "q1-progress")).SelectMany(kv => kv.Value).Sum(x => x.Total);
+// The two questions that pay every chip by design are left out of the headline: the what-went-well
+// menus when nothing went well, and the question a goal with no readable window is left with. Neither
+// is a question the record could have settled, and counting them would hide a real regression behind
+// two known ones.
+var exemptFromGuessRate = new[] { "q1-progress", "q1-exercise-went-well" };
+
+var checkablePaid = byQuestion.Where(kv => kv.Key != "q3-next-action" && !exemptFromGuessRate.Contains(kv.Key)).SelectMany(kv => kv.Value).Sum(x => x.Paid);
+var checkableTotal = byQuestion.Where(kv => kv.Key != "q3-next-action" && !exemptFromGuessRate.Contains(kv.Key)).SelectMany(kv => kv.Value).Sum(x => x.Total);
 
 static string Pct(int paid, int total) => total == 0 ? "n/a" : ((double)paid / total).ToString("P0");
 
@@ -861,6 +1056,7 @@ static ReflectionEvidence Clone(ReflectionEvidence source)
     var copy = new ReflectionEvidence
     {
         IsGoal = source.IsGoal,
+        IsSession = source.IsSession,
         Focus = source.Focus,
         FocusLabelKey = source.FocusLabelKey,
         Errors = source.Errors,

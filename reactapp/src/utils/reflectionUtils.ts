@@ -73,10 +73,57 @@ export async function fetchReflectionQueue(studentId: number): Promise<Reflectio
     }
 }
 
+/**
+ * Opens the end-of-session reflection: two questions about the day as a whole.
+ *
+ * Not fetched from the queue, because it is not earned by finishing something. It is asked for at the
+ * moment the student chooses to look back, and the server builds it from the exercises the day actually
+ * contains. Returns null when it cannot be built, which is what the caller renders as "nothing to show".
+ */
+export async function startSessionReflection(
+    studentId: number,
+    label: string
+): Promise<ReflectionQueueItem | null> {
+    try {
+        const { data } = await axios.post<ReflectionQueueItem>(
+            `${BACKEND}/student-progress/session-reflection/${studentId}`,
+            null,
+            { params: { label } }
+        );
+        return data ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Offers today's intention against the promise made at the end of the last session.
+ *
+ * Called when the student picks their intention, because that is the one moment both halves exist: the
+ * intention is only ever held here, and the promise is a row the server wrote yesterday. Returns the
+ * Resolve the server has already paid, which is normally 0.
+ */
+export async function settleSessionPromise(
+    studentId: number,
+    intentionChoice: string,
+    intentionText: string,
+    detectedCategory: string
+): Promise<number> {
+    try {
+        const { data } = await axios.post<{ resolveAwarded: number }>(
+            `${BACKEND}/student-progress/session-reflection/settle`,
+            { studentId, intentionChoice, intentionText, detectedCategory }
+        );
+        return data?.resolveAwarded ?? 0;
+    } catch {
+        return 0;
+    }
+}
+
 export async function evaluateReflection(
     studentId: number,
     queueItemId: number,
-    questionNumber: 1 | 2 | 3,
+    questionNumber: number,
     mode: "self" | "pippin",
     answer: string,
     language: string,

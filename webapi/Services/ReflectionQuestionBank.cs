@@ -32,6 +32,17 @@ namespace webapi.Services
         public const string Judgement = "judgement";
         public const string NextAction = "next-action";
 
+        /// <summary>
+        /// The end-of-session reflection. Neither of its questions is graded.
+        ///
+        /// Everything else here asks for something the record already holds the answer to. A session
+        /// does not: "what went well today" is the student's reading of their own day, and the second
+        /// question is a commitment about the next one. So these are the only questions that pay no
+        /// Insight, and the model is told that outright rather than left to discover it. Answering them
+        /// still pays — the commitment pays Choice, and keeping it pays Resolve tomorrow.
+        /// </summary>
+        public const string Session = "session";
+
         /// <summary>Insight for an answer that matches the record. Same ceiling the old grader used.</summary>
         private const int AlignedXp = 3;
 
@@ -103,15 +114,121 @@ namespace webapi.Services
         /// Q1 observes, Q2 judges, Q3 looks forward. Not every item has the evidence for every question,
         /// and where it does not the item gets a weaker question rather than no question: a reflection
         /// that skips a step is worse than one that asks something simpler.
+        ///
+        /// The end-of-session reflection is the one item that does not follow that shape, and is built by
+        /// its own pair of builders below: it has no record to judge and no third thing to ask.
         /// </summary>
-        public static List<ReflectionQuestion> Build(ReflectionEvidence evidence) => evidence.IsGoal
-            ? evidence.GoalExercises.Count > 0
-                // A goal with a readable window is asked its own questions.
-                ? [BuildGoalObservation(evidence), BuildGoalJudgement(evidence), BuildGoalNextAction(evidence)]
-                // A goal completed before the window was recorded, or one whose window was empty. The
-                // plain questions are all that can be asked of it, and they still ask something real.
-                : [BuildObservation(evidence), BuildJudgement(evidence), BuildNextAction(evidence)]
-            : [BuildObservation(evidence), BuildJudgement(evidence), BuildNextAction(evidence)];
+        public static List<ReflectionQuestion> Build(ReflectionEvidence evidence) => evidence.IsSession
+            ? BuildSession(evidence)
+            : evidence.IsGoal
+                ? evidence.GoalExercises.Count > 0
+                    // A goal with a readable window is asked its own questions.
+                    ? [BuildGoalObservation(evidence), BuildGoalJudgement(evidence), BuildGoalNextAction(evidence)]
+                    // A goal completed before the window was recorded, or one whose window was empty. The
+                    // plain questions are all that can be asked of it, and they still ask something real.
+                    : [BuildObservation(evidence), BuildJudgement(evidence), BuildNextAction(evidence)]
+                : [BuildObservation(evidence), BuildJudgement(evidence), BuildNextAction(evidence)];
+
+        // ── The end-of-session questions ──────────────────────────────────────
+        //
+        // Two questions, not three. An item is asked three because there is something to observe, to
+        // judge and to commit to; a session is only ever asked the first and the last. The middle one is
+        // missing on purpose rather than by omission: a judgement question needs a record that can settle
+        // the answer, and "how did today compare with yesterday" cannot be settled from one day's row.
+
+        /// <summary>
+        /// Q1: what went well today, as a menu read from the day's own exercises.
+        ///
+        /// The options are the things that DID go well — every one of them is backed by a rule over the
+        /// session's window, so the student is choosing between true statements rather than guessing at
+        /// one. Nothing is graded, because the record cannot say which of several true things a student
+        /// noticed. The menu is capped so it stays a quick answer rather than a survey.
+        /// </summary>
+        private static ReflectionQuestion BuildSessionObservation(ReflectionEvidence evidence)
+        {
+            var window = evidence.GoalExercises;
+
+            var question = new ReflectionQuestion
+            {
+                Id = "session-q1-went-well",
+                Kind = Session,
+                ItemType = "session",
+                TextKey = "reflection-session-q1",
+            };
+
+            var chips = new List<ReflectionChip>();
+
+            if (window.Count == 0)
+            {
+                // Nothing was finished today, so there is no win to read out of the record. The honest
+                // menu is about making the time at all, which is all a session with no completed
+                // exercise consisted of.
+                chips.Add(new ReflectionChip { Id = "session-went-showed-up", TextKey = "reflection-session-chip-showed-up" });
+                chips.Add(new ReflectionChip { Id = "session-went-looked", TextKey = "reflection-session-chip-looked" });
+            }
+            else
+            {
+                // Finishing is the one thing a session cannot have happened without, so it is always on
+                // the menu and always first. The rest are offered only when the day actually shows them.
+                chips.Add(new ReflectionChip { Id = "session-went-finished", TextKey = "reflection-session-chip-finished" });
+
+                if (window.Any(exercise => exercise.Errors == 0))
+                    chips.Add(new ReflectionChip { Id = "session-went-clean", TextKey = "reflection-session-chip-clean" });
+                if (window.Any(exercise => exercise.Hints == 0))
+                    chips.Add(new ReflectionChip { Id = "session-went-nohints", TextKey = "reflection-session-chip-nohints" });
+                if (window.Any(exercise => exercise.Own))
+                    chips.Add(new ReflectionChip { Id = "session-went-alone", TextKey = "reflection-session-chip-alone" });
+                if (window.Any(exercise => exercise.Explained))
+                    chips.Add(new ReflectionChip { Id = "session-went-explained", TextKey = "reflection-session-chip-explained" });
+                if (window.Any(exercise => exercise.Compared))
+                    chips.Add(new ReflectionChip { Id = "session-went-compared", TextKey = "reflection-session-chip-compared" });
+
+                // A day where every exercise cost both a mistake and a hint leaves "I finished them"
+                // alone on the menu, and one chip is not a menu — it is a button with a foregone
+                // conclusion. Making the time is still true on a hard day, so it is the floor.
+                if (chips.Count < 2)
+                    chips.Add(new ReflectionChip { Id = "session-went-showed-up", TextKey = "reflection-session-chip-showed-up" });
+            }
+
+            // Capped so the question stays a quick answer rather than a survey. The cap is generous
+            // enough not to bite on its own, and the floor above is applied first so that it never
+            // decides whether the question has enough answers.
+            question.Chips = chips.Take(6).ToList();
+            return question;
+        }
+
+        /// <summary>
+        /// Q2: what to work on next session, which is the promise.
+        ///
+        /// The three chips name the same three things the daily intention offers at the start of the next
+        /// session — more practice, a goal, a look at the numbers first — and deliberately so: the two
+        /// are settled against each other tomorrow, and matching them is only possible because neither
+        /// side invented its own vocabulary. A student who writes instead of tapping is judged on the
+        /// text, which is why the "something else" answer needs no chip of its own.
+        ///
+        /// ItemType stays "session" so the exercise settlement cannot read this promise. It judges
+        /// promises that name a dimension of the next exercise, and asking it to settle one about
+        /// tomorrow's intention would close the promise unpaid.
+        /// </summary>
+        private static ReflectionQuestion BuildSessionNextAction(ReflectionEvidence evidence)
+        {
+            return new ReflectionQuestion
+            {
+                Id = "session-q2-next",
+                Kind = NextAction,
+                ItemType = "session",
+                TextKey = "reflection-session-q2",
+                Chips =
+                [
+                    new ReflectionChip { Id = "session-next-practice", TextKey = "reflection-session-chip-next-practice" },
+                    new ReflectionChip { Id = "session-next-goal", TextKey = "reflection-session-chip-next-goal" },
+                    new ReflectionChip { Id = "session-next-review", TextKey = "reflection-session-chip-next-review" },
+                ],
+            };
+        }
+
+        private static List<ReflectionQuestion> BuildSession(ReflectionEvidence evidence) =>
+            [BuildSessionObservation(evidence), BuildSessionNextAction(evidence)];
 
         /// <summary>
         /// Q1: which part went well, read from the per-step numbers.
@@ -183,6 +300,13 @@ namespace webapi.Services
                 ItemType = itemType,
             };
 
+            // A GOAL with no readable window is kept on the comparison with the run before it: there is
+            // nothing else to ask it, and "did this go better than last time" is at least checkable.
+            //
+            // An EXERCISE goes to the what-went-well menu instead, which is the same menu the
+            // exercise-type goal is offered. See BuildExerciseWentWell.
+            if (!evidence.IsGoal) return BuildExerciseWentWell(evidence, itemType);
+
             if (evidence.HasHistory)
             {
                 // One question, whether the run improved or not. The question is about the comparison and
@@ -222,6 +346,78 @@ namespace webapi.Services
         }
 
         /// <summary>
+        /// Q1 when an exercise has no step breakdown: the exercise-type GOAL's what-went-well menu, read
+        /// from one exercise.
+        ///
+        /// It is the same menu, with the same facts behind it, so a student who just answered it about a
+        /// goal meets it again after their next exercise rather than a second and differently worded
+        /// question about the same thing.
+        ///
+        /// Two of the goal's options are deliberately absent. "My choices got better later" and "I got
+        /// faster by the end" compare the later half of a set against the earlier half, and one exercise
+        /// has one half — the option could never be true, and offering an answer that cannot be right is
+        /// worse than leaving it out.
+        /// </summary>
+        private static ReflectionQuestion BuildExerciseWentWell(ReflectionEvidence evidence, string itemType)
+        {
+            var question = new ReflectionQuestion
+            {
+                Id = "q1-exercise-went-well",
+                Kind = Observation,
+                ItemType = itemType,
+            };
+
+            var options = new List<(string Id, string TextKey, bool True)>();
+
+            void Offer(string id, string textKey, bool isTrue) => options.Add((id, textKey, isTrue));
+
+            switch (evidence.Focus)
+            {
+                case "Suitability":
+                    question.TextKey = "reflection-q1-went-well-suitability";
+                    // Only when we can check it: an exercise we cannot find has no list of allowed
+                    // methods, and the option would be a coin toss wearing a question's clothes.
+                    if (evidence.HasAllowedMethods)
+                        Offer("went-suitable-choice", "reflection-chip-went-suitable-choice", evidence.ChoseAllowedMethod);
+                    Offer("went-clean", "reflection-chip-went-clean", evidence.Errors == 0);
+                    Offer("went-nohints", "reflection-chip-went-nohints", evidence.Hints == 0);
+                    break;
+
+                case "Efficiency":
+                    question.TextKey = "reflection-q1-went-well-efficiency";
+                    if (evidence.HasAllowedMethods)
+                        Offer("went-best-choice", "reflection-chip-went-best-choice", evidence.ChoseAllowedMethod);
+                    Offer("went-clean", "reflection-chip-went-clean", evidence.Errors == 0);
+                    Offer("went-nohints", "reflection-chip-went-nohints", evidence.Hints == 0);
+                    break;
+
+                default:
+                    // Matching is the only type left, and the only one whose menu is about the decision
+                    // rather than about a choice: it hands the method over, so there is no right one to
+                    // have picked.
+                    question.TextKey = "reflection-q1-went-well-matching";
+                    Offer("went-clean", "reflection-chip-went-clean", evidence.Errors == 0);
+                    Offer("went-nohints", "reflection-chip-went-nohints", evidence.Hints == 0);
+                    Offer("went-explained", "reflection-chip-went-explained", evidence.DidExplain);
+                    break;
+            }
+
+            question.Chips = [.. options.Select(option => new ReflectionChip { Id = option.Id, TextKey = option.TextKey })];
+            question.AlignedChipIds = [.. options.Where(option => option.True).Select(option => option.Id)];
+
+            // The goal menu's rule, for the goal menu's reason: an exercise where they made mistakes, took
+            // hints AND picked a method it did not allow still got finished, and a student answering
+            // honestly about that should not be paid nothing. Whichever option they name, they answered
+            // honestly about a run that simply did not go their way.
+            if (question.AlignedChipIds.Count == 0)
+                question.PartialChipIds = [.. question.Chips.Select(chip => chip.Id)];
+
+            question.Expectation = "they name something that genuinely went well in this exercise, and it did";
+
+            return question;
+        }
+
+        /// <summary>
         /// Q2: the question that is actually about this goal, or this kind of exercise.
         ///
         /// This is where the category matters. A goal about explaining your reasoning is asked whether
@@ -248,13 +444,14 @@ namespace webapi.Services
                     Chips =
                     [
                         new ReflectionChip { Id = "yn-compare-yes", TextKey = "reflection-chip-yn-compare-yes" },
-                        new ReflectionChip { Id = "yn-compare-partly", TextKey = "reflection-chip-yn-compare-partly" },
                         new ReflectionChip { Id = "yn-compare-shown", TextKey = "reflection-chip-yn-compare-shown" },
                     ],
                     AlignedChipIds = [evidence.DidCompare ? "yn-compare-yes" : "yn-compare-shown"],
-                    // The record is a yes or a no, so "I compared part of it" is never the accurate
-                    // description of it. The chip stays because it is a fair thing to want to say; it
-                    // simply does not pay, and a wrong answer that pays is how guessing becomes rational.
+                    // NO MIDDLE OPTION. "I compared part of it" used to be offered and could never be the
+                    // right answer, because the record holds a yes or a no and nothing in between. That
+                    // made it a trap: it reads as the honest middle ground, and a student who declined the
+                    // comparison and picked it was told they were wrong for the one answer that sounded
+                    // most like the truth. The question is an either/or because the fact is an either/or.
                     PartialChipIds = [],
                     Expectation = evidence.DidCompare
                         ? "they say they compared it themselves, because they did"
@@ -280,10 +477,10 @@ namespace webapi.Services
                     Chips =
                     [
                         new ReflectionChip { Id = "yn-explain-yes", TextKey = "reflection-chip-yn-explain-yes" },
-                        new ReflectionChip { Id = "yn-explain-partly", TextKey = "reflection-chip-yn-explain-partly" },
                         new ReflectionChip { Id = "yn-explain-shown", TextKey = "reflection-chip-yn-explain-shown" },
                     ],
                     AlignedChipIds = [evidence.DidExplain ? "yn-explain-yes" : "yn-explain-shown"],
+                    // No middle option, for the same reason as the comparison question above.
                     PartialChipIds = [],
                     Expectation = evidence.DidExplain
                         ? "they say they explained it themselves, because they did"
@@ -655,14 +852,18 @@ namespace webapi.Services
                         question, window, e => e.Explained,
                         "reflection-chip-cmp-explained", "reflection-chip-cmp-skipped",
                         "they say whether they made fewer mistakes in the exercises they explained",
-                        evidence);
+                        evidence,
+                        "reflection-goal-q2-explain-method",
+                        "they name the method they explained their reasoning in most often");
 
                 case "methodComparison":
                     return BuildGoalGroupComparisonQuestion(
                         question, window, e => e.Compared,
                         "reflection-chip-cmp-compared", "reflection-chip-cmp-skipped",
                         "they say whether they made fewer mistakes in the exercises they compared",
-                        evidence);
+                        evidence,
+                        "reflection-goal-q2-compare-method",
+                        "they name the method they compared most often");
 
                 case "solveOnOwn":
                 {
@@ -755,14 +956,47 @@ namespace webapi.Services
             string inGroupChip,
             string outOfGroupChip,
             string expectation,
-            ReflectionEvidence evidence)
+            ReflectionEvidence evidence,
+            string oneGroupTextKey,
+            string oneGroupExpectation)
         {
             var inside = window.Where(inGroup).ToList();
             var outside = window.Where(e => !inGroup(e)).ToList();
 
-            // Needs at least one of each, or there is nothing to compare and the question would have a
-            // right answer the student could not possibly know.
-            if (inside.Count == 0 || outside.Count == 0) return BuildGoalAccuracyQuestion(evidence);
+            // Only one kind present, so there is nothing to compare and the question would have a right
+            // answer the student could not possibly know. It used to be replaced with a count of clean
+            // runs, which is a question about MISTAKES and has nothing to do with what the goal was
+            // about: a self-explanation goal can only be completed by explaining, so its window is
+            // usually all-explained and the student was asked about their error counts instead.
+            //
+            // So the substitute is the question the other categories already ask for their own
+            // dimension: which method this was done in most often. It stays inside the goal's subject,
+            // and the record can answer it.
+            if (inside.Count == 0 || outside.Count == 0)
+            {
+                var group = inside.Count > 0 ? inside : outside;
+                var common = MostCommonMethod(group);
+
+                question.TextKey = oneGroupTextKey;
+                question.Chips =
+                [
+                    new ReflectionChip { Id = "pick-equalization", TextKey = "flexibility:equalization-method" },
+                    new ReflectionChip { Id = "pick-substitution", TextKey = "flexibility:substitution-method" },
+                    new ReflectionChip { Id = "pick-elimination", TextKey = "flexibility:elimination-method" },
+                ];
+                question.AlignedChipIds = common is null ? [] : [$"pick-{common}"];
+
+                // A tie is not a question with one answer, so every chip pays the partial amount rather
+                // than one of them being wrong for no reason the student could see.
+                if (question.AlignedChipIds.Count == 0)
+                    question.PartialChipIds = [.. question.Chips.Select(chip => chip.Id)];
+
+                question.Expectation = common is null
+                    ? $"{oneGroupExpectation}, which the record cannot single out"
+                    : oneGroupExpectation;
+
+                return question;
+            }
 
             var with = Mean(inside, e => e.Errors);
             var without = Mean(outside, e => e.Errors);
@@ -1083,7 +1317,10 @@ namespace webapi.Services
         /// </summary>
         public static ReflectionVerdict Grade(ReflectionQuestion question, string chipId)
         {
-            if (question.Kind == NextAction)
+            // A commitment is not a claim, so there is nothing to be right about. Neither is a session
+            // question: "what went well today" has several true answers and the record is in no position
+            // to say which one the student noticed.
+            if (question.Kind is NextAction or Session)
                 return new ReflectionVerdict { Status = "no-award", InsightXp = 0, FromRecord = true };
 
             if (chipId.Length > 0 && question.AlignedChipIds.Contains(chipId))
@@ -1122,7 +1359,14 @@ namespace webapi.Services
         {
             var parts = new List<string>();
 
-            if (evidence.IsGoal)
+            if (evidence.IsSession)
+            {
+                parts.Add(evidence.GoalExercises.Count > 0
+                    ? $"This is the end of their session today. They finished {evidence.InSet} exercise(s) " +
+                      "in total, and the mistake and hint numbers below are TOTALS across all of them."
+                    : "This is the end of their session today, and no exercise was finished in it.");
+            }
+            else if (evidence.IsGoal)
             {
                 parts.Add($"This is a goal they completed, covering {evidence.InSet} exercise(s).");
                 // Said outright, because the number in the row is a TOTAL and reads like a count of
@@ -1131,7 +1375,61 @@ namespace webapi.Services
                           "exercise's numbers.");
             }
 
-            if (evidence.HasDecisions)
+            // ONE DECISION AT A TIME. The record carries three of them, and handing all three over on
+            // every question is what produced a reply about the solution on a question that asked
+            // whether they compared two methods: a model told "they asked to be shown the solution"
+            // brings it up whatever was asked, and the feedback then answers a different question from
+            // the one on screen. A question about one decision is told about that decision, and the rest
+            // is left out — including the mistake and hint totals, which have nothing to do with it.
+            var aboutComparison = question?.Id == "q2-compared";
+            var aboutExplanation = question?.Id == "q2-explained";
+            var aboutAStep = question?.Id is "q1-step-sure" or "q1-step-fight";
+
+            // Q3 asks what they will do NEXT, and is never graded, so there is nothing in the record it
+            // needs. It used to be handed the whole history, which is how a question about the next
+            // exercise came back with "you asked to see the solution" — a fact about the past, answering
+            // a question about the future. The session's promise question is the same shape and is
+            // named here for the same reason.
+            var aboutThePromise = question?.Id is "q3-next-action" or "session-q2-next";
+
+            if (aboutThePromise)
+            {
+                parts.Add("This question asks what they will do next time. Nothing about what already "
+                          + "happened is needed to answer it, and nothing about it should be mentioned in the reply.");
+            }
+            else if (aboutComparison)
+            {
+                parts.Add(evidence.DidCompare
+                    ? "They worked the comparison through themselves."
+                    : evidence.WasShownComparison
+                        ? "They asked to see the comparison rather than working it through."
+                        : "Nothing was recorded about whether they worked the comparison through.");
+            }
+            else if (aboutAStep)
+            {
+                // A step question asks which part of the working went well, so the one decision that bears
+                // on it is whether they did the working at all. The comparison and the explanation are in
+                // the record too, and handing them over as well is what turned "which part did you feel
+                // sure about" into a reply about comparing two methods.
+                parts.Add(evidence.DidSolveOnOwn
+                    ? "They worked the solution out themselves rather than being shown it."
+                    : evidence.WasShownAnswer
+                        ? "They asked to be shown the solution rather than working it out."
+                        : "Nothing was recorded about whether they worked the solution out themselves.");
+            }
+            else if (aboutExplanation)
+            {
+                // "They did not explain it" rather than "they asked to be shown it": a decline covers both
+                // asking for the explanation and skipping the step entirely, and only one of those is a
+                // request. Saying they asked for it when they ignored it had the model thank a student for
+                // taking the time to read an explanation they never opened.
+                parts.Add(evidence.DidExplain
+                    ? "They explained their own reasoning."
+                    : evidence.WasShownExplanation
+                        ? "They did not explain their own reasoning at that step."
+                        : "Nothing was recorded about whether they explained their reasoning.");
+            }
+            else if (evidence.HasDecisions)
             {
                 parts.Add(evidence.DidExplain
                     ? "They chose to explain their own reasoning."
@@ -1142,12 +1440,12 @@ namespace webapi.Services
                 if (evidence.DidCompare || evidence.WasShownComparison)
                     parts.Add(evidence.DidCompare
                         ? "They compared the two methods themselves."
-                        : "They asked to be shown the comparison instead of working it out themselves.");
+                        : "They skipped the comparison and did not work it through.");
 
                 parts.Add(evidence.DidSolveOnOwn
                     ? "They chose to work the solution out themselves rather than being shown it."
                     : evidence.WasShownAnswer
-                        ? "They asked to be shown the solution. A low error count is therefore NOT evidence that this was easy: they did not solve it unaided."
+                        ? "They asked to be shown the solution."
                         : "Nothing was recorded about whether they worked the solution out themselves.");
             }
             else
@@ -1155,7 +1453,8 @@ namespace webapi.Services
                 parts.Add("No decision point was recorded for this item, so nothing is known about what they chose.");
             }
 
-            parts.Add($"{evidence.Errors} mistake(s) and {evidence.Hints} hint(s) were counted.");
+            if (!aboutComparison && !aboutExplanation && !aboutThePromise)
+                parts.Add($"{evidence.Errors} mistake(s) and {evidence.Hints} hint(s) were counted.");
 
             // The goal's exercises one by one, because its questions ask about their ORDER: did the
             // mistakes go down, was the later one faster, was any run clean, did they work one out
@@ -1165,7 +1464,11 @@ namespace webapi.Services
             //
             // Stated as facts, never as a verdict: which of these add up to "something went well" is
             // still the reading the student is being asked to make.
-            if (evidence.IsGoal && evidence.GoalExercises.Count > 0)
+            //
+            // A session is listed the same way and for the same reason — its first question is a menu of
+            // things that may have gone well, and the model can only reply to it honestly if it can see
+            // what the day consisted of.
+            if ((evidence.IsGoal || evidence.IsSession) && evidence.GoalExercises.Count > 0)
             {
                 var runs = evidence.GoalExercises.Select((exercise, index) =>
                     $"#{index + 1}: {exercise.Errors} mistake(s), {exercise.Hints} hint(s), {Fmt(exercise.Time)}s" +
@@ -1174,7 +1477,7 @@ namespace webapi.Services
                     (exercise.Compared ? ", compared the methods" : "") +
                     (exercise.Correct ? ", chose a method the exercise allowed" : ""));
 
-                parts.Add($"The goal's exercises, oldest first — {string.Join("; ", runs)}.");
+                parts.Add($"{(evidence.IsGoal ? "The goal's" : "The session's")} exercises, oldest first — {string.Join("; ", runs)}.");
             }
 
             // The figure the question is actually about. For a count question this IS the answer, and
@@ -1206,6 +1509,10 @@ namespace webapi.Services
         {
             if (question.Kind == NextAction)
                 return "This is a next-step question. It never earns Insight XP, whatever the student writes.";
+
+            if (question.Kind == Session)
+                return "This is an end-of-session question. It never earns Insight XP and has no right answer, "
+                     + "whatever the student answers. There is no expectation to check their words against.";
 
             var terms = subjectTerms.Where(term => !string.IsNullOrWhiteSpace(term)).ToList();
             var clue = terms.Count > 0

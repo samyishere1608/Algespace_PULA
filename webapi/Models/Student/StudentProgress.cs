@@ -399,6 +399,36 @@ namespace webapi.Models.Student
         public List<ReflectionHistoryRecord> History { get; set; } = [];
     }
 
+    /// <summary>
+    /// The daily intention the student set this session, offered against the promise they made at the
+    /// end of the last one.
+    ///
+    /// The intention itself lives in the client's local storage, because it is a note to the student
+    /// rather than a record the server has any use for. The one thing the server does need from it is
+    /// this: what they said they would work on, so a promise made yesterday can be judged against it.
+    /// The preset choice is sent as an id ("practice" | "goal" | "review" | "custom" | "skip") and the
+    /// free text as written, because a custom intention has no id the promise could match.
+    /// </summary>
+    public class SettleSessionPromiseRequest
+    {
+        public long StudentId { get; set; }
+
+        /// <summary>"practice" | "goal" | "review" | "custom" | "skip".</summary>
+        public string IntentionChoice { get; set; } = "";
+
+        /// <summary>What they wrote, when they wrote instead of choosing. Empty otherwise.</summary>
+        public string IntentionText { get; set; } = "";
+
+        /// <summary>What the AI made of the custom text: "practice" | "goal" | "both" | "unclear" | "no_xp".</summary>
+        public string DetectedCategory { get; set; } = "";
+    }
+
+    public class SettleSessionPromiseResponse
+    {
+        /// <summary>The Resolve awarded for keeping the promise, which is normally 0.</summary>
+        public int ResolveAwarded { get; set; }
+    }
+
 
     /// <summary>One log entry per exercise completion (used for charts).</summary>
     public class ExerciseLogRecord

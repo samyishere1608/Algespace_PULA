@@ -14,6 +14,14 @@ interface Props {
     studentId: number | string;
     onEndSession: () => void;
     onClose: () => void;
+    /**
+     * Hands off to the guided session reflection, which the dashboard owns.
+     *
+     * It is a different thing from the two options below: those are a note the student writes or reads,
+     * while this asks them two questions the server has built from the day's own exercises. It renders
+     * in the reflection dialog, so the dashboard is what has to open it.
+     */
+    onStartSessionReflection: () => void;
 }
 
 interface AnalysisResult {
@@ -23,7 +31,7 @@ interface AnalysisResult {
     isAiGenerated: boolean;
 }
 
-export function EndSessionModal({ studentId, onEndSession, onClose }: Props): ReactElement {
+export function EndSessionModal({ studentId, onEndSession, onClose, onStartSessionReflection }: Props): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
     const [showReflection, setShowReflection] = useState(false);
     const [reflectionMode, setReflectionMode] = useState<"free" | "ai" | null>(null);
@@ -109,6 +117,14 @@ export function EndSessionModal({ studentId, onEndSession, onClose }: Props): Re
                     <div className="end-session-modal__reflect-options">
                         <h3>{t("end-session-reflect-title")}</h3>
                         <div className="end-session-modal__reflect-cards">
+                            {/* The guided reflection leads: it is the one that looks at the day's own
+                                exercises, and the second of its two questions is the promise that the
+                                next session's intention is checked against. */}
+                            <button className="ess-reflect-card" onClick={onStartSessionReflection}>
+                                <span className="ess-reflect-card__icon"><FontAwesomeIcon icon={faStar} /></span>
+                                <span className="ess-reflect-card__title">{t("end-session-reflect-guided")}</span>
+                                <span className="ess-reflect-card__desc">{t("end-session-reflect-guided-desc")}</span>
+                            </button>
                             <button className="ess-reflect-card" onClick={() => setReflectionMode("free")}>
                                 <span className="ess-reflect-card__icon"><FontAwesomeIcon icon={faPen} /></span>
                                 <span className="ess-reflect-card__title">{t("end-session-reflect-free")}</span>
