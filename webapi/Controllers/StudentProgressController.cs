@@ -2453,8 +2453,6 @@ RULES:
                 ? string.Join("\n", history.Select(h => $"{h.Role}: {h.Text}"))
                 : "(none)";
 
-            var fallback = BuildReflectionFallback(request, item, weakness);
-
             // ── The record decides when it can ────────────────────────────────
             //
             // The question is REBUILT here rather than trusted from the client, so the chips graded
@@ -2477,6 +2475,11 @@ RULES:
             // was, so it mirrored the student instead.
             var recordLine = ReflectionQuestionBank.DescribeRecord(evidence, asked);
 
+            // Built after the record is read, because the offline reply is not a generic one any more: it
+            // says what the record says about the question the student was actually looking at, which is
+            // what the help button asks for and what a chip answer needs to be answered with.
+            var fallback = BuildReflectionFallback(request, item, evidence, asked);
+
             // THE VERDICT THE MODEL IS TOLD TO COPY WAS NEVER ACTUALLY GIVEN TO IT.
             //
             // The prompt said "alignment is already decided, it is stated above" and then stated only
@@ -2485,24 +2488,36 @@ RULES:
             // answer the record had scored as not matching. The verdict is now printed, so "copy it
             // exactly" has something to copy.
             //
-            // An end-of-session question is told something different again, and has to be: it is the one
-            // case where the answer was never checked, and both of the branches below would have the model
-            // either confirm or reject something no rule looked at. A session question has no verdict, so
-            // it is given none.
-            var verdictLine = asked.Kind == ReflectionQuestionBank.Session
+            // A promise and an end-of-session question are each told something different again, and have to
+            // be: neither was checked against anything, and both of the branches below would have the model
+            // either confirm or reject a claim no rule looked at. A commitment is about the next exercise
+            // and a session question is about the day, so neither is given a verdict.
+            var verdictLine = asked.Kind == ReflectionQuestionBank.NextAction
+                // A promise is not a claim. Nothing about it is checked, and no chip of it is right or
+                // wrong — it is settled tomorrow, by the exercise it is about. It used to be given the
+                // "does not match" line, because a commitment has no verdict from this call, and the
+                // model read that as a mark against something the student had just done.
+                ? "This is a commitment about the next exercise, not a claim about this one: nothing here was checked, and no answer to it is right or wrong. Return aligned=false with an award number of 0, and write the reply about the thing they have chosen to do next."
+                : item.ItemType == "session"
                 ? "Nothing was checked here. This is an end-of-session question with no right answer, so " +
-                    "there is no verdict to give: aligned=false, insightXp=0, and no XP is expected either " +
-                    "way. Reply to what they said about their day; do not say that it matched or did not."
+                    "there is no verdict to give: aligned=false, and the award number to return is 0. Reply " +
+                    "to what they said about their day; do not say that it matched or did not, and do not say " +
+                    "anything about what their answer was or was not worth."
                 : !verdict.FromRecord
                 ? "No quick answer was tapped, so the free-text answer above decides: judge it yourself against the stated expectation. Whatever you decide, the reply has to SAY which way it went — the student cannot see the verdict, so a reply that leaves it open tells them nothing."
+                : verdict.Status == "partial"
+                    ? $"They tapped a quick answer, and the facts above cannot single out one right answer for this question, so what they tapped is a fair reading and is not marked either way: aligned=false, and the award number to return is {verdict.InsightXp}. Copy this exactly. Reply by saying what the facts above show about their pick, using only the figures stated there. Never say it was the most common, the only one, or true of all the exercises unless the facts say so."
+                : asked.Id == "goal-q1-went-well" && verdict.InsightXp == 0
+                    ? "They tapped an option, and the facts above do not back it as something that happened across this goal: aligned=false, and the award number to return is 0. Copy this exactly. Do not repeat the option back as if it happened, and do not say that it did not. Reply by telling them warmly what the facts above show went well in this goal, using only what they state. Do not mention or paraphrase the option they tapped, and do not use any stronger word than the facts do (nothing like perfectly, always, every, first try or on your own unless the facts say so)."
                 : verdict.InsightXp > 0
-                    ? $"They tapped a quick answer and the record CONFIRMS it: aligned=true, insightXp={verdict.InsightXp}. Copy this exactly. The reply must read as a clear confirmation: one or two warm sentences that name what they picked and say it is what happened. Do not hedge, do not call it interesting, and NEVER write that the record tells a different story — they are being paid Insight because it is right, and a reply that sounds doubtful while the badge says +{verdict.InsightXp} is the one thing they will notice."
-                    : "They tapped a quick answer and the record says it does NOT match what happened: aligned=false, " +
-                      "insightXp=0. Copy this exactly. The reply must still let them see which way it went: name what " +
-                      "they actually chose as the sensible thing it was, warmly and without judging it, so the " +
-                      "difference is theirs to notice. Do not agree with their version, do not invent a reason why " +
-                      "it was right, and do not deliver a verdict on it either — no 'but', no 'actually', no " +
-                      "'the record shows'.";
+                    ? $"They tapped a quick answer and the facts above CONFIRM it: aligned=true, and the award number to return is {verdict.InsightXp}. Copy this exactly. The reply must read as a clear confirmation: one or two warm sentences that name what they picked and say it is what happened. Do not hedge, do not call it interesting, and NEVER sound doubtful about it — the reply is confirming something that is right, and a reply that hedges while the badge shows a positive number is the one thing they will notice."
+                    : "They tapped a quick answer and the facts above say it does NOT match what happened: " +
+                      "aligned=false, and the award number to return is 0. Copy this exactly. The reply must " +
+                      "still let them see which way it went: name what they actually chose as the sensible " +
+                      "thing it was, warmly and without judging it, so the difference is theirs to notice. " +
+                      "Do not agree with their version, do not invent a reason why it was right, and do not " +
+                      "deliver a verdict on it either — no 'but', no 'actually', no 'in reality', no " +
+                      "'to be honest', no 'you didn't' and no 'the record shows'.";
 
             Console.WriteLine($"[Reflection] Question {asked.Id} ({asked.Kind}) — choice=\"{request.Choice}\"{(string.IsNullOrWhiteSpace(request.ChoiceLabel) ? "" : $" (\"{request.ChoiceLabel}\")")} => {verdict.Status} ({verdict.InsightXp} XP){(verdict.FromRecord ? "" : ", the text has to decide")}");
 
@@ -2526,7 +2541,12 @@ RULES:
                 // verdict replaced its own, a student could be paid three Insight next to "the data tells
                 // a slightly different story". This is the path a student sees whenever the AI provider
                 // is unavailable, which is often, so it is not a rare branch.
-                fallback.Feedback = VerdictFeedback(asked, verdict, request.ChoiceLabel);
+                //
+                // The second-person record line goes with it, so the reply says what happened on the thing
+                // this question asked about rather than a remark that would fit any answer.
+                fallback.Feedback = VerdictFeedback(
+                    asked, verdict, request.ChoiceLabel,
+                    ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked, request.Choice ?? ""));
             }
 
             Console.WriteLine($"[Reflection] Fallback ready — errors={item.Errors}, hints={item.Hints} (fallback: aligned={fallback.Aligned}, insight={fallback.InsightXp})");
@@ -2553,7 +2573,8 @@ RULES:
                         $"uncertainty={promptFeatures.UncertaintyMarkers.Count}, affect={promptFeatures.AffectMarkers.Count}");
                 }
 
-                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures, questionLine, recordLine, verdictLine);
+                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures, questionLine, recordLine, verdictLine,
+                    ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked, request.Choice ?? ""));
 
                 var raw = await CallOpenAI(apiKey,
                     "You are Pippin, a warm encouraging study coach chatting with a student. Compare their reflection answer to their real performance, but keep it conversational and kind — like a friend checking in. Always output valid JSON with exactly these keys: feedback (string), aligned (boolean), insightXp (integer 0-3), nextStep (string, filled only for the final question otherwise empty).",
@@ -2647,6 +2668,14 @@ RULES:
 
                 Console.WriteLine($"[Reflection] AI result — aligned={aligned}, insightXp={insightXp}, feedback=\"{feedback}\", nextStep=\"{nextStep}\"");
 
+                // The prompt forbids these and the model still produces them now and then, so the worst
+                // of them are caught here and the offline reply, which is built from the record, goes
+                // out instead. English only: the patterns are words.
+                if (ReplyBreaksTheRules(feedback, request.Language, request.Mode))
+                {
+                    Console.WriteLine("[Reflection] AI reply broke a rule — sending the record-based reply instead");
+                    feedback = fallback.Feedback;
+                }
                 return Ok(new ReflectionEvaluateResponse
                 {
                     Feedback = AiTextFormatter.StripMathDelimiters(
@@ -3096,7 +3125,8 @@ RULES:
             NlpFeatures? features = null,
             string questionLine = "",
             string recordLine = "",
-            string verdictLine = "")
+            string verdictLine = "",
+            string studentLine = "")
         {
             var signalBlock = features is null ? string.Empty : BuildSignalBlock(features);
 
@@ -3119,7 +3149,20 @@ RULES:
                     2 => "Q2 - the question this goal or exercise is actually about",
                     _ => "Q3 - one concrete next step"
                 };
-            var mode = request.Mode == "pippin" ? "Pippin told them (model answer requested)" : "They answered themselves";
+            // WHAT THE HELP BUTTON MEANS.
+            //
+            // Not "model answer requested": that label was put in front of the model on every help-button
+            // call and came straight back in the reply as "You asked for the model answer...", which is
+            // off-topic and mildly shaming.
+            //
+            // Not "nothing about them to say" either, which is what replaced it. That contradicted the
+            // rule further down that tells the model to say what the record shows they did, and two
+            // instructions pulling opposite ways is how a help-button reply ends up vague or about the
+            // wrong question. The student pressed the button ASKING this question, so the companion
+            // answers it: for Q1 and Q2 with what the student actually did, for Q3 with what to do next.
+            var mode = request.Mode == "pippin"
+                ? "The student pressed the help button instead of answering, so they are asking you to answer this question for them, from the facts below. For Q1 and Q2 that means stating what they actually did on the one thing this question asks about. For Q3 it means naming what to do next. There is no student answer to grade."
+                : "They answered themselves";
             var weakest = weakness.Weakest;
             var weakestText = weakest != null
                 ? $"{weakest.Label} (score {weakest.Score}/100, recommended exercise: {weakest.RecommendedExercise})"
@@ -3131,9 +3174,20 @@ RULES:
                 _ => "Respond in English."
             };
 
+            // The same fact, said TO the student instead of about them.
+            //
+            // Q1 and Q2 are answered with this: the help button asks for it outright, and a written answer
+            // is judged and then confirmed or told which way it went. The model is handed the sentence to
+            // convey rather than left to build one from the error and hint totals — which is how a reply
+            // comes back vague, or reaches for "you didn't", the exact shape the ban below forbids. Empty
+            // for the questions where the past is not the answer at all.
+            var studentLineBlock = string.IsNullOrWhiteSpace(studentLine)
+                ? ""
+                : $"\nWhat they did, said to them rather than about them (state this, in your own warm words, adding no contrast and no \"didn't\", and nothing beyond it: no stronger word than it uses and no extra achievement it does not state): {studentLine}.";
+
             return $@"Student completed: {item.ItemLabel} (item type: {item.ItemType}, method/exercise type: {item.Method}).
 Actual performance on it: {item.Errors} errors, {item.Hints} hints, {item.PippinMessages} Pippin messages.
-What they decided during it is stated below, but ONLY the part this question is about: the decisions are listed once, next to the record line, so nothing from a different question can leak into this reply.
+What they decided during it is stated below, but ONLY the part this question is about: those decisions are stated once, on the facts line, so nothing from a different question can leak into this reply.
 Weakest area: {weakestText}.
 
 Previous reflection turns (for context):
@@ -3141,32 +3195,36 @@ Previous reflection turns (for context):
 
 Current question: {questionLabel}
 {questionLine}
-What actually happened on this exercise, from the record: {recordLine}
-What the record decided about the answer: {verdictLine}
-Quick answer they tapped (empty when they wrote instead): {(string.IsNullOrWhiteSpace(request.Choice) ? "(none)" : string.IsNullOrWhiteSpace(request.ChoiceLabel) ? request.Choice : request.ChoiceLabel)}
+What they actually did, as far as we know it: {recordLine}{studentLineBlock}
+The decision on their answer: {verdictLine}
+Quick answer they tapped (empty when they wrote instead; when one is named it settles the verdict on its own, whatever the box also holds): {(string.IsNullOrWhiteSpace(request.Choice) ? "(none)" : string.IsNullOrWhiteSpace(request.ChoiceLabel) ? request.Choice : request.ChoiceLabel)}
 Mode: {mode}
 Student answer: {(string.IsNullOrWhiteSpace(request.Answer) ? "(empty)" : request.Answer)}
 {signalBlock}
 Instructions:
 {langInstruction}
-TONE (very important): Be warm, brief and conversational — like a friend, not a report. NEVER say things like ""I saw on your performance..."", ""according to your data..."", ""the data tells..."", ""the record shows..."", or list their exact error/hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
-NEVER MENTION XP OR AWARDS (very important): never write the words Insight, Choice, Resolve, XP, points, award, or score, and never say that something counted, paid, earned, or did not. The badge already shows what was earned, and talking about it turns a reflection into a scoreboard. The JSON keys below contain the word insightXp: that is for the machine and must never appear in the feedback text. Never write ""the record shows"", ""the record says"", ""the data shows"" or ""according to"" either — describe what happened in the student's own terms.
+TONE (very important): Be warm, brief and conversational — like a friend, not a report. Write as the companion who was there with them, in the second person (""you compared the two methods""), never as something that looked them up or checked them, and never list their exact error or hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
+NEVER TALK ABOUT AWARDS OR SCORES (very important): the app's own scoreboard must not appear in the reply in any form — no name for it, no number, no abbreviation, and nothing about whether something counted, paid, was earned, or did not. That includes the empty-handed version of it: never tell them there is nothing here to earn, because a student who got little out of an exercise still did the exercise, and that line only lands as a mark against them. Whatever there is to show sits on the badge beside your reply, and talking about it turns a reflection into a scoreboard. The JSON at the end carries an award number and the machine's names for its fields: those are for the machine, and neither the number nor those names may appear in the feedback text.
+ANSWER THE QUESTION WITH SOMETHING REAL ABOUT IT (very important): every reply answers the ONE question above with something real about it — for a question about a decision, what they did at that step; for a counting question, the number; for a question about the next exercise, the one thing to do next. A remark that would fit any question at all (""that's interesting"", ""worth another look"", ""sometimes the tricky spots sneak up on us"") does not answer it, and must never be the whole reply. If their answer was too vague to tell you anything, do not comment on how vague it was: give them what the facts line states about this question, warmly, and stop.
 SAY WHICH WAY IT WENT (very important): the student cannot see the verdict, so the reply is the only place they learn whether their answer matched. A reply that only says ""interesting, take a look"" tells them nothing and reads as a brush-off. When it matches, say so plainly and warmly. When it does not, name what they actually did so the difference is visible to them — without ever framing it as a mistake.
-STAY INSIDE THE QUESTION (very important): the reply answers the ONE question above and nothing else. Do not bring in errors, hints, other decisions, or any other question from this reflection. If the question asked whether they compared two methods, the whole reply is about comparing two methods — a sentence about the solution, the method choice or their mistake count does not belong in it, however true it is. The record line above states only what this question is about; treat anything it does not mention as unknown to you and do not guess at it.
-NEVER TELL THEM THEY DID NOT DO SOMETHING (very important): do not write that their choice was wrong, that they did not work it out, that something was not quite what they did, or that their answer does not count. Those phrasings read as a telling-off even when they are accurate, and they make a student write what sounds right rather than look at their own work. Where they took the offered help, state what they did plainly and without judgement (""you skipped the comparison here""), then reassure them that asking for help is a real, sensible thing to do — and if there is something genuinely good to name, name it. Use their own words for their choice, never a verdict on it. NEVER reproach them for what their answer left out either: not ""you didn't share"", ""you didn't mention"", ""you didn't say"", ""you didn't tell me"". If the answer was too short or too vague to match against anything, do not point at the gap — say warmly that this is one to keep an eye on and invite them to have a go at the next one. THE AUDIT CATCHES THIS ONE REPEATEDLY, SO BE EXACT: the forbidden shapes are ""but you"", ""you didn't"", ""you did not"", ""you haven't"", ""you failed to"", ""you never"". When the answer was vague, or when it said outright that they ignored the step, the reply must not reach for any of them. State what the record shows as a plain fact with no contrast in front of it, and stop.
-NEVER INVENT WHAT THEY DID (very important): the record line is the only thing you know about their choices, and it says what it says. Never credit them with something it does not state — do not write that they read, opened, saw, studied or took the time to look at an explanation unless the record line says they did. If it says only that they did not explain their reasoning, then that is all that happened and the reply says nothing more about it. Where the record says nothing was recorded, you know nothing about that step: never guess, and never fill the gap with something flattering or otherwise.
+STAY INSIDE THE QUESTION (very important): the reply answers the ONE question above and nothing else. Do not bring in errors, hints, other decisions, or any other question from this reflection. If the question asked whether they compared two methods, the whole reply is about comparing two methods — a sentence about the solution, the method choice or their mistake count does not belong in it, however true it is. The facts line above states only what this question is about; treat anything it does not mention as unknown to you and do not guess at it.
+NEVER TELL THEM THEY DID NOT DO SOMETHING (very important): every sentence is about what they DID. Write the fact affirmatively, and never build a sentence on a gap — nothing about what their answer left out, what they missed, what did not happen, or what their choice was not. Put no contrast in front of the fact either, and no word that turns it into a correction of their answer. Those sentences read as a telling-off even when they are accurate, and they make a student write what sounds right rather than look at their own work. Where they took the offered help, state what they did plainly and without judgement (""you skipped the comparison here""), then say that asking for help is a real, sensible thing to do — and if there is something genuinely good to name, name it. Use their own words for their choice, never a verdict on it. If the answer was too short or too vague to match against anything, do not point at the gap — state what the facts line says about this question, warmly, and invite them to have a go at the next one. When the answer was vague, or said outright that they ignored the step, this rule matters most of all: state what the facts say as a plain fact, with nothing in front of it, and stop.
+NEVER INVENT WHAT THEY DID (very important): the facts line is the only thing you know about their choices, and it says what it says. Never credit them with something it does not state — do not write that they read, opened, saw, studied or took the time to look at an explanation unless the facts line says they did. If it says only that they did not explain their reasoning, then that is all that happened and the reply says nothing more about it. Where the facts say nothing, you know nothing about that step: never guess, and never fill the gap with something flattering or otherwise.
 NO FOLLOW-UP QUESTIONS (very important): This reflection is ONE question and ONE answer. The student cannot reply again. Never ask them anything, never probe for more detail, never invite them to explain further, and never end your feedback with a question mark. Deliver your feedback as a complete statement and stop.
-- If mode is 'Pippin told them': the student pressed ""Pippin, tell me"" instead of writing an answer, so there is no answer to judge. NEVER grade them, never say they answered correctly, and never praise their answer — there is nothing to praise, and doing so would be dishonest. Give ONE concrete piece of guidance instead, and it must answer THE QUESTION ON SCREEN. For a question about one decision, that means saying plainly what the record shows they did with that decision — which is the thing they pressed the button to find out. For the promise question, suggest one concrete thing they might try next. If the question asks what they will do next, the guidance is about the next exercise — do not open by describing what they did earlier. If it asks about one thing (comparing two methods, explaining their reasoning, a part of the working), the guidance is about that one thing and nothing else. Use what actually happened on this exercise only as the record line above states it, which for some questions is only one decision and for the promise question is nothing at all: treat everything it does not mention as unknown and do not guess at it. Speak directly to the student as Pippin. Set aligned=false and insightXp=0 — requesting help never earns XP.
+- If mode is 'Pippin told them': the student pressed ""Pippin, tell me"" instead of writing an answer, so there is nothing to grade, and requesting help pays nothing: return aligned=false with an award number of 0, never say they answered correctly, and never praise an answer there is none of. Never remark on the empty box either, or on there being no answer, or on what they did not write: they asked for help, which is a thing they did, and the reply says nothing about the shape of their turn.
+  * On Q1 and Q2 the student is asking YOU for this question's answer, so ANSWER IT: one or two sentences stating plainly what the facts line above says they did with the one thing this question asks about — the decision they took at that step, or the part of the working the question names. That statement IS the reply. Never replace it with a general tip, and never write that they asked for the model answer, that you are explaining their work, or anything else about the button they pressed.
+  * On Q3 the question is about the NEXT exercise, so the reply is ONE concrete thing to try next, taken from this question's own answers, with a few words on why it will help. Say nothing about what they did earlier: a question about the future is not answered by the past.
+  * Speak directly to the student as Pippin, warmly, without judging either choice. Everything the facts line does not mention is unknown to you — do not guess at it and do not credit them with it.
 - If Q1 or Q2 and they answered themselves: judge ALIGNMENT against the thing the question asked about, which is stated above as ""Expected of a correct answer"". They are ALIGNED when their answer refers to that one thing, in their own words, and says something about it. An answer that only gives a general verdict — ""it was fine"", ""it was good"", ""I don't know"" — is NOT aligned, however warm it sounds.{sessionOnlyRule}
-- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED, and it is stated above as what the record decided about the answer. Copy it exactly: do not change it, do not second-guess it, and do not award or withhold XP yourself. Write only the reply. Where the tap and the record differ, say what they actually chose the way the record line states it, and make it sound like the reasonable thing it was — no ""but"", no ""actually"", no ""the record shows"", no comparing it against what they tapped, and no sentence that could be read as marking them down. They do not need to be told the tap was wrong; the XP already reflects it, and the reply is there to end the reflection on something true and warm. Do not repeat their version either, and never write that their answer was right, close, or matches when the record says it does not.
-- ALWAYS FIND SOMETHING GENUINELY GOOD, AND ESPECIALLY ON Q1. Q1 asks what was good, so never answer it with what they did NOT do. Never write that they did not get to work it out, that there is no win to celebrate, or that being shown the answer means the result does not count. The record line above says what happened; use it to find something true and positive and LEAD with that — they chose to work it out themselves, they made no mistakes on a part, they did better than last time, they asked for help rather than giving up, or they finished something they found hard. If the answer does not match, say what happened in a warm, matter-of-fact way and then name the good thing. Do not scold, and do not point out that they were wrong.
-- NEVER AGREE WITH SOMETHING THE RECORD CONTRADICTS. If they say they worked it out themselves but the record says they skipped it, do not congratulate them for working it out and never state their claim as fact: that teaches them the reflection is a box to type anything into. Say what they did in a warm, matter-of-fact way, and celebrate the thing that is actually true instead (asking for help or skipping a step you did not need is a real skill).
+- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED, and it is stated above as the decision on their answer. Copy it exactly: do not change it, do not second-guess it, and do not decide the award yourself. Write only the reply. Where the tap and the facts differ, say what they actually chose the way the facts line states it, and make it sound like the reasonable thing it was — no ""but"", no ""actually"", no ""in reality"", no comparing it against what they tapped, and no sentence that could be read as marking them down. They do not need to be told the tap was wrong; the reply is there to end the reflection on something true and warm. Do not repeat their version either, and never write that their answer was right, close, or matches when the facts say it does not.
+- ALWAYS FIND SOMETHING GENUINELY GOOD, AND ESPECIALLY ON Q1. Q1 asks what was good, so the reply LEADS with something real and good that the facts line supports — they worked it out themselves, they got through a part without a mistake, they took no hints, they explained their reasoning, they compared the methods, they asked for help rather than giving up, or they finished an exercise that cost them. Name it first, in their own terms, and let the reply stand on it: every exercise has one, even a rough one. If their answer does not match, state what the facts say warmly and matter-of-factly and then name that good thing. Do not scold, and do not point out that they were wrong.
+- NEVER AGREE WITH SOMETHING THE FACTS CONTRADICT. If they say they worked it out themselves but the facts say they skipped it, do not congratulate them for working it out and never state their claim as fact: that teaches them the reflection is a box to type anything into. Say what they did in a warm, matter-of-fact way, and celebrate the thing that is actually true instead — taking the help on offer is a real, sensible thing to do.
 - A TAPPED QUICK ANSWER IS A COMPLETE ANSWER. If the answer text is empty but a quick answer is stated above, they answered: quote or refer to what they chose. NEVER say they did not answer, did not share their thoughts, or missed the question, and never remark on the empty box. There is nothing missing.
-  * If they DID NOT tap a quick answer AND wrote nothing usable, then there is genuinely no answer, and the reply should simply invite them to have a go at the next one.
-  * Where they SKIPPED the thing this question is about, that is what the record says and it decides the verdict. Say it plainly and warmly, without ranking it as a failure, and never carry it into a question it does not belong to. A decision here is a yes or a no: no means they skipped it, not that they asked for the answer to be revealed.
-  If aligned → aligned=true, insightXp=3, with 1-2 warm celebrating sentences. If not → aligned=false, insightXp=0, and gently offer a warm observation instead (e.g. ""That's interesting — sometimes the tricky spots sneak up on us."") without quoting stats, without scolding, and without asking the student anything.
-- If Q3: ignore alignment. Put in nextStep ONE suggestion they might try, phrased as an offer rather than an instruction and shaped like a goal they could set: what to work on, and what it would help them get better at. Prefer what THEY just said they want to work on; fall back to the weakest area only when they did not say. One line. Set aligned=false, insightXp=0. The feedback text must not end with a question mark — the audit catches that here more than anywhere else, so end on a full stop.
-- OFF-TOPIC: if the answer is clearly unrelated to maths and to this exercise (a random word, a different topic entirely, keyboard mashing), set offTopic=true, aligned=false, insightXp=0, and leave feedback empty — the app shows its own message asking the student to write the reflection again. Use this ONLY when the answer is genuinely unrelated: a short, vague, unsure or partly incoherent answer that is still about the exercise is a valid reflection and is NOT off-topic. When in doubt, do not flag it.
+  * If they DID NOT tap a quick answer AND wrote nothing usable, then there is genuinely no answer, and the reply should simply invite them to have a go at the next one. Never remark on the empty box or on what they did not write, and never say they did not share, did not answer or missed the question — there is simply nothing there, and the invitation is the whole reply.
+  * Where they SKIPPED the thing this question is about, that is what the facts say and it decides the verdict. Say it plainly and warmly, without ranking it as a failure, and never carry it into a question it does not belong to. A decision here is a yes or a no: no means they skipped it, not that they asked for the answer to be revealed.
+  If aligned → aligned=true with an award number of 3, and one or two warm sentences that name the thing they got right. If not → aligned=false, award number 0: give them the one thing the facts line above says about this question, as a plain fact with nothing in front of it — start the sentence with the fact itself, with no phrase about a source, a check, or where the fact came from (for example ""you went straight on without comparing the two methods here"") — and then say warmly why that step is the one worth taking. Never settle for a general observation instead of that fact, never quote their own words back as the thing that went wrong, never quote error or hint counts, and never ask them anything. A vague answer gets exactly the same treatment: what the facts line says about this question, and stop.
+- If Q3: ignore alignment. The FEEDBACK must ANSWER the question on screen: name ONE concrete thing to do in the next exercise, taken from this question's own quick answers, and say in a few words why it will help. It must be about the subject THIS question is about (comparing, explaining, working it out, hints, the method) and never a general study tip, and the weakest area is background only — do not build the reply or the next step out of it unless the question itself is about that. Put the same thing, one line and phrased as an offer, in nextStep. NEVER open by describing what the student did, what they pressed, or that they asked for anything. Set aligned=false with an award number of 0. The feedback must not end with a question mark — the audit catches that here more than anywhere else, so end on a full stop.
+- OFF-TOPIC: if the answer is clearly unrelated to maths and to this exercise (a random word, a different topic entirely, keyboard mashing), set offTopic=true, aligned=false, insightXp=0, and leave feedback empty — the app shows its own message asking the student to write the reflection again. A reply must be to words that mean something, so placeholder and nonsense text (""blah blah"", ""keyboard smash"", ""asdf"", ""test test"") is unrelated even when it is several words long: flag it rather than replying to it. Beyond that, use this ONLY when the answer is genuinely unrelated: a short, vague, unsure or partly incoherent answer that is still about the exercise is a valid reflection and is NOT off-topic.
 
 IMPORTANT: always include the ""aligned"", ""insightXp"" and ""offTopic"" keys with their exact boolean/integer values — never omit them and never quote the numbers as strings.
 
@@ -3213,44 +3271,86 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
 ";
         }
 
+        private static readonly System.Text.RegularExpressions.Regex ForbiddenReplyShape = new(
+            @"\b(insight|xp|award(ed)?|you (just )?(asked|tapped|pressed|clicked|selected)|didn'?t|did not|you (missed|forgot))\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        private static readonly System.Text.RegularExpressions.Regex MentionsHelpButton = new(
+            @"\b(help|you asked|the button)\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
         /// <summary>
-        /// The reply that goes beside a verdict the RECORD decided, for the path where the AI provider is
-        /// unavailable.
-        ///
-        /// It has to say the same thing as the Insight badge, because the badge is computed from the record
-        /// and this text is shown next to it. Nothing here names a decision the question was not about, so
-        /// a question about comparing two methods cannot come back talking about the solution.
+        /// Whether a model reply says something the rules forbid: talking about the score, about the
+        /// button they pressed, or about what they did not do. English only, because these are words.
         /// </summary>
-        private static string VerdictFeedback(ReflectionQuestion question, ReflectionVerdict verdict, string choiceLabel)
+        private static bool ReplyBreaksTheRules(string reply, string? language, string? mode)
+        {
+            if (string.IsNullOrWhiteSpace(reply)) return false;
+            if (!string.IsNullOrWhiteSpace(language) && !language.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return ForbiddenReplyShape.IsMatch(reply)
+                   || (mode == "pippin" && MentionsHelpButton.IsMatch(reply));
+        }
+
+        /// <summary>
+        /// <summary>
+        /// The reply, when the AI provider cannot be reached, for an answer the record settled itself.
+        ///
+        /// It has to say the same thing as the Insight badge, because the badge is computed from the
+        /// record and this text is shown next to it. Nothing here names a decision the question was not
+        /// about, so a question about comparing two methods cannot come back talking about the solution.
+        ///
+        /// This text is the whole of what the student reads on this path, and two more things shape every
+        /// line: it never talks about what their answer was worth (the badge is the only place that
+        /// belongs), and it says what actually happened on the thing this question asked about instead of
+        /// a remark that would fit any answer. <paramref name="whatTheyDid"/> is that fact — the record's
+        /// own words, second person — and it is empty when the record holds nothing about this question.
+        /// </summary>
+        private static string VerdictFeedback(
+            ReflectionQuestion question, ReflectionVerdict verdict, string choiceLabel, string whatTheyDid)
         {
             var promise = question.Kind == ReflectionQuestionBank.NextAction;
             var picked = string.IsNullOrWhiteSpace(choiceLabel) ? "that" : $"\"{choiceLabel}\"";
 
-            // A session question is ungraded, and the two branches below would each say something about a
-            // claim nothing ever checked: one confirms it, the other quietly marks it down. Neither is
-            // true here, so it gets its own line — and for the second question, whose chip really is a
-            // commitment, the promise line is the right one.
+            // A session question is ungraded and has no expectation to check a claim against, so neither
+            // a confirmation nor a mark-down would be true. What the student read of their own day is the
+            // only answer there is, and the reply says only that.
             if (question.Kind == ReflectionQuestionBank.Session)
-                return $"Thanks for giving that some thought. Nothing to score on this one — it is about "
-                     + "your own read of the session.";
+                return "Thanks for taking a look at your day. Your own reading of it is the one that counts "
+                     + "here, and naming what went well is what makes it something to build on.";
 
+            // A commitment is settled tomorrow by the exercise it is about, so the reply is about the
+            // choice just made rather than about how anything went.
             if (promise)
-                return verdict.Status == "aligned"
-                    ? "That is a solid plan, and it is exactly the kind of thing that pays off next time."
-                    : "That is a solid plan for next time, and a promise worth keeping an eye on.";
+                return $"Good — {picked} next time. Choosing it now, before the exercise starts, is what makes "
+                     + "it happen rather than being one more thing to remember.";
 
             if (verdict.Status == "aligned")
-                return $"Spot on — {picked} is what happened here. Reading your own work that closely is the whole point.";
+                return string.IsNullOrWhiteSpace(whatTheyDid)
+                    ? $"Spot on — {picked} is exactly what happened here, and noticing that about your own "
+                      + "work is the whole point of looking back."
+                    : $"Spot on — {whatTheyDid}, which is exactly what happened here. Noticing that about your "
+                      + "own work is the whole point of looking back.";
 
-            return $"You picked {picked}, and that is a fair thing to say. What happened here reads a little "
-                 + "differently, which is worth a second glance — and asking for help when you need it is "
-                 + "still a good call.";
+            // The one case the record cannot settle: it has nothing to hold a claim against, so the
+            // student's own reading stands and the reply does not pretend to confirm or correct it.
+            if (verdict.Status == "partial")
+                return $"{picked} — this one is yours to call, and that is a fair reading to take from it. "
+                     + "Worth holding on to for the next exercise.";
+
+            return string.IsNullOrWhiteSpace(whatTheyDid)
+                ? "Thanks for looking at that one. It is worth a second glance before the next exercise, and "
+                  + "the moment this question asks about is the place to look."
+                : $"Here is the bit this question was about: {whatTheyDid}. That is worth knowing about how "
+                  + "you work through an exercise, and it is the part the next one will ask about again.";
         }
 
         private static ReflectionEvaluateResponse BuildReflectionFallback(
             ReflectionEvaluateRequest request,
             ReflectionQueueRecord item,
-            WeaknessResponse weakness)
+            ReflectionEvidence evidence,
+            ReflectionQuestion asked)
         {
             // The end-of-session reflection is ungraded, so none of the rules below fit it: the keyword
             // guess reads a claim nothing checked, and the next-step plan belongs to the third question of
@@ -3273,26 +3373,44 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
 
             if (request.QuestionNumber == 3)
             {
-                var weakest = weakness.Weakest;
-                var rec = weakest?.RecommendedExercise ?? "Suitability";
-                var label = weakest?.Label ?? "weak area";
+                // Q3 asks the student what they will do next, so the reply is about their promise and
+                // nothing else. It used to hand over the weakest area's own recommendation, which answers
+                // a different question than the one on screen — and that line reached the student on the
+                // normal path as well, whenever the model returned no nextStep.
+                //
+                // A tapped chip IS their answer, and its words arrived with the request, so a tap can be
+                // named back to them. A written promise cannot: the wording of that copy lives in the
+                // client's locale files, so the reply works with what they wrote instead of inventing a
+                // plan of its own.
+                var promise = request.ChoiceLabel?.Trim() ?? "";
                 return new ReflectionEvaluateResponse
                 {
-                    Feedback = "Let's pick one concrete step to work on next!",
+                    Feedback = string.IsNullOrWhiteSpace(promise)
+                        ? "Good — you have named something to work on next time."
+                        : $"Good — you have picked \"{promise}\" for next time.",
                     Aligned = false,
                     InsightXp = 0,
-                    NextStep = $"Try 2 more {rec} exercises and watch your {label} improve."
+                    NextStep = string.IsNullOrWhiteSpace(promise)
+                        ? "Take the thing you just named and try it in your next exercise."
+                        : $"Next time: {promise}."
                 };
             }
 
             if (request.Mode == "pippin")
             {
-                // No numbers read back at the student, and no claim about what they did: this text goes
-                // out on the path where the AI is unavailable, and it is the only thing they will read.
+                // The help button is a request for THIS question's answer, so the reply gives one: what
+                // the record says they did with the one thing the question asks about. It used to be a
+                // generic "look at the part that felt least certain", which answers no question at all —
+                // and this is the only text the student reads on this path.
+                var did = ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked);
                 return new ReflectionEvaluateResponse
                 {
-                    Feedback = "Happy to help. Look at the part of the working that felt least certain, "
-                               + "and try that same kind of step once more on the next exercise.",
+                    Feedback = string.IsNullOrWhiteSpace(did)
+                        ? "Happy to help with this one. Nothing is known about that step here, so the "
+                          + "best I can say is to take the moment this question is about and give it a go "
+                          + "on the next exercise."
+                        : $"Here is what this one came down to: {did}. That is the bit this question was "
+                          + "asking about.",
                     Aligned = false,
                     InsightXp = 0,
                     NextStep = ""
@@ -3307,21 +3425,21 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
 
             if (aboutADecision)
             {
-                var element = request.QuestionId == "q2-compared" ? "MethodComparison" : "SelfExplanation";
-                var decisions = item.Decisions ?? "";
-
-                var record = decisions.Contains($"{element}=Engaged", StringComparison.OrdinalIgnoreCase)
-                    ? "you did that here"
-                    : decisions.Contains($"{element}=Declined", StringComparison.OrdinalIgnoreCase)
-                        ? "you skipped that here"
-                        : "nothing was recorded about that here";
+                // The record holds the decision this question asked about, so the offline reply states it
+                // rather than explaining that there would normally be a comparison to make. This branch is
+                // only reached for a written answer: a tapped chip is settled by the record and answered
+                // by VerdictFeedback, which overwrites this.
+                var did = ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked);
 
                 return new ReflectionEvaluateResponse
                 {
                     // No mention of an award. The badge already says what the badge says, and telling a
                     // student that something did not count is the one way this reply could still sting.
-                    Feedback = $"Thanks. The record for this exercise says {record}, which is the bit I "
-                               + "would normally line up against what you wrote.",
+                    Feedback = string.IsNullOrWhiteSpace(did)
+                        ? "Thanks for writing that down. Nothing is known about that step on this one, so "
+                          + "it is worth another look before the next exercise asks for it."
+                        : $"Thanks for writing that down. On this one, {did} — and that is the bit this "
+                          + "question was asking about.",
                     Aligned = false,
                     InsightXp = 0,
                     NextStep = ""

@@ -85,6 +85,18 @@ namespace webapi.Models.Student
         /// </summary>
         [JsonIgnore]
         public string Expectation { get; set; } = "";
+
+        /// <summary>
+        /// What the record says about exactly this question, in the second person ("you picked
+        /// equalization in 1 of the 3 exercises"). Server only. The reply is written from it, so a figure
+        /// that is not here cannot turn up in the reply.
+        /// </summary>
+        [JsonIgnore]
+        public string RecordFact { get; set; } = "";
+
+        /// <summary>What is true behind each chip, in the second person, for the chips the record can back. Server only.</summary>
+        [JsonIgnore]
+        public Dictionary<string, string> ChipFacts { get; set; } = [];
     }
 
     /// <summary>One step of an exercise, reduced to what a question can be built from.</summary>

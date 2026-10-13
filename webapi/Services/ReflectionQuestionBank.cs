@@ -105,8 +105,80 @@ namespace webapi.Services
                 _ => ""
             };
         }
-
+
         public static string StepLabelKey(string stepId) => $"reflection-step-{stepId}";
+
+        /// <summary>
+        /// What is true behind each goal "what went well" chip, said to the student. Only the chips the
+        /// record backs are ever read from here, so a reply names the option they tapped and says what it
+        /// stands for, and never something that merely sits elsewhere in the goal's record.
+        /// </summary>
+        private static readonly Dictionary<string, string> GoalChipFacts = new()
+        {
+            ["went-better-choices"] = "your choices fitted the exercises better in the later ones than in the earlier ones",
+            ["went-always-correct"] = "the method you picked fitted the exercise every single time",
+            ["went-no-errors"] = "at least one of the exercises went by with no mistakes",
+            ["went-no-hints"] = "at least one of the exercises went by with no hints",
+            ["went-fewer-hints"] = "you needed fewer hints in the later exercises than in the earlier ones",
+            ["went-hints-down"] = "you needed fewer hints in your last exercise than in your first",
+            ["went-errors-down"] = "you made fewer mistakes in your last exercise than in your first",
+            ["went-fewer-errors"] = "you made fewer mistakes in the later exercises than in the earlier ones",
+            ["went-faster"] = "your last exercise took less time than your first",
+            ["went-solved-alone"] = "you worked at least one of them out yourself",
+            ["went-explained"] = "you explained your reasoning in at least one of them",
+            ["went-explain-helped"] = "you made fewer mistakes in the exercises where you explained your reasoning",
+            ["went-explain-clean"] = "an exercise where you explained your reasoning had no mistakes",
+            ["went-explain-hints"] = "you needed fewer hints in the exercises where you explained your reasoning",
+            ["went-explain-new"] = "you explained your reasoning on a method where you had skipped that before",
+            ["went-compare-helped"] = "you made fewer mistakes in the exercises where you compared the methods",
+            ["went-compare-clean"] = "an exercise where you compared the methods had no mistakes",
+            ["went-compare-hints"] = "you needed fewer hints in the exercises where you compared the methods",
+            ["went-compare-new"] = "you compared the methods on a method where you had skipped that before",
+            ["went-alone-clean"] = "an exercise you worked out yourself had no mistakes",
+            ["went-alone-hints"] = "an exercise you worked out yourself needed no hints",
+            ["went-alone-new"] = "you worked one out yourself on a method you had handed over before",
+            ["went-alone-fewer"] = "you made fewer mistakes in the exercises you worked out yourself",
+            ["went-within-limit"] = "every exercise stayed inside the limit your goal set",
+        };
+
+        /// <summary>
+        /// The step vocabulary in plain English, for the MODEL only.
+        ///
+        /// The labels the student reads are translation keys, and the server never renders them. A step
+        /// question asks which part went well or cost the most, so the model has to be able to name that
+        /// part — and "setup" is not something it can turn into the student's language on its own. This
+        /// gloss is what it translates. The app's own copy stays in the locale files, where it belongs.
+        /// </summary>
+        private static string StepGloss(string stepId) => stepId switch
+        {
+            StepChoose => "the part where the method is chosen",
+            StepSetup => "the part where the method is set up",
+            StepSolve => "the part where the solution is found",
+            StepExplain => "the part where the reasoning is written out",
+            _ => "that part"
+        };
+
+        /// <summary>
+        /// What a next-step question is about, in plain English, for the MODEL only.
+        ///
+        /// The question itself reaches the student as a translation key and the chips never leave the
+        /// client, so without this the model is looking at "Q3 - one concrete next step" and nothing else.
+        /// It then guesses the subject, and a question about comparing two methods comes back with advice
+        /// about something else — or, worse, with a description of what the student did earlier, which is
+        /// the one thing this question is not about. The gloss is what the model turns into the student's
+        /// language; the app's own copy stays in the locale files.
+        /// </summary>
+        private static string NextActionSubject(string textKey) => textKey switch
+        {
+            "reflection-q3-solo" or "reflection-goal-q3-solve-method" => "working the solution out themselves",
+            "reflection-q3-explain" or "reflection-q3-explain-efficiency" or "reflection-q3-explain-matching"
+                or "reflection-goal-q3-explain-type" => "explaining their reasoning",
+            "reflection-q3-compare" or "reflection-goal-q3-compare-method" => "comparing the two methods",
+            "reflection-q3-method" or "reflection-goal-q3-method" or "reflection-goal-q3-suitability"
+                or "reflection-goal-q3-efficiency" or "reflection-goal-q3-matching" => "which method to pick",
+            "reflection-q3-target" or "reflection-goal-q3-hints-errors" => "how many hints to take",
+            _ => ""
+        };
 
         // ── The three questions ───────────────────────────────────────────────
 
@@ -764,6 +836,15 @@ namespace webapi.Services
 
             question.Chips = [.. options.Select(option => new ReflectionChip { Id = option.Id, TextKey = option.TextKey })];
             question.AlignedChipIds = [.. options.Where(option => option.True).Select(option => option.Id)];
+            question.ChipFacts = options
+                .Where(option => option.True && GoalChipFacts.ContainsKey(option.Id))
+                .ToDictionary(option => option.Id, option => GoalChipFacts[option.Id]);
+
+            // The two "at least one" facts are stated with their counts, so a reply cannot round them up.
+            if (question.ChipFacts.ContainsKey("went-no-errors"))
+                question.ChipFacts["went-no-errors"] = $"{window.Count(e => e.Errors == 0)} of the {window.Count} exercises went by with no mistakes";
+            if (question.ChipFacts.ContainsKey("went-no-hints"))
+                question.ChipFacts["went-no-hints"] = $"{window.Count(e => e.Hints == 0)} of the {window.Count} exercises went by with no hints";
 
             // Nothing went well, so there is no wrong answer here: whichever one they pick, they answered
             // honestly about a session that simply did not go their way, and paying nothing for that
@@ -823,6 +904,7 @@ namespace webapi.Services
                     ];
                     question.AlignedChipIds = [fewer ? "cmp-fewer" : more ? "cmp-more" : "cmp-same"];
                     question.Expectation = $"they say how this method compared with their others: {Fmt(mine)} against {Fmt(other.Value)} mistakes per exercise";
+                    question.RecordFact = $"with this method your mistakes averaged {Fmt(mine)} per exercise, and with your other methods {Fmt(other.Value)}";
                     return question;
                 }
 
@@ -881,6 +963,9 @@ namespace webapi.Services
                     question.Expectation = weakest is null
                         ? "they name a method, because the record cannot single one out"
                         : $"they name the method they most often handed over: {weakest}";
+                    question.RecordFact = "the exercises you handed over to the system were in "
+                        + string.Join(", ", system.GroupBy(e => e.Method).OrderByDescending(g => g.Count())
+                            .Select(g => $"{MethodKey(g.Key)} {Times(g.Count())}"));
                     return question;
                 }
 
@@ -945,8 +1030,45 @@ namespace webapi.Services
                 question.PartialChipIds = [.. chips.Select(chip => chip.Id)];
 
             question.Expectation = weakest is null ? $"{expectation}, which the record cannot single out" : expectation;
+
+            // The tally the reply has to be written from. Without it the model had only a list of
+            // exercises and filled in the rest, which is how a method picked once came back as "all three".
+            var pickedWhenUnsuitable = textKey is "reflection-goal-q2-pick-unsuitable" or "reflection-goal-q2-pick-inefficient";
+            if (pickedWhenUnsuitable)
+            {
+                var total = evidence.GoalExercises.Count;
+                question.RecordFact = rows.Count == 0
+                    ? $"the method you picked fitted in all {total} of the exercises"
+                    : $"the method was not the suitable one in {rows.Count} of the {total} exercises, and there you picked "
+                      + string.Join(", ", rows.GroupBy(e => e.Method).OrderByDescending(g => g.Count())
+                          .Select(g => $"{MethodKey(g.Key)} {Times(g.Count())}"))
+                      + $". Over all {total} exercises you picked "
+                      + string.Join(", ", evidence.GoalExercises.GroupBy(e => e.Method).OrderByDescending(g => g.Count())
+                          .Select(g => $"{MethodKey(g.Key)} {Times(g.Count())}"));
+            }
+            else
+            {
+                var hints = textKey == "reflection-goal-q2-most-hints";
+                var tally = rows.GroupBy(e => e.Method)
+                    .Select(g => new { g.Key, Total = hints ? g.Sum(e => e.Hints) : g.Sum(e => e.Errors) })
+                    .Where(g => g.Total > 0)
+                    .OrderByDescending(g => g.Total)
+                    .Select(g => $"{MethodKey(g.Key)} {g.Total}");
+                var joined = string.Join(", ", tally);
+                question.RecordFact = joined.Length == 0
+                    ? $"there were no {(hints ? "hints" : "mistakes")} in any of these exercises"
+                    : $"your {(hints ? "hints" : "mistakes")} added up per method as: {joined}";
+            }
+
             return question;
         }
+
+        private static string Times(int count) => count switch
+        {
+            1 => "once",
+            2 => "twice",
+            _ => $"{count} times",
+        };
 
         /// <summary>Q2 comparing two groups inside the same goal, on mistakes.</summary>
         private static ReflectionQuestion BuildGoalGroupComparisonQuestion(
@@ -994,6 +1116,9 @@ namespace webapi.Services
                 question.Expectation = common is null
                     ? $"{oneGroupExpectation}, which the record cannot single out"
                     : oneGroupExpectation;
+                question.RecordFact = "across these exercises you used "
+                    + string.Join(", ", group.GroupBy(e => e.Method).OrderByDescending(g => g.Count())
+                        .Select(g => $"{MethodKey(g.Key)} {Times(g.Count())}"));
 
                 return question;
             }
@@ -1002,6 +1127,9 @@ namespace webapi.Services
             var without = Mean(outside, e => e.Errors);
             var fewer = with < without - ComparisonTolerance;
             var more = with > without + ComparisonTolerance;
+            var did = oneGroupTextKey.Contains("explain") ? "explained your reasoning" : "compared the methods";
+            question.RecordFact = $"in the {inside.Count} exercise(s) where you {did} your mistakes averaged {Fmt(with)} each, "
+                                + $"and in the other {outside.Count} they averaged {Fmt(without)} each";
 
             question.TextKey = "reflection-goal-q2-group-compare";
             question.Chips =
@@ -1392,6 +1520,8 @@ namespace webapi.Services
             // named here for the same reason.
             var aboutThePromise = question?.Id is "q3-next-action" or "session-q2-next";
 
+            var aboutGoalPattern = evidence.IsGoal && question?.Id is "goal-q1-went-well" or "goal-q2-pattern" or "q2-count";
+            var showDecisions = !aboutGoalPattern || evidence.Focus is "selfExplanation" or "methodComparison" or "solveOnOwn";
             if (aboutThePromise)
             {
                 parts.Add("This question asks what they will do next time. Nothing about what already "
@@ -1403,7 +1533,7 @@ namespace webapi.Services
                     ? "They worked the comparison through themselves."
                     : evidence.WasShownComparison
                         ? "They asked to see the comparison rather than working it through."
-                        : "Nothing was recorded about whether they worked the comparison through.");
+                        : "We do not know whether they worked the comparison through.");
             }
             else if (aboutAStep)
             {
@@ -1415,7 +1545,7 @@ namespace webapi.Services
                     ? "They worked the solution out themselves rather than being shown it."
                     : evidence.WasShownAnswer
                         ? "They asked to be shown the solution rather than working it out."
-                        : "Nothing was recorded about whether they worked the solution out themselves.");
+                        : "We do not know whether they worked the solution out themselves.");
             }
             else if (aboutExplanation)
             {
@@ -1427,7 +1557,20 @@ namespace webapi.Services
                     ? "They explained their own reasoning."
                     : evidence.WasShownExplanation
                         ? "They did not explain their own reasoning at that step."
-                        : "Nothing was recorded about whether they explained their reasoning.");
+                        : "We do not know whether they explained their reasoning.");
+            }
+            else if (aboutGoalPattern)
+            {
+                // A goal's pattern questions are about how the exercises compare with one another. The
+                // decisions are left out for the same reason as above: a model told that the solution was
+                // asked for will bring it up whatever the question was.
+                parts.Add("This question is only about the pattern across the exercises listed below. "
+                          + "Reply about that and nothing else.");
+                if (!string.IsNullOrWhiteSpace(question?.RecordFact))
+                    parts.Add($"The facts about this question: {question!.RecordFact}. Use these numbers exactly and never "
+                              + "say \"all\", \"every\" or any count the facts do not state.");
+                if (question?.Id == "goal-q1-went-well" && question.ChipFacts.Count > 0)
+                    parts.Add("What is true of the options they were offered: " + string.Join("; ", question.ChipFacts.Values) + ".");
             }
             else if (evidence.HasDecisions)
             {
@@ -1435,7 +1578,7 @@ namespace webapi.Services
                     ? "They chose to explain their own reasoning."
                     : evidence.WasShownExplanation
                         ? "They asked to be shown the explanation instead of explaining it themselves."
-                        : "Nothing was recorded about whether they explained their reasoning.");
+                        : "We do not know whether they explained their reasoning.");
 
                 if (evidence.DidCompare || evidence.WasShownComparison)
                     parts.Add(evidence.DidCompare
@@ -1446,14 +1589,14 @@ namespace webapi.Services
                     ? "They chose to work the solution out themselves rather than being shown it."
                     : evidence.WasShownAnswer
                         ? "They asked to be shown the solution."
-                        : "Nothing was recorded about whether they worked the solution out themselves.");
+                        : "We do not know whether they worked the solution out themselves.");
             }
             else
             {
-                parts.Add("No decision point was recorded for this item, so nothing is known about what they chose.");
+                parts.Add("No decision point exists for this item, so nothing is known about what they chose.");
             }
 
-            if (!aboutComparison && !aboutExplanation && !aboutThePromise)
+            if (!aboutComparison && !aboutExplanation && !aboutThePromise && !aboutGoalPattern)
                 parts.Add($"{evidence.Errors} mistake(s) and {evidence.Hints} hint(s) were counted.");
 
             // The goal's exercises one by one, because its questions ask about their ORDER: did the
@@ -1471,10 +1614,10 @@ namespace webapi.Services
             if ((evidence.IsGoal || evidence.IsSession) && evidence.GoalExercises.Count > 0)
             {
                 var runs = evidence.GoalExercises.Select((exercise, index) =>
-                    $"#{index + 1}: {exercise.Errors} mistake(s), {exercise.Hints} hint(s), {Fmt(exercise.Time)}s" +
-                    (exercise.Own ? ", worked out alone" : exercise.WasShown ? ", asked to be shown" : "") +
-                    (exercise.Explained ? ", explained their reasoning" : "") +
-                    (exercise.Compared ? ", compared the methods" : "") +
+                    $"#{index + 1}: {MethodKey(exercise.Method)} method, {exercise.Errors} mistake(s), {exercise.Hints} hint(s), {Fmt(exercise.Time)}s" +
+                    (showDecisions && exercise.Own ? ", worked out alone" : showDecisions && exercise.WasShown ? ", asked to be shown" : "") +
+                    (showDecisions && exercise.Explained ? ", explained their reasoning" : "") +
+                    (showDecisions && exercise.Compared ? ", compared the methods" : "") +
                     (exercise.Correct ? ", chose a method the exercise allowed" : ""));
 
                 parts.Add($"{(evidence.IsGoal ? "The goal's" : "The session's")} exercises, oldest first — {string.Join("; ", runs)}.");
@@ -1499,6 +1642,111 @@ namespace webapi.Services
         }
 
         /// <summary>
+        /// The same record, said TO the student rather than about them.
+        ///
+        /// <see cref="DescribeRecord"/> is written for the prompt ("They worked the comparison through
+        /// themselves."). The reply the student reads when the model cannot be reached is shown as it is,
+        /// so the fact has to be in the second person, and it is scoped the same way: it names the one
+        /// thing this question asks about and says nothing about anything else.
+        ///
+        /// Empty means the record holds nothing about this question. It never means "you did nothing",
+        /// which is why the caller falls back to wording about the question rather than about them.
+        /// </summary>
+        public static string DescribeRecordToStudent(ReflectionEvidence evidence, ReflectionQuestion? question, string choice = "")
+        {
+            if (question is null || evidence.IsSession) return "";
+
+            // A goal's "what went well" question is answered by the option they tapped: what that option
+            // stands for, when the record backs it, and otherwise what the record does back.
+            if (question.Id == "goal-q1-went-well")
+            {
+                if (!string.IsNullOrEmpty(choice) && question.ChipFacts.TryGetValue(choice, out var tapped))
+                    return tapped;
+
+                var backed = question.ChipFacts.Values.Take(3).ToList();
+                return backed.Count switch
+                {
+                    0 => "",
+                    1 => backed[0],
+                    _ => string.Join(", ", backed.Take(backed.Count - 1)) + " and " + backed[^1],
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(question.RecordFact)) return question.RecordFact;
+
+            switch (question.Id)
+            {
+                case "q2-compared":
+                    return evidence.DidCompare
+                        ? "you worked the comparison through yourself"
+                        : evidence.WasShownComparison
+                            // Not "you asked to see it": the record holds a yes or a no at that step, and a
+                            // no covers both skipping it and handing it over.
+                            ? "you went straight on without comparing the two methods"
+                            : "";
+                case "q2-explained":
+                    return evidence.DidExplain
+                        ? "you explained your own reasoning there"
+                        : evidence.WasShownExplanation
+                            ? "you moved on without putting your reasoning into words"
+                            : "";
+                case "q1-step-sure":
+                case "q1-step-fight":
+                {
+                    // The step IS the answer here: the question asks which part they felt sure about, or
+                    // which one cost them the most. It used to be answered with the solve-on-own decision,
+                    // which is a different fact about the exercise and left the model nothing to name.
+                    var clean = evidence.Steps.Where(step => evidence.CleanStepIds.Contains(step.Id)).ToList();
+                    if (!string.IsNullOrEmpty(question.Id) && question.Id == "q1-step-sure" && clean.Count > 0)
+                        return "you got through " + string.Join(" and ", clean.Select(step => StepGloss(step.Id)))
+                             + " without a mistake";
+
+                    var worst = evidence.Steps
+                        .OrderByDescending(step => step.Errors * 1000 + step.Hints)
+                        .FirstOrDefault();
+                    return worst is null || (worst.Errors == 0 && worst.Hints == 0)
+                        ? ""
+                        : $"{StepGloss(worst.Id)} is the part that cost you the most";
+                }
+
+                case "q1-exercise-went-well":
+                {
+                    // The menu the student is looking at, said as facts: these are the options the record
+                    // can back, and they are also the good things Q1 is asking for. Naming them here is
+                    // what stops a reply that says a rough exercise has nothing in it to celebrate.
+                    var good = new List<string>();
+                    if (evidence.Errors == 0) good.Add("you finished it without a single mistake");
+                    if (evidence.Hints == 0) good.Add("you got through it with no hints");
+                    if (evidence.DidExplain) good.Add("you explained your own reasoning");
+                    if (evidence.DidCompare) good.Add("you compared the two methods");
+                    if (evidence.HasAllowedMethods && evidence.ChoseAllowedMethod)
+                        good.Add("you picked a method this exercise allowed");
+
+                    return good.Count switch
+                    {
+                        0 => "",
+                        1 => good[0],
+                        _ => string.Join(", ", good.Take(good.Count - 1)) + " and " + good[^1],
+                    };
+                }
+            }
+
+            // The counts are the answer to the question that asks for them, so the number is what the
+            // reply has to say. Nothing outside the window is counted and no number is invented.
+            switch (question.TextKey)
+            {
+                case "reflection-q2-count-clean":
+                    return $"you got through {evidence.CleanRuns} of them without a single mistake";
+                case "reflection-q2-count-hintfree":
+                    return $"{evidence.HintFreeRuns} of them went by with no hints at all";
+                case "reflection-q2-count-solo":
+                    return $"you worked {evidence.SolvedOnOwnRuns} of them out before seeing the answer";
+            }
+
+            return "";
+        }
+
+        /// <summary>
         /// What the model should be told about the question before it reads a free-text answer.
         ///
         /// Narrow on purpose. The old prompt asked whether an answer was "aligned" against a set of
@@ -1507,12 +1755,25 @@ namespace webapi.Services
         /// </summary>
         public static string DescribeForPrompt(ReflectionQuestion question, IEnumerable<string> subjectTerms)
         {
+            // Neither ungraded kind is told what it is worth.
+            //
+            // The old wording said "it never earns Insight XP", and the model reads that as something to
+            // pass on: replies came back telling the student there was nothing here to score. In a
+            // reflection, what an answer was worth is the one thing nobody should be talking about.
             if (question.Kind == NextAction)
-                return "This is a next-step question. It never earns Insight XP, whatever the student writes.";
+            {
+                var subject = NextActionSubject(question.TextKey);
+                return "This is a next-step question: it has no right answer that could be checked, so "
+                     + "nothing in the student's words is confirmed or corrected here."
+                     + (subject.Length == 0
+                         ? ""
+                         : $" It asks what they will do next time about {subject}, so the reply is about that "
+                           + "and the next exercise, never about what happened in this one.");
+            }
 
             if (question.Kind == Session)
-                return "This is an end-of-session question. It never earns Insight XP and has no right answer, "
-                     + "whatever the student answers. There is no expectation to check their words against.";
+                return "This is an end-of-session question: it has no right answer, and nothing to check the "
+                     + "student's words against, whatever they answer.";
 
             var terms = subjectTerms.Where(term => !string.IsNullOrWhiteSpace(term)).ToList();
             var clue = terms.Count > 0

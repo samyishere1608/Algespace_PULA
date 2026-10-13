@@ -96,6 +96,16 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const [earnedInsight, setEarnedInsight] = useState(0);
     const [retryNotice, setRetryNotice] = useState("");
 
+    /**
+     * WHICH action is in flight, not merely that one is.
+     *
+     * A single `loading` flag drove both buttons, so pressing either made BOTH of them spin and the
+     * student could not tell which action they had actually started. Sending an answer and asking the
+     * companion are different things, and each button has to look like itself: only the pressed one
+     * turns, and the other goes quiet and disabled.
+     */
+    const [pending, setPending] = useState<"" | "self" | "pippin">("");
+
     const item = items[itemIndex];
 
     // How many questions this item has, taken from the questions themselves.
@@ -126,11 +136,16 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const questionText = asked.text
         || (question === 1 ? t("reflection-q1") : question === 2 ? t("reflection-q2-generic") : t("reflection-q3"));
 
-    // A chip on its own is a complete answer, so the button cannot require text as well.
+    // A chip OR some writing is an answer, and ONE button sends whichever is there.
+    //
+    // A chip used to submit itself the moment it was tapped, which made a quick answer a different
+    // kind of action from writing one and sent it before the student could change their mind. Now
+    // tapping a chip selects it and the same button sends it, so both ways of answering end the same.
     const hasAnswer = answer.trim().length > 0 || choice.length > 0;
 
-    async function handleAnswer(mode: "self" | "pippin"): Promise<void> {
+    async function handleAnswer(mode: "self" | "pippin", chipId = choice): Promise<void> {
         if (loading) return;
+        setPending(mode);
         setLoading(true);
         // ── Debug log: what we send to the backend ───────────────────────
         console.log("[Reflection] SEND", JSON.stringify({
@@ -156,9 +171,9 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 mode === "self" ? answer : "",
                 i18n.language?.slice(0, 2) ?? "en",
                 asked.id,
-                mode === "self" ? choice : "",
+                mode === "self" ? chipId : "",
                 asked.terms,
-                mode === "self" ? (asked.chips.find((chip) => chip.id === choice)?.label ?? "") : ""
+                mode === "self" ? (asked.chips.find((chip) => chip.id === chipId)?.label ?? "") : ""
             );
             // ── Debug log: what the backend/AI decided ───────────────────
             console.log("[Reflection] RESULT", JSON.stringify({
@@ -185,7 +200,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
 
             const newEntries: ReflectionHistoryEntry[] = [];
             if (mode === "self" && answer.trim()) {
-                newEntries.push({ role: "student", text: answer.trim(), insightXp: 0, itemType: item.itemType, itemId: item.itemId, questionId: asked.id, choice });
+                newEntries.push({ role: "student", text: answer.trim(), insightXp: 0, itemType: item.itemType, itemId: item.itemId, questionId: asked.id, choice: chipId });
             }
             newEntries.push({ role: "pippin", text: result.feedback, insightXp: result.insightXp, itemType: item.itemType, itemId: item.itemId, questionId: asked.id, choice });
             setHistory((prev) => [...prev, ...newEntries]);
@@ -197,6 +212,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setFeedback(t("reflection-ai-unavailable"));
             setPhase("feedback");
         } finally {
+            setPending("");
             setLoading(false);
         }
     }
@@ -314,6 +330,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                             type="button"
                                             className={`reflection-modal__chip${choice === chip.id ? " reflection-modal__chip--on" : ""}`}
                                             aria-pressed={choice === chip.id}
+                                            disabled={loading}
                                             onClick={() => setChoice(choice === chip.id ? "" : chip.id)}
                                         >
                                             {chip.label}
@@ -328,13 +345,17 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                 <p>{retryNotice}</p>
                             </div>
                         )}
+                        {/* Two actions, and they are different things: send the answer the student gave,
+                            or have the companion answer this question for them. The submit button sends a
+                            chip or the writing, whichever is there — an answer is one answer, so it is one
+                            button, and nothing is sent until it is pressed. */}
                         <div className="reflection-modal__actions">
                             <button
                                 className="button secondary-button"
                                 onClick={() => handleAnswer("pippin")}
                                 disabled={loading}
                             >
-                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faRobot} />}
+                                {pending === "pippin" ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faRobot} />}
                                 {t("reflection-buddy-tell-me", { buddy: buddyName })}
                             </button>
                             <button
@@ -342,8 +363,8 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                 onClick={() => handleAnswer("self")}
                                 disabled={!hasAnswer || loading}
                             >
-                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faPen} />}
-                                {t("reflection-answer-myself")}
+                                {pending === "self" ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faPen} />}
+                                {t("reflection-submit-answer")}
                             </button>
                         </div>
                     </div>
