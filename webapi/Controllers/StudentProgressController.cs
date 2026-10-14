@@ -863,8 +863,20 @@ namespace webapi.Controllers
 
         private const string InsightGapAwardTable = "InsightGapAward";
 
+        private sealed class InsightAwardRow
+        {
+            public long AttemptId { get; set; }
+            public string AwardedAt { get; set; } = "";
+        }
+
         /// <summary>Small by design: it is for STARTING on something avoided, not for continuing.</summary>
         private const int InsightForFacingGapXp = 8;
+
+        /// <summary>After an award the element is watched for at least this long before it can be paid again.</summary>
+        private const int InsightMonitoringDays = 7;
+
+        /// <summary>...and for at least this many opportunities, of which at most a fifth may be taken.</summary>
+        private const int InsightMonitoringOpportunities = 5;
 
         // ── POST /student-progress/insight-gap-award ────────────────────────
         /// <summary>
@@ -876,12 +888,14 @@ namespace webapi.Controllers
         /// past a fifth, and every one of them was paid — a student who simply started working things
         /// out themselves collected the award three times for one change of habit.
         ///
-        /// THE RULE. One award per gap EPISODE:
-        ///   1. Before this exercise, the element was a gap over the whole record (at least three
-        ///      opportunities, at most a fifth engaged).
-        ///   2. If it was already paid for, a NEW gap has to have formed since: the last three
-        ///      opportunities after that award were all declined. Working on it next time pays nothing;
-        ///      falling back into avoiding it, and then facing it again, pays again.
+        /// THE RULE. A gap is paid once, then monitored:
+        ///   1. First award: before this exercise, the element was a gap over the whole record (at least
+        ///      three opportunities, at most a fifth engaged).
+        ///   2. After an award the element is MONITORED. It is paid again only when a deficit has built up
+        ///      again over a period long enough to mean something: at least seven days since the award,
+        ///      and at least five opportunities since it, of which at most one was taken. Working on it
+        ///      next time pays nothing, and declining a few times on purpose to set it up buys nothing
+        ///      either, because the deficit has to last across days.
         ///
         /// The exercise being engaged in is excluded from every count, so the answer does not depend on
         /// whether the decision it just wrote has landed yet.
@@ -921,9 +935,10 @@ namespace webapi.Controllers
                     $"SELECT AttemptId, Name, Choice FROM {AnchorStoreSettings.RecordTable} WHERE StudentId = @StudentId",
                     new { request.StudentId }).ToList();
 
-            var lastAwardedAttempt = conn.ExecuteScalar<long?>(
-                $"SELECT MAX(AttemptId) FROM {InsightGapAwardTable} WHERE StudentId = @StudentId AND Element = @Element",
-                new { request.StudentId, request.Element }) ?? 0;
+            var lastAward = conn.QueryFirstOrDefault<InsightAwardRow>(
+                $"SELECT AttemptId, AwardedAt FROM {InsightGapAwardTable} WHERE StudentId = @StudentId AND Element = @Element ORDER BY Id DESC LIMIT 1",
+                new { request.StudentId, request.Element });
+            var lastAwardedAttempt = lastAward?.AttemptId ?? 0;
 
             // Whether they engaged, for each exercise that carried this decision at all, oldest first.
             List<bool> Opportunities(long afterAttempt)
@@ -941,17 +956,31 @@ namespace webapi.Controllers
                 return flags;
             }
 
-            bool IsGap(List<bool> flags) =>
-                flags.Count >= GapThresholds.MinOpportunities
+            bool IsGap(List<bool> flags, int minimum) =>
+                flags.Count >= minimum
                 && (double)flags.Count(engaged => engaged) / flags.Count <= GapThresholds.MaxEngagementRate;
 
-            // The first award reads the whole record, as the profile does. Every later one reads only
-            // what has happened SINCE the last award, and only its most recent three opportunities: the
-            // engagements right after an award are the change of habit being rewarded, so they must not
-            // hold the gap shut for the next dozen declines, nor count as a reason to pay again.
-            var qualifies = lastAwardedAttempt == 0
-                ? IsGap(Opportunities(0))
-                : IsGap(Opportunities(lastAwardedAttempt).TakeLast(GapThresholds.MinOpportunities).ToList());
+            bool qualifies;
+            if (lastAwardedAttempt == 0)
+            {
+                // The first award reads the whole record, as the profile does.
+                qualifies = IsGap(Opportunities(0), GapThresholds.MinOpportunities);
+            }
+            else
+            {
+                // AFTER AN AWARD THE ELEMENT IS MONITORED, and it is paid again only if a deficit has
+                // built up again over a monitoring period long enough to mean something: at least a week
+                // since the award AND at least five opportunities since it, of which at most one was taken.
+                // Declining a few times in a row on purpose therefore buys nothing by itself — it has to
+                // last, and it has to last across days.
+                var awardedAt = DateTime.TryParse(lastAward!.AwardedAt, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var at) ? at : DateTime.UtcNow;
+                var monitored = DateTime.UtcNow - awardedAt >= TimeSpan.FromDays(InsightMonitoringDays);
+
+                qualifies = monitored && IsGap(
+                    Opportunities(lastAwardedAttempt).TakeLast(InsightMonitoringOpportunities).ToList(),
+                    InsightMonitoringOpportunities);
+            }
             if (!qualifies) return Ok(new InsightGapAwardResponse());
 
             conn.Execute(
@@ -2614,7 +2643,7 @@ RULES:
                 : asked.Id == "goal-q1-went-well" && verdict.InsightXp == 0
                     ? "They tapped an option, and the facts above do not back it as something that happened across this goal: aligned=false, and the award number to return is 0. Copy this exactly. Do not repeat the option back as if it happened, and do not say that it did not. Reply by telling them warmly what the facts above show went well in this goal, using only what they state. Do not mention or paraphrase the option they tapped, and do not use any stronger word than the facts do (nothing like perfectly, always, every, first try or on your own unless the facts say so)."
                 : verdict.InsightXp > 0
-                    ? $"They tapped a quick answer and the facts above CONFIRM it: aligned=true, and the award number to return is {verdict.InsightXp}. Copy this exactly. The reply must read as a clear confirmation: one or two warm sentences that name what they picked and say it is what happened. Do not hedge, do not call it interesting, and NEVER sound doubtful about it — the reply is confirming something that is right, and a reply that hedges while the badge shows a positive number is the one thing they will notice."
+                    ? $"They tapped a quick answer and the facts above CONFIRM it: aligned=true, and the award number to return is {verdict.InsightXp}. Copy this exactly. The reply must read as a clear confirmation: one short clause that says it is what happened (in different words from theirs), then the sentence on why it matters. Do not hedge, do not call it interesting, and NEVER sound doubtful about it — the reply is confirming something that is right, and a reply that hedges while the badge shows a positive number is the one thing they will notice."
                     : "They tapped a quick answer and the facts above say it does NOT match what happened: " +
                       "aligned=false, and the award number to return is 0. Copy this exactly. The reply must " +
                       "still let them see which way it went: name what they actually chose as the sensible " +
@@ -2702,11 +2731,11 @@ RULES:
                     Console.WriteLine($"[Reflection] Written answer judged: {writtenMatch}");
 
                     verdictLine = writtenMatch == "yes"
-                        ? "Their written answer is CONFIRMED by the facts above: aligned=true, and the award number to return is 3. The reply must read as a clear confirmation: one or two warm sentences saying it is what happened and naming the fact that shows it. Do not hedge, and never sound doubtful about it."
+                        ? "Their written answer is CONFIRMED by the facts above: aligned=true, and the award number to return is 3. The reply must read as a clear confirmation: one short clause saying it is what happened, then the sentence on why it matters. Do not hedge, and never sound doubtful about it."
                         : "Their written answer is NOT confirmed by the facts above: aligned=false, and the award number to return is 0. The reply must not say or suggest that it matched. State what the facts above say about this question as a plain, warm fact, starting with the fact itself, using only the figures stated there.";
                 }
 
-                var prompt = BuildReflectionPrompt(request, item, promptFeatures, questionLine, recordLine, verdictLine, studentLine);
+                var prompt = BuildReflectionPrompt(request, item, promptFeatures, questionLine, recordLine, verdictLine, studentLine, asked.Meaning);
 
                 string? rejected = null;
 
@@ -3277,7 +3306,8 @@ RULES:
             string questionLine = "",
             string recordLine = "",
             string verdictLine = "",
-            string studentLine = "")
+            string studentLine = "",
+            string meaning = "")
         {
             var signalBlock = features is null ? string.Empty : BuildSignalBlock(features);
 
@@ -3332,12 +3362,16 @@ RULES:
                 ? ""
                 : $"\nWhat they did, said to them rather than about them (state this, in your own warm words, adding no contrast and no \"didn't\", and nothing beyond it: no stronger word than it uses and no extra achievement it does not state): {studentLine}.";
 
+            var meaningBlock = string.IsNullOrWhiteSpace(meaning)
+                ? ""
+                : $"\nWhy this matters (the one thing your reply adds beyond their answer): {meaning}";
+
             return $@"Student completed: {item.ItemLabel} (item type: {item.ItemType}).
 The ONLY facts about this student that you may use are the ones on the lines below. Nothing else about them is known to you, and nothing about any other exercise, goal or question may appear in the reply.
 
 Current question: {questionLabel}
 {questionLine}
-What they actually did, as far as we know it: {recordLine}{studentLineBlock}
+What they actually did, as far as we know it: {recordLine}{studentLineBlock}{meaningBlock}
 The decision on their answer: {verdictLine}
 Quick answer they tapped (empty when they wrote instead; when one is named it settles the verdict on its own, whatever the box also holds): {(string.IsNullOrWhiteSpace(request.Choice) ? "(none)" : string.IsNullOrWhiteSpace(request.ChoiceLabel) ? request.Choice : request.ChoiceLabel)}
 Mode: {mode}
@@ -3348,6 +3382,7 @@ Instructions:
 TONE (very important): Be warm, brief and conversational — like a friend, not a report. Write as the companion who was there with them, in the second person (""you compared the two methods""), never as something that looked them up or checked them, and never list their exact error or hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
 NEVER TALK ABOUT AWARDS OR SCORES (very important): the app's own scoreboard must not appear in the reply in any form — no name for it, no number, no abbreviation, and nothing about whether something counted, paid, was earned, or did not. That includes the empty-handed version of it: never tell them there is nothing here to earn, because a student who got little out of an exercise still did the exercise, and that line only lands as a mark against them. Whatever there is to show sits on the badge beside your reply, and talking about it turns a reflection into a scoreboard. The JSON at the end carries an award number and the machine's names for its fields: those are for the machine, and neither the number nor those names may appear in the feedback text.
 ANSWER THE QUESTION WITH SOMETHING REAL ABOUT IT (very important): every reply answers the ONE question above with something real about it — for a question about a decision, what they did at that step; for a counting question, the number; for a question about the next exercise, the one thing to do next. A remark that would fit any question at all (""that's interesting"", ""worth another look"", ""sometimes the tricky spots sneak up on us"") does not answer it, and must never be the whole reply. If their answer was too vague to tell you anything, do not comment on how vague it was: give them what the facts line states about this question, warmly, and stop.
+NEVER JUST HAND THEIR ANSWER BACK (very important): a reply that only repeats what they said or did (""you did exactly that"", ""that is exactly what happened"", ""you got through all three without hints"") tells them nothing new. Every reply for Q1 and Q2 has TWO parts: first, ONE short clause that states the fact, in different words from theirs; second, ONE sentence from the ""Why this matters"" line, put in your own words, saying what that thing is for. Do not stack praise on top (""great job"", ""wonderful"", ""it is great to see"") — the second part IS the substance. If there is no ""Why this matters"" line, add one true sentence about why that thing helps, drawn only from the subject of this question.
 SAY WHICH WAY IT WENT (very important): the student cannot see the verdict, so the reply is the only place they learn whether their answer matched. A reply that only says ""interesting, take a look"" tells them nothing and reads as a brush-off. When it matches, say so plainly and warmly. When it does not, name what they actually did so the difference is visible to them — without ever framing it as a mistake.
 STAY INSIDE THE QUESTION (very important): the reply answers the ONE question above and nothing else. Do not bring in errors, hints, other decisions, or any other question from this reflection. If the question asked whether they compared two methods, the whole reply is about comparing two methods — a sentence about the solution, the method choice or their mistake count does not belong in it, however true it is. The facts line above states only what this question is about; treat anything it does not mention as unknown to you and do not guess at it.
 NEVER TELL THEM THEY DID NOT DO SOMETHING (very important): every sentence is about what they DID. Write the fact affirmatively, and never build a sentence on a gap — nothing about what their answer left out, what they missed, what did not happen, or what their choice was not. Put no contrast in front of the fact either, and no word that turns it into a correction of their answer. Those sentences read as a telling-off even when they are accurate, and they make a student write what sounds right rather than look at their own work. Where they took the offered help, state what they did plainly and without judgement (""you skipped the comparison here""), then say that asking for help is a real, sensible thing to do — and if there is something genuinely good to name, name it. Use their own words for their choice, never a verdict on it. If the answer was too short or too vague to match against anything, do not point at the gap — state what the facts line says about this question, warmly, and invite them to have a go at the next one. When the answer was vague, or said outright that they ignored the step, this rule matters most of all: state what the facts say as a plain fact, with nothing in front of it, and stop.
@@ -3473,6 +3508,11 @@ Respond ONLY with JSON, keys in this order: {{""claim"":""what the student claim
             }
         }
 
+        // A reply that only repeats the answer back.
+        private static readonly System.Text.RegularExpressions.Regex EchoesTheAnswer = new(
+            @"exactly (what|that)|that is (just )?what (happened|you did)|that'?s (just )?what (happened|you did)|exactly as you",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
         // A reply that hedges or points at a difference. It may not sit next to a confirmed answer.
         private static readonly System.Text.RegularExpressions.Regex HedgesAConfirmation = new(
             @"differently|different from|(a |the )?(little|bit|touch|slightly)( bit)? different|not (quite|exactly)|(does|did|do)(n'?t| not)( quite)? (match|line up)|second (glance|look)|however|in reality|but actually|to be honest",
@@ -3503,6 +3543,12 @@ Respond ONLY with JSON, keys in this order: {{""claim"":""what the student claim
 
             var judged = questionKind is ReflectionQuestionBank.Observation or ReflectionQuestionBank.Judgement;
             if (!judged) return null;
+
+            // A reply that only hands the answer back: too short to hold a second thing, or built on
+            // "that is exactly what happened". The second sentence is what makes it worth reading.
+            var sentences = System.Text.RegularExpressions.Regex.Matches(reply, @"[.!]+(\s|$)").Count;
+            if (EchoesTheAnswer.IsMatch(reply) || reply.Trim().Length < 100 || sentences < 2)
+                return "it only hands their answer back — state the fact in different words, then add one sentence on why that thing matters";
 
             if (aligned && HedgesAConfirmation.IsMatch(reply))
                 return "their answer matched the facts but the reply hedges or points at a difference — confirm it plainly, with no hedge";
@@ -3545,24 +3591,27 @@ Respond ONLY with JSON, keys in this order: {{""claim"":""what the student claim
                 return $"Good — {picked} next time. Choosing it now, before the exercise starts, is what makes "
                      + "it happen rather than being one more thing to remember.";
 
+            // Fact first, then what the thing is FOR. Neither says the answer was "exactly" anything: the
+            // badge already says whether it matched, and the second sentence is what makes the reply
+            // worth reading instead of the student's own words handed back.
+            var why = string.IsNullOrWhiteSpace(question.Meaning) ? "" : $" {question.Meaning}";
+            var fact = string.IsNullOrWhiteSpace(whatTheyDid) ? "" : $"{char.ToUpperInvariant(whatTheyDid[0])}{whatTheyDid[1..]}.";
+
             if (verdict.Status == "aligned")
-                return string.IsNullOrWhiteSpace(whatTheyDid)
-                    ? $"Spot on — {picked} is exactly what happened here, and noticing that about your own "
-                      + "work is the whole point of looking back."
-                    : $"Spot on — {whatTheyDid}, which is exactly what happened here. Noticing that about your "
-                      + "own work is the whole point of looking back.";
+                return string.IsNullOrWhiteSpace(fact)
+                    ? $"That is how it went here.{why}".Trim()
+                    : $"{fact}{why}";
 
             // The one case the record cannot settle: it has nothing to hold a claim against, so the
             // student's own reading stands and the reply does not pretend to confirm or correct it.
             if (verdict.Status == "partial")
-                return $"{picked} — this one is yours to call, and that is a fair reading to take from it. "
-                     + "Worth holding on to for the next exercise.";
+                return string.IsNullOrWhiteSpace(fact)
+                    ? $"{picked} is a fair reading to take from this one.{why}".Trim()
+                    : $"{fact}{why}";
 
-            return string.IsNullOrWhiteSpace(whatTheyDid)
-                ? "Thanks for looking at that one. It is worth a second glance before the next exercise, and "
-                  + "the moment this question asks about is the place to look."
-                : $"Here is the bit this question was about: {whatTheyDid}. That is worth knowing about how "
-                  + "you work through an exercise, and it is the part the next one will ask about again.";
+            return string.IsNullOrWhiteSpace(fact)
+                ? $"Thanks for looking at that one.{why}".Trim()
+                : $"{fact}{why}";
         }
 
         private static ReflectionEvaluateResponse BuildReflectionFallback(
@@ -3628,35 +3677,7 @@ Respond ONLY with JSON, keys in this order: {{""claim"":""what the student claim
                         ? "Happy to help with this one. Nothing is known about that step here, so the "
                           + "best I can say is to take the moment this question is about and give it a go "
                           + "on the next exercise."
-                        : $"Here is what this one came down to: {did}. That is the bit this question was "
-                          + "asking about.",
-                    Aligned = false,
-                    InsightXp = 0,
-                    NextStep = ""
-                };
-            }
-
-            // The question is named on the request, and the decision is on the item's own summary, so
-            // this needs nothing that is built later in the caller.
-            var aboutADecision = request.QuestionId is "q2-compared" or "q2-explained";
-
-            if (aboutADecision)
-            {
-                // The record holds the decision this question asked about, so the offline reply states it
-                // rather than explaining that there would normally be a comparison to make. This branch is
-                // only reached for a written answer: a tapped chip is settled by the record and answered
-                // by VerdictFeedback, which overwrites this.
-                var did = ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked);
-
-                return new ReflectionEvaluateResponse
-                {
-                    // No mention of an award. The badge already says what the badge says, and telling a
-                    // student that something did not count is the one way this reply could still sting.
-                    Feedback = string.IsNullOrWhiteSpace(did)
-                        ? "Thanks for writing that down. Nothing is known about that step on this one, so "
-                          + "it is worth another look before the next exercise asks for it."
-                        : $"Thanks for writing that down. On this one, {did} — and that is the bit this "
-                          + "question was asking about.",
+                        : FactAndMeaning(did, asked),
                     Aligned = false,
                     InsightXp = 0,
                     NextStep = ""
@@ -3678,12 +3699,17 @@ Respond ONLY with JSON, keys in this order: {{""claim"":""what the student claim
                 Feedback = string.IsNullOrWhiteSpace(shown)
                     ? "Thanks for writing that down. Looking back at your own work like this is what makes the "
                       + "next exercise easier to plan."
-                    : $"Thanks for writing that down. On this question, {shown}.",
+                    : FactAndMeaning(shown, asked),
                 Aligned = false,
                 InsightXp = 0,
                 NextStep = ""
             };
         }
+
+        /// <summary>The offline reply: the fact about this question, then what that thing is for.</summary>
+        private static string FactAndMeaning(string fact, ReflectionQuestion question) =>
+            $"{char.ToUpperInvariant(fact[0])}{fact[1..]}."
+            + (string.IsNullOrWhiteSpace(question.Meaning) ? "" : $" {question.Meaning}");
 
         // ── Demo data generator ────────────────────────────────────────────────
 

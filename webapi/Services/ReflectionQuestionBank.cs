@@ -190,7 +190,77 @@ namespace webapi.Services
         /// The end-of-session reflection is the one item that does not follow that shape, and is built by
         /// its own pair of builders below: it has no record to judge and no third thing to ask.
         /// </summary>
-        public static List<ReflectionQuestion> Build(ReflectionEvidence evidence) => evidence.IsSession
+        public static List<ReflectionQuestion> Build(ReflectionEvidence evidence)
+        {
+            var questions = BuildQuestions(evidence);
+            foreach (var question in questions) question.Meaning = MeaningFor(question, evidence);
+            return questions;
+        }
+
+        /// <summary>
+        /// One sentence on why the thing a question asks about matters, for the reply to add.
+        ///
+        /// A reply that confirms the answer and stops there only repeats the student back to themselves
+        /// ("you did exactly that"). What it can honestly add, inside the question's own subject, is what
+        /// that thing is FOR. It is about the skill, never about the student's numbers, so it cannot pull
+        /// anything from outside the question into the reply.
+        /// </summary>
+        private static string MeaningFor(ReflectionQuestion question, ReflectionEvidence evidence)
+        {
+            switch (question.Id)
+            {
+                case "q1-step-sure":
+                case "q1-step-fight":
+                    return "Knowing which step carries you and which one costs you is what lets you aim your practice at the right place.";
+                case "q1-exercise-went-well":
+                case "q1-progress":
+                    return "Naming what went well is how you find the habits worth repeating.";
+                case "q2-compared":
+                    return "Putting two methods side by side is how you learn which one fits which kind of problem.";
+                case "q2-explained":
+                    return "Writing your reasoning out shows you whether you understand a step or only follow it.";
+                case "goal-q1-went-well":
+                    return evidence.Focus switch
+                    {
+                        "hintsAndErrors" => "Needing fewer hints and fewer mistakes is the sign that a method is starting to hold without support.",
+                        "method" => "Repeating one method until it feels natural is how it becomes your own.",
+                        "selfExplanation" => "Explaining your reasoning turns following a method into understanding it.",
+                        "methodComparison" => "Comparing methods shows you why one fits better than another.",
+                        "solveOnOwn" => "Working the calculation yourself is what builds the ability to do it without help.",
+                        _ => evidence.GoalFocus switch
+                        {
+                            "Suitability" => "Choosing a method that fits the problem is the skill this exercise type trains.",
+                            "Efficiency" => "Spotting the quickest method saves effort on every later problem.",
+                            "Matching" => "Recognising which method a problem calls for is what makes the first step easy.",
+                            _ => "Seeing what improved across a run of exercises shows where practice is paying off.",
+                        },
+                    };
+            }
+
+            return question.TextKey switch
+            {
+                "reflection-q2-count-hintfree" => "Getting through without hints means you found each next step from what you already know.",
+                "reflection-q2-count-clean" => "Exercises without a mistake show where your working is already reliable.",
+                "reflection-q2-count-solo" => "Working the calculation yourself is what trains you to do it without help.",
+                "reflection-goal-q2-pick-unsuitable" or "reflection-goal-q2-pick-inefficient" =>
+                    "Noticing which method you reach for when it does not fit is the first step to choosing a better one.",
+                "reflection-goal-q2-most-errors" or "reflection-goal-q2-most-errors-type" =>
+                    "Seeing where mistakes gather tells you which method to practise next.",
+                "reflection-goal-q2-most-hints" =>
+                    "Seeing where the hints gather tells you which method to practise next.",
+                "reflection-goal-q2-method-compare" =>
+                    "Setting a method against your others shows whether it is really getting stronger.",
+                "reflection-goal-q2-group-compare" =>
+                    "Seeing whether the exercises where you did this went better shows whether it is worth the time.",
+                "reflection-goal-q2-system-method" =>
+                    "Knowing which method you hand over to the system shows which one to try yourself next.",
+                "reflection-goal-q2-explain-method" or "reflection-goal-q2-compare-method" =>
+                    "Knowing which method you do this in shows where the habit already lives.",
+                _ => "",
+            };
+        }
+
+        private static List<ReflectionQuestion> BuildQuestions(ReflectionEvidence evidence) => evidence.IsSession
             ? BuildSession(evidence)
             : evidence.IsGoal
                 ? evidence.GoalExercises.Count > 0

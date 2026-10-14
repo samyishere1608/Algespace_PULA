@@ -638,6 +638,30 @@ match"), and a handful fell back to the offline text after the second.
 can still be vague, so the verdict is the guarantee and the wording is best effort. Offline, a written
 answer is never paid, by design.
 
+### Follow-up, same day: replies that only echo, and a monitored Insight rule
+
+- **Echo replies** ("you did exactly that"). Each judged question now carries a server-only `Meaning` (one
+  sentence on why that thing matters, `MeaningFor` in the bank). The prompt asks for two parts: the fact in
+  different words, then the meaning in the model's own words, with no stacked praise. `ReplyProblem` rejects
+  a reply under 100 characters, under two sentences, or built on "exactly what happened" and asks again.
+  Offline replies are fact + meaning too (`FactAndMeaning`, `VerdictFeedback`); "Spot on ... exactly what
+  happened" is gone. In a live run about a quarter of first replies were sent back for this; a few fell back
+  to the offline fact + meaning text after the second.
+- **Insight for facing a gap is now monitored, not merely once-per-episode.** The user's rule: after an award
+  the element is watched, and it is offered again only when there is again a sufficient deficit. Declining
+  three times on purpose then engaging was still farmable. Now: first award = whole-record gap before the
+  current exercise (unchanged); every later award needs BOTH at least 7 days since the previous award AND at
+  least 5 opportunities since it with at most one taken. Constants `InsightMonitoringDays` and
+  `InsightMonitoringOpportunities` in `StudentProgressController`. Each element (solve on own, self-explanation,
+  method comparison) is monitored on its own. `check-written-answers-and-gap.mjs` covers the exploit, the
+  week-later paid case, the week-later-but-doing-it case and the three-days-is-too-soon case by back-dating
+  `AwardedAt`.
+- Not changed: the nudge and goal suggestions still read the whole-record gap from the profile. Only the
+  Insight payment was made time-aware.
+
+Results: live 111 replies / 0 failures, broken key 114 / 0, written answers + gap 42/42 live and 46/46
+offline, goal window 16/16, session 27/27, keys 0 missing, `tsc` clean, baseline residue 0/0/0.
+
 ---
 
 # NEXT TASK — section-based onboarding. Agreed with the user, NOT started.

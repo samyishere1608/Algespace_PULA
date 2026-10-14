@@ -163,18 +163,45 @@ const first = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAG
 expect('the first engagement after a run of declines is paid', (await ask(first)) > 0);
 expect('the same exercise is not paid twice', (await ask(first)) === 0);
 
-// Three more engagements: the old rule paid each of these while the all-time rate caught up.
+// The old rule paid each of these while the all-time rate caught up.
 for (let i = 0; i < 3; i++) {
     const next = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
     expect(`engagement ${i + 2} after the award pays nothing`, (await ask(next)) === 0);
 }
 
-// Falling back into avoiding it, three times, forms a new gap; facing it then pays again.
-for (let i = 0; i < 3; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, DECLINE);
-const again = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
-expect('facing it again after falling back into avoiding it pays again', (await ask(again)) > 0);
-const afterThat = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
-expect('and the next engagement after that pays nothing', (await ask(afterThat)) === 0);
+// THE EXPLOIT: decline on purpose, straight away, then engage. The element is being monitored, so five
+// quick declines buy nothing: a week has to pass as well.
+for (let i = 0; i < 6; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, DECLINE);
+const quick = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
+expect('declining on purpose straight after an award, then engaging, pays nothing', (await ask(quick)) === 0);
+
+// A week later, with the deficit still there over the last five opportunities, it is paid again.
+conn.prepare('UPDATE InsightGapAward SET AwardedAt = ? WHERE StudentId = ?')
+    .run(new Date(Date.now() - 8 * 86_400_000).toISOString().slice(0, 19), GAP_STUDENT);
+const later = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
+expect('after a week of monitoring with the deficit back, it pays again', (await ask(later)) > 0);
+
+// A week passes but the student has been doing it: no deficit, nothing to pay.
+conn.prepare('UPDATE InsightGapAward SET AwardedAt = ? WHERE StudentId = ?')
+    .run(new Date(Date.now() - 8 * 86_400_000).toISOString().slice(0, 19), GAP_STUDENT);
+for (let i = 0; i < 5; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
+const kept = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
+expect('a week later but doing it regularly: no deficit, no award', (await ask(kept)) === 0);
+
+// Five opportunities, a deficit, but less than a week: still monitored.
+clearStudent(GAP_STUDENT);
+for (let i = 0; i < 6; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, DECLINE);
+const firstAgain = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
+await ask(firstAgain);
+for (let i = 0; i < 5; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, DECLINE);
+conn.prepare('UPDATE InsightGapAward SET AwardedAt = ? WHERE StudentId = ?')
+    .run(new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 19), GAP_STUDENT);
+const early = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
+expect('a deficit after only three days is still inside the monitoring period', (await ask(early)) === 0);
+
+// Each element is monitored on its own.
+const other = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, { SelfExplanationChoice: 'Yes' });
+expect('an element that was never avoided is not paid because another one was', (await ask(other, 'SelfExplanation')) === 0);
 
 // A student who has never avoided it is not paid.
 clearStudent(GAP_STUDENT);

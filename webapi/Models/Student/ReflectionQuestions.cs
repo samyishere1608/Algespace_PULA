@@ -94,6 +94,13 @@ namespace webapi.Models.Student
         [JsonIgnore]
         public string RecordFact { get; set; } = "";
 
+        /// <summary>
+        /// Why the thing this question asks about matters, in one sentence. Server only. It is what a reply
+        /// adds beyond the answer, so the reply is never only the student's own words handed back.
+        /// </summary>
+        [JsonIgnore]
+        public string Meaning { get; set; } = "";
+
         /// <summary>What is true behind each chip, in the second person, for the chips the record can back. Server only.</summary>
         [JsonIgnore]
         public Dictionary<string, string> ChipFacts { get; set; } = [];
