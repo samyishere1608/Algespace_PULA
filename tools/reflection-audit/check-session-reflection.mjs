@@ -72,9 +72,14 @@ async function get(url) {
 
 /** A promise made yesterday, as the history would hold it after the reflection was completed. */
 let promiseSequence = 0;
+/**
+ * A promise row written the way the app writes one: the chosen chip on the student's own row, and the
+ * reply on the companion's.
+ *
+ * A no-chip promise is still seedable, because the settlement has to survive a row it cannot match —
+ * that is the boundary the last check in this file is about.
+ */
 function seedPromise(choice, text = "", daysAgo = 1) {
-    // One item id per promise, because that is what the settlement groups by — a promise answered with
-    // a chip writes one row where a written one writes two, so the rows cannot be told apart by shape.
     const itemId = `seed-session-${++promiseSequence}`;
 
     const insert = (role, choiceId, body) =>
@@ -83,8 +88,8 @@ function seedPromise(choice, text = "", daysAgo = 1) {
             "VALUES (?, 'session', ?, ?, ?, 0, ?, 'session-q2-next', ?, 0)"
         ).run(STUDENT, itemId, role, body, stamp(daysAgo), choiceId);
 
-    if (text) insert('student', choice, text);
-    insert('pippin', choice, 'e2e reply');
+    insert('student', choice, text);
+    insert('pippin', '', 'e2e reply');
 
     const rows = conn.prepare(
         'SELECT Id, FollowedUp FROM ReflectionHistory WHERE StudentId = ? AND ItemId = ? ORDER BY Id'
@@ -131,13 +136,12 @@ check('no answer key is sent to the client',
 
 // ── 2. Nothing the student taps there pays Insight ───────────────────────────
 
-const answer = (questionNumber, questionId, choice, label, text = "") =>
+const answer = (questionNumber, questionId, choice, label) =>
     post('/student-progress/reflection/evaluate', {
         studentId: STUDENT,
         queueItemId: item.id,
         questionNumber,
         mode: 'self',
-        answer: text,
         language: 'en',
         questionId,
         choice,
@@ -274,19 +278,19 @@ check('skipping the intention neither pays nor closes the promise',
     settled.body?.resolveAwarded === 0 && progress().ResolveXP === before.ResolveXP && !seeded.closed(),
     `resolveAwarded=${settled.body?.resolveAwarded}`);
 
-// 5g. A promise that was written rather than tapped has no id to match, so the model reads it.
+// 5g. A promise with no chip at all is left open rather than closed unpaid.
 //
-// Reported rather than asserted: when the provider is unreachable the promise is left OPEN and unpaid,
-// which is the intended behaviour and not a failure. What is asserted is that it is not silently closed.
-seeded = seedPromise('', 'I want to get much better at elimination next time');
+// There is no free text in the reflection any more, so a promise always arrives as a chip id and the
+// match is settled by the record. What is still worth asserting is the boundary: a commitment row that
+// carries no chip — a row written before chips-only, or one the app could not resolve — must not be
+// closed as "not kept", because "the record cannot say" and "the student did not do it" are different
+// facts and only one of them is a promise that was broken.
+seeded = seedPromise('', '');
 before = progress();
-settled = await settle('custom', 'unclear', 'I will practise elimination more');
-const judged = settled.body?.resolveAwarded === 5;
-console.log(`NOTE  the model judged the written promise ${judged ? 'KEPT (+5 Resolve)' : 'NOT PAID'} ` +
-    `— open: ${!seeded.closed()}`);
-check('an unjudged written promise is left open rather than closed as not kept',
-    judged || !seeded.closed(),
-    judged ? 'judged kept' : `left open, ResolveXP ${before.ResolveXP} -> ${progress().ResolveXP}`);
+settled = await settle('custom', 'unclear', '');
+check('a commitment with no chip is left open rather than closed as not kept',
+    settled.body?.resolveAwarded === 0 && !seeded.closed(),
+    `resolveAwarded=${settled.body?.resolveAwarded}, ResolveXP ${before.ResolveXP} -> ${progress().ResolveXP}`);
 
 // ── Report ───────────────────────────────────────────────────────────────────
 

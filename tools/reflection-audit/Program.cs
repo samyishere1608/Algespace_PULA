@@ -384,7 +384,7 @@ foreach (var (name, evidence) in scenarios)
         if (question.Chips.Any(c => c.TextKey.Length == 0)) Fail(label, "a chip has no text key");
         if (question.TextKey.Length == 0) Fail(label, "no question text key");
         if (question.Kind != ReflectionQuestionBank.NextAction && question.Expectation.Length == 0)
-            Fail(label, "no expectation, so a free-text answer could not be judged");
+            Fail(label, "nothing describes what this question asks about, so the reply has no anchor");
 
         // Exactly two questions may pay every chip, and they are the two whose case really is that
         // nothing checkable went well: the what-went-well menus, and the question a goal with no
@@ -420,8 +420,6 @@ foreach (var (name, evidence) in scenarios)
             if (verdict.InsightXp > 0) paid++;
             if (verdict.InsightXp is not (0 or 1 or 3))
                 Fail(label, $"chip \"{chip.Id}\" paid {verdict.InsightXp}, which is not a defined award");
-            if (!verdict.FromRecord)
-                Fail(label, $"chip \"{chip.Id}\" was not decided from the record");
 
             if (question.Kind == ReflectionQuestionBank.NextAction && verdict.InsightXp != 0)
                 Fail(label, $"next-action chip \"{chip.Id}\" paid Insight");
@@ -445,7 +443,7 @@ foreach (var (name, evidence) in scenarios)
             if (question.AlignedChipIds.Count > 0 || question.PartialChipIds.Count > 0)
                 Fail(label, "a next-action question has an answer key");
             if (question.Expectation.Length > 0)
-                Fail(label, "a next-action question carries an expectation it would never use");
+                Fail(label, "a next-action question describes a past answer it would never use");
 
             // No Insight either way, so "decided from the record" is true for the empty chip too.
             continue;
@@ -462,7 +460,8 @@ foreach (var (name, evidence) in scenarios)
         }
 
         var blank = ReflectionQuestionBank.Grade(question, "");
-        if (blank.FromRecord) Fail(label, "an empty chip was decided from the record");
+        if (blank.InsightXp != 0)
+            Fail(label, "the help button (no chip) paid Insight");
     }
 }
 
@@ -511,75 +510,6 @@ foreach (var question in scenarios.SelectMany(s => ReflectionQuestionBank.Build(
     }
 }
 
-// ── The relevance gate ───────────────────────────────────────────────────────
-//
-// The gate runs before the model and discards an answer outright, so a false positive loses real
-// work and tells the student their reflection was irrelevant. It used to be a missing-signal test,
-// which threw away "I wrote out why I moved the x term first" because a bare "x" was not a maths
-// signal and none of its words were on the list.
-//
-// The cases below are the ones that matter, not an exhaustive sample: every answer a student
-// plausibly writes must pass, and obvious junk must not.
-
-var gateCases = new (string Answer, bool ShouldReject, string Why)[]
-{
-    // MUST PASS. Real answers, including the one the old gate threw away.
-    ("I wrote out why I moved the x term first", false, "a sentence about the algebra"),
-    ("it was fine, not too hard", false, "short but a real answer"),
-    ("I solved for y and then substituted", false, "names a variable and the work"),
-    ("I found it hard", false, "a feeling word"),
-    ("I got stuck on the first step", false, "describes where they got stuck"),
-    ("it took me a while but I got there", false, "a sentence with no domain word at all"),
-    ("I asked to be shown", false, "the truth about a chip-only turn"),
-    ("ok cool", false, "lazy, but a real answer: the gate rejects non-answers, the model grades quality"),
-    ("x", false, "a lone variable letter is a maths signal"),
-    ("7", false, "a bare number is a maths signal even at one character"),
-    ("9", false, "ditto"),
-    ("2x + 3 = 7", false, "an expression"),
-    ("Ich habe zuerst die Gleichung umgestellt", false, "German sentence"),
-    ("es war schwer", false, "German, three words and no domain word: was rejected before"),
-    ("erst war ich verwirrt", false, "German, no domain word"),
-    ("schwer", false, "the most common German word for hard, which was simply missing"),
-    ("むずかしかった", false, "Japanese past tense in HIRAGANA, which the kanji entries miss"),
-    ("やり方がわからなかった", false, "Japanese sentence"),
-    ("最初は意味が分からなかった", false, "Japanese, longer than the character threshold"),
-
-    // MUST NOT PASS. This is the whole reason the gate exists.
-    ("burger", true, "the original report"),
-    ("asdf", true, "keyboard mashing"),
-    ("hello", true, "a greeting"),
-    ("blah blah", true, "noise"),
-    ("k", true, "one character and nothing else"),
-};
-
-foreach (var (answer, shouldReject, why) in gateCases)
-{
-    foreach (var language in new[] { "en", "de", "ja" })
-    {
-        // The real call site passes extracted features, so both paths are exercised: the text-only
-        // path is what the gate degrades to when the NLP flag is off.
-        var features = NlpFeatureExtractor.Extract(answer, language);
-        var withFeatures = OffTopicDetector.IsOffTopic(answer, features);
-        var textOnly = OffTopicDetector.IsOffTopic(answer, null);
-
-        if (withFeatures != shouldReject)
-            Fail($"gate/{language}", $"\"{answer}\" ({why}) was {(withFeatures ? "REJECTED" : "accepted")}, expected {(shouldReject ? "rejection" : "acceptance")}");
-
-        // The text-only path is deliberately weaker but must never be STRICTER than the full path:
-        // a gate that rejects more when it knows less is the wrong way round.
-        if (textOnly && !withFeatures)
-            Fail($"gate/{language}", $"\"{answer}\" was rejected without features but accepted with them");
-    }
-}
-
-// Free text is never graded from the record alone, and an empty answer is never the gate's business:
-// a chip-only turn has no text to be off-topic about, which is handled by the caller.
-if (!OffTopicDetector.IsOffTopic("", null)) Fail("gate", "an empty answer was accepted");
-if (!OffTopicDetector.IsOffTopic("   ", null)) Fail("gate", "whitespace was accepted");
-
-Console.WriteLine();
-Console.WriteLine($"relevance gate: {gateCases.Length * 3} answer/language pairs checked, " +
-                  $"{gateCases.Count(c => c.ShouldReject)} of them junk");
 
 // ── The goal questions, with a real window ───────────────────────────────────
 //
@@ -945,7 +875,7 @@ void CheckSession(string name, ReflectionEvidence evidence)
             Fail(label, "duplicate chip ids");
         if (question.Chips.Any(c => c.TextKey.Length == 0)) Fail(label, "a chip has no text key");
 
-        // NEITHER QUESTION IS GRADED. Not one chip, and not the blank the free text arrives as.
+        // NEITHER QUESTION IS GRADED. Not one of its chips, and not the blank the help button arrives as.
         if (question.AlignedChipIds.Count > 0 || question.PartialChipIds.Count > 0)
             Fail(label, "a session question carries an answer key");
 

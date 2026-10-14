@@ -3,10 +3,10 @@ import axios from "axios";
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
 /**
- * One chip under a question. A quick answer, not the expected one.
+ * One chip under a question.
  *
  * The wording and the correct answer are decided by the server, so nothing here needs to know which
- * chip is right; the client renders them and sends back the one that was tapped.
+ * chip is right; the client renders them and sends back the one that was chosen.
  */
 export interface ReflectionChip {
     id: string;
@@ -51,7 +51,7 @@ export interface ReflectionHistoryEntry {
     itemId: string;
     /** Which question this turn answered, so questions can be compared later. */
     questionId?: string;
-    /** The chip tapped, or empty when the student wrote instead. */
+    /** The chip chosen. Written on the student's own row, which is the one row that holds the answer. */
     choice?: string;
 }
 
@@ -60,8 +60,6 @@ export interface ReflectionEvaluateResult {
     aligned: boolean;
     insightXp: number;
     nextStep: string;
-    /** True when the answer was off-topic and the student should rewrite it (no XP, not saved). */
-    needsRetry: boolean;
 }
 
 export async function fetchReflectionQueue(studentId: number): Promise<ReflectionQueueItem[]> {
@@ -125,7 +123,6 @@ export async function evaluateReflection(
     queueItemId: number,
     questionNumber: number,
     mode: "self" | "pippin",
-    answer: string,
     language: string,
     questionId?: string,
     choice?: string,
@@ -137,14 +134,12 @@ export async function evaluateReflection(
         queueItemId,
         questionNumber,
         mode,
-        answer,
         language,
-        // Which question was asked, which chip was tapped, and the localised words the question is
-        // about. The last two are what let the grader tell the model what a correct answer has to
-        // refer to without the server keeping a second copy of the app's copy.
+        // Which question was asked and which chip was chosen. The server rebuilds the question and grades
+        // the chip against its own answer key, so the verdict never travels from the client.
         questionId: questionId ?? "",
         choice: choice ?? "",
-        // The words the student actually saw on the chip they tapped. Sent separately from the id
+        // The words the student actually saw on the chip they chose. Sent separately from the id
         // because a reply that says "step-solve" is a reply about our data structure, not about
         // their work.
         choiceLabel: choiceLabel ?? "",

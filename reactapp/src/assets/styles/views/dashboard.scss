@@ -3452,23 +3452,19 @@
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }}
 
-/* ─── Quick answers under a reflection question ─────────────────
-   Deliberately quiet, and deliberately BELOW the answer box. The writing is the reply; a row of
-   pills above it reads as the expected answer and quietly turns a reflection into a multiple
-   choice, which is the opposite of what these questions are for. Small type, no fill until one is
-   chosen, and the question itself never mentions them. */
-.reflection-modal__quick {
+/* ─── The answer chips of a reflection question ─────────────────
+   These ARE the answer, not a shortcut past one. There used to be a text box above them and a
+   "quick answer" label to stop them reading as the expected answer; with the box gone that framing
+   is gone too, so they sit where the answer goes and are sized like something you are meant to
+   press. */
+.reflection-modal__chips--answer {
     margin-top: 0.7rem;
-}
 
-.reflection-modal__quick-label {
-    display: block;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.42);
-    margin-bottom: 0.45rem;
+    .reflection-modal__chip {
+        min-height: 2.6rem;
+        padding: 0.5rem 1.05rem;
+        font-size: 0.95rem;
+    }
 }
 
 .reflection-modal__chips {

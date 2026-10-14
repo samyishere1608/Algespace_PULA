@@ -385,7 +385,7 @@ namespace webapi.Models.Student
         /// would apply the wrong rule.
         /// </summary>
         public string QuestionId { get; set; } = "";
-        /// <summary>The chip the student tapped, or empty when they wrote an answer instead.</summary>
+        /// <summary>The chip the student chose. Every question offers chips, so this is always filled.</summary>
         public string Choice { get; set; } = "";
         /// <summary>
         /// What the tapped chip actually said, in the student's language.
@@ -397,13 +397,12 @@ namespace webapi.Models.Student
         public string ChoiceLabel { get; set; } = "";
         /// <summary>
         /// The localised words the question is about, resolved by the client from the question's own
-        /// slots. Sent so the grader can tell the model what to look for in the student's own language
-        /// without the server keeping a second copy of the app's copy.
+        /// slots. Sent so the reply can name the thing the question asked about in the student's own
+        /// language without the server keeping a second copy of the app's copy.
         /// </summary>
         public List<string> SubjectTerms { get; set; } = [];
         /// <summary>"self" | "pippin"</summary>
         public string Mode { get; set; } = "self";
-        public string Answer { get; set; } = "";
         public string Language { get; set; } = "en";
     }
 
@@ -414,12 +413,6 @@ namespace webapi.Models.Student
         public int InsightXp { get; set; }
         /// <summary>Concrete next step (filled for the final question).</summary>
         public string NextStep { get; set; } = "";
-        /// <summary>
-        /// True when the answer was unusable — unrelated to the exercise — and the student should be
-        /// asked to write it again. The turn is NOT persisted and no Insight XP is awarded, so the
-        /// student is neither rewarded nor credited with a reflection they did not actually make.
-        /// </summary>
-        public bool NeedsRetry { get; set; }
     }
 
     /// <summary>Marks a reflection item complete and persists its chat history.</summary>

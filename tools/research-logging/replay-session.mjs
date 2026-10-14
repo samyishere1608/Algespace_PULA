@@ -13,6 +13,7 @@
 // pointing at the table that holds the detail.
 
 import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -21,6 +22,24 @@ const conn = new DatabaseSync(path.join(ROOT, 'webapi/Data/databases/students.db
 const API = 'http://localhost:7273';
 // A student of its own, so the demo never mixes with a real record.
 const STUDENT = 99010;
+
+/**
+ * The words a chip shows the student, resolved from the app's own locale files.
+ *
+ * The client does this before rendering and sends the result as the label. Sending the raw text key
+ * instead puts "flexibility:elimination-method" in front of the model, which then writes it back at the
+ * student — so the reply here would be about our data structure rather than their work.
+ */
+function labelFor(textKey) {
+    const [namespace = 'student', key = textKey] = textKey?.includes(':') ? textKey.split(':') : ['student', textKey];
+    const file = path.join(ROOT, `reactapp/src/assets/translations/en/${namespace}.json`);
+    try {
+        const value = JSON.parse(readFileSync(file, 'utf8'))[key];
+        return typeof value === 'string' ? value : textKey;
+    } catch {
+        return textKey;
+    }
+}
 
 const send = async (method, url, body) => {
     const response = await fetch(`${API}${url}`, {
@@ -124,7 +143,7 @@ const question = reflection.questions[0];
 const chip = question.chips[0];
 await post('/student-progress/reflection/evaluate', {
     studentId: STUDENT, queueItemId: reflection.id, questionNumber: 1, questionId: question.id,
-    choice: chip.id, choiceLabel: chip.textKey, answer: '', mode: 'self', language: 'en', subjectTerms: [],
+    choice: chip.id, choiceLabel: labelFor(chip.textKey), mode: 'self', language: 'en', subjectTerms: [],
 });
 console.log(` 12. answered it                     -> tapped "${chip.id}"`);
 
@@ -133,8 +152,10 @@ await post('/student-progress/reflection/complete', {
     queueItemId: reflection.id,
     skip: false,
     history: [
+        // The chip goes on the student's own row, and only there: that is the one row that holds the
+        // answer now, so the companion's row carries the reply and nothing else.
         { role: 'student', text: '', insightXp: 0, itemType: 'goal', itemId: reflection.itemId, questionId: question.id, choice: chip.id },
-        { role: 'pippin', text: '(the reply the student read)', insightXp: 3, itemType: 'goal', itemId: reflection.itemId, questionId: question.id, choice: chip.id },
+        { role: 'pippin', text: '(the reply the student read)', insightXp: 3, itemType: 'goal', itemId: reflection.itemId, questionId: question.id },
     ],
 });
 console.log(' 13. finished the reflection          -> recorded as answered');

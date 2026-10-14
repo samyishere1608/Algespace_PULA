@@ -24,10 +24,6 @@ function thinkTime(pause, minMs, maxMs) {
     return pause(minMs + Math.random() * (maxMs - minMs));
 }
 
-const REFLECTION_ANSWER =
-    "I chose Elimination because the coefficients of x are equal, so subtracting one equation " +
-    "from the other removes x in a single step and leaves y directly.";
-
 /**
  * Runs one full session for one student.
  *
@@ -351,24 +347,34 @@ export async function runStudentSession({ api, account, ids, pause, state, optio
 
         if (queue.ok && Array.isArray(queue.json) && queue.json.length > 0) {
             const item = queue.json[0];
+            const question = item.questions?.[0];
+            const chip = question?.chips?.[0];
 
-            if (options.includeAi) {
+            // The reflection is answered with a CHIP, the way the app answers it. There is no free text
+            // any more, so posting one would exercise a path the product no longer has — and it would
+            // skip the call that actually runs in production.
+            if (options.includeAi && question && chip) {
                 await thinkTime(pause, 20000, 45000);
                 await reflection.post("/student-progress/reflection/evaluate", {
                     studentId: account.id,
                     queueItemId: item.id,
                     questionNumber: 1,
+                    questionId: question.id,
+                    choice: chip.id,
+                    choiceLabel: chip.textKey,
+                    subjectTerms: [],
                     mode: "self",
-                    answer: REFLECTION_ANSWER,
                     language: options.language,
                 }, "evaluate");
             }
 
             await thinkTime(pause, 15000, 40000);
 
+            // The chip sits on the student's own row; the companion's row carries the reply and nothing
+            // else. That is how the app writes it, so it is how the load test writes it.
             const history = [
-                { questionNumber: 1, role: "student", text: REFLECTION_ANSWER, insightXp: 0 },
-                { questionNumber: 1, role: "model", text: "That is the right reasoning.", insightXp: 0 },
+                { role: "student", text: "", insightXp: 0, itemType: item.itemType, itemId: item.itemId, questionId: question?.id ?? "", choice: chip?.id ?? "" },
+                { role: "pippin", text: "That is the right reasoning.", insightXp: 0, itemType: item.itemType, itemId: item.itemId, questionId: question?.id ?? "" },
             ];
 
             const completed = await reflection.post("/student-progress/reflection/complete", {

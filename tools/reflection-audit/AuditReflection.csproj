@@ -12,10 +12,7 @@
   <ItemGroup>
     <Compile Include="..\..\webapi\Models\Student\ReflectionQuestions.cs" Link="ReflectionQuestions.cs" />
     <Compile Include="..\..\webapi\Models\Student\StudentProgress.cs" Link="StudentProgress.cs" />
-    <Compile Include="..\..\webapi\Models\Analytics\NlpFeatures.cs" Link="NlpFeatures.cs" />
     <Compile Include="..\..\webapi\Services\ReflectionQuestionBank.cs" Link="ReflectionQuestionBank.cs" />
-    <Compile Include="..\..\webapi\Services\NlpFeatureExtractor.cs" Link="NlpFeatureExtractor.cs" />
-    <Compile Include="..\..\webapi\Services\OffTopicDetector.cs" Link="OffTopicDetector.cs" />
   </ItemGroup>
 
 </Project>

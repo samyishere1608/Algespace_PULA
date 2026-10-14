@@ -8,7 +8,7 @@ namespace webapi.Services
     /// The AI path gets its sentences from the model, so it needs only an instruction. The rule-based
     /// fallback assembles its own sentences, and those are read by the student in the goal picker —
     /// without this a German student was shown English prose inside an otherwise German screen. Same
-    /// reasoning as <see cref="OffTopicDetector.RetryMessage"/> for the reflection flow.
+    /// reasoning as <see cref="ReflectionText"/> for the reflection flow.
     ///
     /// The raw values handed in (method names, exercise-type names, the three decision labels) are the
     /// English strings the tracker records, so they are translated here rather than passed through.

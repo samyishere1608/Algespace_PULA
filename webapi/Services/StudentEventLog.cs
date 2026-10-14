@@ -119,7 +119,7 @@ namespace webapi.Services
                 new { Id = id, StudentId = studentId, StartedAt = now, Language = language ?? "" });
 
             // Written with the session explicit: there was no open session to look up a moment ago.
-            WriteInSession(conn, studentId, id, LogEventType.SessionStarted, data: new { resumed = false }, language: language);
+            WriteInSession(conn, studentId, id, LogEventType.SessionStarted, data: new { resumed = false }, language: language ?? "");
 
             return new StartSessionResponse { SessionId = id, StartedAt = now, Resumed = false };
         }

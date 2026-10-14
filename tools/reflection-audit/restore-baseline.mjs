@@ -1,8 +1,8 @@
 // Puts the test student back to the recorded baseline after the UI walkthrough.
 //
 // Baseline for student 7: Choice 15 / Insight 40 / Resolve 0 / lifetime 55, no reflection
-// rows, no queue rows, no agency rows. A test that leaves its own state behind makes the
-// next test measure the leftovers.
+// rows, no queue rows, no agency rows, no timeline rows. A test that leaves its own state
+// behind makes the next test measure the leftovers.
 
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,15 @@ const STUDENT = 7;
 
 const conn = new DatabaseSync(DB);
 
+/** How many timeline rows this student has. Zero on a database that predates the table. */
+function timelineRows() {
+    try {
+        return conn.prepare('SELECT COUNT(*) AS n FROM StudentEvent WHERE StudentId = ?').get(STUDENT).n;
+    } catch {
+        return 'n/a';
+    }
+}
+
 console.log('before:', JSON.stringify(conn.prepare(
     'SELECT ChoiceXP, InsightXP, ResolveXP, LifetimeAgencyXP FROM StudentProgress WHERE StudentId = ?'
 ).get(STUDENT)));
@@ -21,11 +30,18 @@ console.log('rows:', JSON.stringify({
     history: conn.prepare('SELECT COUNT(*) AS n FROM ReflectionHistory WHERE StudentId = ?').get(STUDENT).n,
     queue: conn.prepare('SELECT COUNT(*) AS n FROM ReflectionQueue WHERE StudentId = ?').get(STUDENT).n,
     agency: conn.prepare('SELECT COUNT(*) AS n FROM AgencyLog WHERE StudentId = ?').get(STUDENT).n,
+    timeline: timelineRows(),
 }));
 
 conn.prepare('DELETE FROM ReflectionHistory WHERE StudentId = ?').run(STUDENT);
 conn.prepare('DELETE FROM ReflectionQueue WHERE StudentId = ?').run(STUDENT);
 conn.prepare('DELETE FROM AgencyLog WHERE StudentId = ?').run(STUDENT);
+
+// The timeline is new, and every audit that drives an endpoint now writes to it: the alignment check
+// alone left 836 rows behind. They are not the student's own actions, so they go the same way the
+// reflection rows do. The table is created on first use, so a database that predates it is not an error.
+conn.prepare('DELETE FROM StudentEvent WHERE StudentId = ?').run(STUDENT);
+conn.prepare('DELETE FROM StudentSession WHERE StudentId = ?').run(STUDENT);
 
 // The follow-through check finishes exercises, and finishing one writes rows here. Both the
 // log rows and the counter have to go back, or the dashboard's own numbers lie after a run.
@@ -48,4 +64,5 @@ console.log('residue:', JSON.stringify({
     history: conn.prepare('SELECT COUNT(*) AS n FROM ReflectionHistory WHERE StudentId = ?').get(STUDENT).n,
     queue: conn.prepare('SELECT COUNT(*) AS n FROM ReflectionQueue WHERE StudentId = ?').get(STUDENT).n,
     agency: conn.prepare('SELECT COUNT(*) AS n FROM AgencyLog WHERE StudentId = ?').get(STUDENT).n,
+    timeline: timelineRows(),
 }));

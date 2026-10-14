@@ -25,7 +25,7 @@ $used = ($literal + $generated) | Sort-Object -Unique
 
 # The question the client shows when the server sends nothing usable, and the chip labels the
 # bank names by hand. Kept here so the check is on what the app renders, not only on the bank.
-$clientFallbacks = @('reflection-q1', 'reflection-q2-generic', 'reflection-q3', 'reflection-quick-answer')
+$clientFallbacks = @('reflection-q1', 'reflection-q2-generic', 'reflection-q3', 'reflection-pick-answer')
 
 $used = ($used + $clientFallbacks) | Sort-Object -Unique
 

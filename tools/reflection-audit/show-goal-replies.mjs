@@ -34,7 +34,7 @@ async function ask(questionNumber, questionId, choice, choiceLabel) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             studentId: STUDENT, queueItemId: seedGoal(), questionNumber, questionId, choice, choiceLabel,
-            subjectTerms: [], mode: 'self', answer: '', language: 'en',
+            subjectTerms: [], mode: 'self', language: 'en',
         }),
     });
     return await response.json();

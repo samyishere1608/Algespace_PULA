@@ -31,10 +31,10 @@ node .\check-queue-routing.mjs ja
 node .\check-resolve-followthrough.mjs
 node .\restore-baseline.mjs
 
-# 5. The relevance gate (in `dotnet run`) plus two behavioural checks against the live model.
-#    (a) and (b) write to the database; follow them with restore-baseline.mjs.
-node .\check-replies.mjs          # a real answer is not discarded; a contradicted claim is not agreed with
+# 5. Two behavioural checks against the live model. They write to the database;
+#    follow them with restore-baseline.mjs.
 node .\check-attempt-link.mjs     # a reflection reads its own attempt (uses a throwaway student)
+node .\check-insight-gap.mjs      # Insight for facing a gap is paid once per episode, not per attempt
 
 # 6. The end-of-session reflection, end to end through the real endpoints: its two questions,
 #    the promise the second one records, and the Resolve the next day's intention pays.
@@ -378,31 +378,39 @@ It used to just hide the window, leaving the item `pending` and bringing it back
 | `dotnet run` | The bank itself: every category, every type, every awkward case, and the relevance gate. No API needed. |
 | `check-keys.ps1` | Every key the bank can emit resolves in en, de and ja. Currently 590 / 590 / 589. |
 | `node check-reply-alignment.mjs` | The replies. Needs the API. **The main tool.** |
-| `node check-session-reflection.mjs` | The session reflection end to end. 27 of 27. |
+| `node check-session-reflection.mjs` | The session reflection end to end. 26 of 26. |
+| `node check-insight-gap.mjs` | Insight for facing a gap, once per episode. |
 | `node check-resolve-followthrough.mjs` | Promises settling. 27 of 27. Writes to the database. |
 | `node restore-baseline.mjs` | **Always run this after anything that wrote.** |
 
 ### `check-reply-alignment.mjs` — read this before trusting or changing it
 
 Reads each item's real questions and chips back from the endpoint, then probes every answer shape:
-every chip, four free-text shapes including "I ignored that" and junk, and "Pippin, tell me". Covers
-three exercise types and three goal categories. Checks the reply against **the verdict that was paid**
-and **the question that was asked**, using word lists for phrases that have actually gone wrong.
+**every chip of every question**, plus "Pippin, tell me". There is no free-text case any more — nothing
+is typed, so there is nothing to type. Covers three exercise types and three goal categories, and
+checks the reply against **the verdict that was paid** and **the question that was asked**, using word
+lists for phrases that have actually gone wrong.
 
-Last full run: **107 replies, 3 failures.** The three are all the same input, the vague answer
-"it was fine i think" on a decision question, where the model still reaches for "you didn't". That is
-the next thing to fix.
+It also reports how often the reply guard threw the model's reply away in favour of the offline text,
+read from the `reflection.verdict` events the run just wrote, and fails above a 10% ceiling. That
+measurement is the point of it: the guard's "only hands their answer back" rule counted full stops and
+demanded two, which rejected 55 of 130 good replies — every one of them the fact-plus-reason shape the
+prompt asks for, joined by a comma. Counting a comma-joined clause as a second clause takes that to 3
+of 130. If this number climbs, the guard is the first thing to look at, not the model.
 
-**Two traps in this file, both learned the hard way:**
+**Three traps in this file, all learned the hard way:**
 
-1. **A question mark on a rejected answer is CORRECT.** The notice asks them to write it again, and the
-   modal shows that text. The check exempts `needsRetry` and says so in a comment. Do not "fix" it.
+1. **Send the chip's LOCALISED label, not its text key.** The real client resolves the key against its
+   own locale files and sends the words the student read; this file used to send the raw key, so the
+   model was handed "flexibility:elimination-method" and wrote it back. That is a fault of the harness,
+   and it inflated the rejection count this file reports. `labelFor()` reads the real locale files now.
 2. **Keep the banned-word lists narrow.** Banning the bare word "point" fired on ordinary English
    ("a fair point", "the key point of each method") and reported ten failures that were nothing.
    "choice" and "resolve" are excluded for the same reason.
+3. **An empty reply is the only hard failure on the text itself.** With no retry path left, every reply
+   is a complete statement, so a question mark at the end and an empty string are both simply wrong.
 
-A provider outage shows up as fallback text and the check will report it, which is how the
-contradiction above was found. That is deliberate.
+A provider outage shows up as the offline text and the check will report it, which is deliberate.
 
 ## Open items, in the order I would do them
 
@@ -841,3 +849,79 @@ locales, and the scoped `.dash-modal__action-btn` rules and its focus-ring entry
 used that class). The picker's real Add button (`data-tour="goals-confirm"`) is untouched, and no tour
 step anchors the removed one.
 
+
+
+## The reflection lost its free text
+
+Green light from the researcher: no more typing in a reflection, chips only. Every question in the
+bank already shipped chips, so this was checked branch by branch before anything was touched - all 15
+builders assign `Chips` on every path, and the smallest menu is 2. No question became unanswerable.
+
+**What went, and why it was more than a text box.** Four checkpoints existed only because a typed
+answer had to be judged, and all four are gone:
+
+- the off-topic gate, the feature extraction feeding it, the "write it again" loop and the whole of
+  `OffTopicDetector` (file deleted, plus its `Compile Include` in `AuditReflection.csproj`)
+- the narrow judge (`JudgeWrittenAnswer`), `NlpFeatures` in the prompt, `BuildSignalBlock`, and
+  `BuildReflectionPrompt`'s `features` parameter
+- `ReflectionQuestion.Expectation` as an ANSWER KEY and `JudgeFacts` - the property stays, because it
+  is still the one line that tells the reply's author what the question is about, but
+  `DescribeForPrompt` now frames it as "What this question asks about" instead of as a grading rule
+- `JudgeSessionPromise` and `SessionPromiseMeaning`, because the daily intention lost its free text
+  first and the promise has now lost its own, so both halves of that comparison are chip ids the server
+  wrote. A commitment with NO chip is left OPEN rather than closed unpaid, which is the one boundary
+  the old code existed to protect.
+
+`ReflectionEvaluateRequest` drops `Answer`, `ReflectionEvaluateResponse` drops `NeedsRetry`, and
+`ReflectionVerdict` drops `FromRecord` - the record always decides now, so the flag had one possible
+value. Three cases that used to be separate enforcement rules in the controller (Pippin pressed, a
+commitment, an end-of-session question) are now covered by the single line that copies the verdict,
+because `Grade` already returns zero for all three. Net: the reflection went from TWO provider calls
+per answer to ONE.
+
+**The reply guard was rejecting 44% of good replies, and that had to be fixed in the same change.**
+
+Measured from a real run of 130 model replies:
+
+    rejected                          57 / 130   (44%)
+    rejected by the "one sentence" rule  55 / 130
+
+`ReplyProblem` counted sentence terminators and demanded two, so it threw away replies that state the
+fact in different words and then the reason for it as one comma-joined sentence - which is good English
+and exactly what the prompt asks for. The student read the generic offline text on 14 of 101 answers
+(13%) and the model took the blame for a rule that was reading its punctuation. With the judge gone,
+that guard is the ONLY thing between the student and the model's reply, so at 44% the whole exercise
+would have failed.
+
+`ClausesIn()` counts sentences plus comma-joined clauses of four words or more (a length test, not a
+word list - a keyword list would be one more thing to keep in step with the model's phrasing). On the
+same 130 replies: **3 rejections instead of 57**, and what stays rejected is genuinely thin - "You got
+through it with no hints. Naming what went well is how you find the habits worth repeating." (99 chars,
+two throwaway sentences). `check-reply-alignment.mjs` now measures the rate from the `reflection.verdict`
+events the run wrote and fails above 10%, so this cannot come back unnoticed.
+
+**The chip moves to the student's own row.** It used to be written onto the companion's row as well
+(68 rows carried it, 2 answered ones did), which made a chip answer look like something the companion
+chose. With typing gone, the student row is the one row that holds the answer: question id + chip. The
+`reflection.answered` event now records the chip's localised LABEL alongside its id, because "band-most"
+is a key into the app's copy and an analysis a year from now cannot read it.
+
+**A harness bug found while measuring.** `check-reply-alignment.mjs` and `replay-session.mjs` were
+sending `chip.textKey` as the label instead of the words the student read, so the model was handed
+"flexibility:elimination-method" and wrote it back - "You tapped flexibility:elimination-method." The
+guard then rightly rejected it. That is the harness's fault, not the model's, and it inflated the very
+number this session was trying to measure. Both now resolve the key against the real locale files.
+
+**Audit suite.** `check-replies.mjs` deleted (it tested the off-topic gate and nothing else).
+`check-written-answers-and-gap.mjs` -> `check-insight-gap.mjs`, with the written-answer half removed.
+`check-reply-alignment.mjs` lost its four free-text cases and its `needsRetry` branch.
+`check-session-reflection.mjs`'s written-promise case became the no-chip boundary case. `Program.cs`
+lost the gate cases and its `FromRecord` assertions. Locales: `reflection-answer-placeholder` removed,
+`reflection-quick-answer` -> `reflection-pick-answer` ("Pick the answer that fits" / "Waehle die
+passende Antwort" / a Japanese equivalent). The SCSS block for the old "quick answers under the box"
+became `.reflection-modal__chips--answer`, sized like something you are meant to press.
+
+**"Pippin, tell me" stays.** The researcher's call: a student who does not know what to pick can still
+have the companion show what the record says before choosing.
+
+**Not verified:** the modal in a browser.

@@ -1,16 +1,15 @@
-// Two things the reflection module kept getting wrong, checked against the real endpoints.
+// Insight for facing a gap, checked against the real endpoint.
 //
-//   1. A WRITTEN answer. The verdict and the sentence beside it have to agree, and a written answer
-//      is paid only when the facts confirm it. The failing case this was written for: a goal on hints
-//      where all three exercises had no hints, answered with "I didn't use hints at all", came back as
-//      "this reads a little differently" next to +3.
-//   2. Insight for facing a gap. One award per gap episode: working on the thing next time must pay
-//      nothing until the student has fallen back into avoiding it.
+// One award per gap episode: working on the thing next time must pay nothing until the student has
+// fallen back into avoiding it, and a grace of three attempts is shared with the nudge.
 //
-//   node check-written-answers-and-gap.mjs            (live AI)
-//   $env:OpenAI__ApiKey='broken'  +  API restarted    (offline pass: a written answer must pay nothing)
+//   node check-insight-gap.mjs
 //
 // Always followed by restore-baseline.mjs.
+//
+// This file used to carry a second half about WRITTEN reflection answers. There is no free text in the
+// reflection any more, so there is nothing left in it to check: a chip is graded from the record before
+// the model is called, and check-reply-alignment.mjs drives every chip of every question.
 
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
@@ -66,87 +65,9 @@ async function post(url, body) {
     return response.ok ? response.json() : { error: response.status };
 }
 
-const HEDGE = /differently|different from|(a |the )?(little|bit|touch|slightly)( bit)? different|not (quite|exactly)|second (glance|look)|however|in reality|but actually/i;
-const CONFIRMS = /spot on|exactly (what|right|as)|that matches|matches what|you'?re (absolutely |completely )?right|that'?s (absolutely |completely )?(right|correct)|nailed it/i;
-const AWARD = /\b(insight|xp|award(ed)?|earn(ed)?)\b/i;
+// ── Insight for facing a gap ────────────────────────────────────────────────
 
-// ── 1. Written answers ──────────────────────────────────────────────────────
-
-async function goalItem(category, quality, limit, attempts) {
-    clearStudent(STUDENT);
-    for (const [type, method, errors, hints, decisions] of attempts) seedAttempt(STUDENT, type, method, errors, hints, decisions);
-
-    await post('/student-progress/log-goal', {
-        studentId: STUDENT, goalId: category, goalLabel: `check ${category}`, xpEarned: 5,
-        exerciseType: '', totalErrors: 0, totalHints: 0, since: '', focus: '', quality, maxPerExercise: limit,
-    });
-
-    const queue = await (await fetch(`${API}/student-progress/reflection-queue/${STUDENT}`)).json();
-    return queue.find(q => q.itemType === 'goal');
-}
-
-async function written(entry, number, question, answer) {
-    // The provider rate-limits, and every written answer is two calls. Spacing them keeps a live run
-    // from silently turning into the offline path, which would prove nothing about the judge.
-    if (!OFFLINE) await new Promise(resolve => setTimeout(resolve, 2500));
-    return post('/student-progress/reflection/evaluate', {
-        studentId: STUDENT, queueItemId: entry.id, questionNumber: number, questionId: question.id,
-        choice: '', choiceLabel: '', answer, mode: 'self', language: 'en', subjectTerms: [],
-    });
-}
-
-// What each written answer ought to be judged as, for a goal on hints where all three exercises had none.
-const CASES_NO_HINTS = [
-    ['claims no hints, true', 'i didnt use hints at all', true],
-    ['claims no hints, true (worded differently)', 'I got through all of them without using a single hint', true],
-    ['claims lots of hints, false', 'I needed loads of hints on every exercise', false],
-    ['a verdict only', 'it was fine i think', false],
-];
-
-console.log('### Goal on hints, 3 exercises, no hints');
-const hintGoal = await goalItem('hintsAndErrors', 'hints', 1, [
-    ['Matching', 'Elimination', 0, 0],
-    ['Matching', 'Elimination', 1, 0],
-    ['Matching', 'Substitution', 0, 0],
-]);
-
-if (!hintGoal) {
-    expect('the hints goal reached the queue', false);
-} else {
-    const q2 = hintGoal.questions[1];
-
-    // A question about "which method took the most hints" has no answer when there were none.
-    expect('Q2 of a hint-free goal is not a "which method took the most hints" question',
-        q2.id === 'q2-count' && q2.textKey === 'reflection-q2-count-hintfree',
-        `got ${q2.id} / ${q2.textKey}`);
-
-    for (const [index, question] of hintGoal.questions.slice(0, 2).entries()) {
-        for (const [label, answer, shouldMatch] of CASES_NO_HINTS) {
-            const result = await written(hintGoal, index + 1, question, answer);
-            const title = `${question.id} — ${label}`;
-            if (result.error) { console.log(`SKIP  ${title}: ${result.error}`); continue; }
-            if (result.needsRetry) continue;
-
-            const text = result.feedback ?? '';
-            expect(`${title}: the badge pays only when the reply confirms`, (result.insightXp > 0) === result.aligned, `aligned=${result.aligned} xp=${result.insightXp} "${text}"`);
-            expect(`${title}: no award language`, !AWARD.test(text), `"${text}"`);
-            if (result.aligned) expect(`${title}: a confirmed answer is not hedged`, !HEDGE.test(text), `"${text}"`);
-            else expect(`${title}: an unconfirmed answer is not confirmed`, !CONFIRMS.test(text), `"${text}"`);
-
-            if (OFFLINE) {
-                expect(`${title}: offline, a written answer pays nothing`, result.insightXp === 0 && !result.aligned, `xp=${result.insightXp}`);
-            } else if (label.startsWith('claims no hints, true') && question.id === 'q2-count') {
-                expect(`${title}: the live judge confirms a true claim`, result.aligned === shouldMatch, `aligned=${result.aligned} "${text}"`);
-            } else if (label === 'claims lots of hints, false') {
-                expect(`${title}: the live judge does not confirm a false claim`, !result.aligned, `aligned=${result.aligned} "${text}"`);
-            }
-        }
-    }
-}
-
-// ── 2. Insight for facing a gap ─────────────────────────────────────────────
-
-console.log('\n### Insight for facing a gap');
+console.log('### Insight for facing a gap');
 clearStudent(GAP_STUDENT);
 
 const DECLINE = { FirstSolutionChoice: 'No' };
@@ -225,4 +146,5 @@ clearStudent(STUDENT);
 conn.close();
 
 console.log(`\n${checks} checks, ${failures.length} failed.`);
+console.log('Now run: node restore-baseline.mjs');
 process.exit(failures.length === 0 ? 0 : 1);

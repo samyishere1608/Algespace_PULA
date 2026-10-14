@@ -22,9 +22,10 @@ namespace webapi.Services
     /// reflection that opens by pointing at a mistake teaches a student to write what sounds right
     /// rather than to look at their own work.
     ///
-    /// CHIPS ARE A SHORTCUT, NOT THE ANSWER. They are offered as a quick claim, never advertised, and
-    /// the free text stays the main way to reply. A student who writes instead of tapping is judged on
-    /// what they wrote, against the same expectation.
+    /// CHIPS ARE THE ANSWER. Every question offers at least two, the student picks one, and the record
+    /// grades it against the answer key held here on the server. That is what makes a reflection
+    /// checkable without a model reading anything: the verdict is settled before the reply is written,
+    /// and the model is left to do the one thing it is better at than any rule.
     /// </summary>
     public static class ReflectionQuestionBank
     {
@@ -1545,19 +1546,20 @@ namespace webapi.Services
             // question: "what went well today" has several true answers and the record is in no position
             // to say which one the student noticed.
             if (question.Kind is NextAction or Session)
-                return new ReflectionVerdict { Status = "no-award", InsightXp = 0, FromRecord = true };
+                return new ReflectionVerdict { Status = "no-award", InsightXp = 0 };
 
             if (chipId.Length > 0 && question.AlignedChipIds.Contains(chipId))
-                return new ReflectionVerdict { Status = "aligned", InsightXp = AlignedXp, FromRecord = true };
+                return new ReflectionVerdict { Status = "aligned", InsightXp = AlignedXp };
 
             if (chipId.Length > 0 && question.PartialChipIds.Contains(chipId))
-                return new ReflectionVerdict { Status = "partial", InsightXp = PartialXp, FromRecord = true };
+                return new ReflectionVerdict { Status = "partial", InsightXp = PartialXp };
 
             if (chipId.Length > 0)
-                return new ReflectionVerdict { Status = "not-aligned", InsightXp = 0, FromRecord = true };
+                return new ReflectionVerdict { Status = "not-aligned", InsightXp = 0 };
 
-            // No chip chosen, so the free text is the answer and only the model can read it.
-            return new ReflectionVerdict { Status = "unjudged", InsightXp = 0, FromRecord = false };
+            // No chip at all, which is the help button: the student asked the companion to answer this
+            // question rather than answering it. Nothing was claimed, so there is nothing to grade.
+            return new ReflectionVerdict { Status = "unjudged", InsightXp = 0 };
         }
 
         /// <summary>
@@ -1761,31 +1763,6 @@ namespace webapi.Services
         }
 
         /// <summary>
-        /// Only the facts, for judging what a student wrote: no instructions to a writer, no tone rules.
-        ///
-        /// <see cref="DescribeRecord"/> carries sentences such as "never say all" that are meant for the
-        /// model writing the reply. A judge reads them as facts, and one marked "I got through all of
-        /// them without a hint" as contradicting a record that said exactly that.
-        /// </summary>
-        public static string JudgeFacts(ReflectionEvidence evidence, ReflectionQuestion question, string studentLine)
-        {
-            var parts = new List<string>();
-            if (!string.IsNullOrWhiteSpace(studentLine)) parts.Add($"{char.ToUpperInvariant(studentLine[0])}{studentLine[1..]}.");
-            if (!string.IsNullOrWhiteSpace(question.RecordFact) && question.RecordFact != studentLine)
-                parts.Add($"{char.ToUpperInvariant(question.RecordFact[0])}{question.RecordFact[1..]}.");
-
-            if (question.Id == "goal-q1-went-well" && question.ChipFacts.Count > 0)
-                parts.Add("What is true of this goal: " + string.Join("; ", question.ChipFacts.Values) + ".");
-
-            if ((evidence.IsGoal || evidence.IsSession) && evidence.GoalExercises.Count > 0)
-                parts.Add($"The exercises, oldest first — {ExerciseRuns(evidence, question)}.");
-            else if (!evidence.IsGoal)
-                parts.Add(DescribeRecord(evidence, question));
-
-            return string.Join(" ", parts);
-        }
-
-        /// <summary>
         /// The same record, said TO the student rather than about them.
         ///
         /// <see cref="DescribeRecord"/> is written for the prompt ("They worked the comparison through
@@ -1891,11 +1868,13 @@ namespace webapi.Services
         }
 
         /// <summary>
-        /// What the model should be told about the question before it reads a free-text answer.
+        /// What this question asks about, for the reply's author.
         ///
-        /// Narrow on purpose. The old prompt asked whether an answer was "aligned" against a set of
-        /// keywords, which is how "it was good" earned points. This asks whether the answer refers to one
-        /// specific thing the record has already settled, and says so in the student's own language.
+        /// It used to be the answer key too: the narrow judge that read a written answer was handed this
+        /// line and asked whether the student's words referred to it, so the wording was written to be
+        /// checkable ("they name the part that cost them the most"). With every answer now a chip, the
+        /// record settles that question long before the model is called, and this line does the one job
+        /// left: telling the author what the question is about so the reply stays inside it.
         /// </summary>
         public static string DescribeForPrompt(ReflectionQuestion question, IEnumerable<string> subjectTerms)
         {
@@ -1908,7 +1887,7 @@ namespace webapi.Services
             {
                 var subject = NextActionSubject(question.TextKey);
                 return "This is a next-step question: it has no right answer that could be checked, so "
-                     + "nothing in the student's words is confirmed or corrected here."
+                     + "nothing in the student's choice is confirmed or corrected here."
                      + (subject.Length == 0
                          ? ""
                          : $" It asks what they will do next time about {subject}, so the reply is about that "
@@ -1917,14 +1896,14 @@ namespace webapi.Services
 
             if (question.Kind == Session)
                 return "This is an end-of-session question: it has no right answer, and nothing to check the "
-                     + "student's words against, whatever they answer.";
+                     + "student's choice against, whatever they choose.";
 
             var terms = subjectTerms.Where(term => !string.IsNullOrWhiteSpace(term)).ToList();
             var clue = terms.Count > 0
-                ? $" A correct answer refers to one of these, in the student's own language: {string.Join(", ", terms)}."
+                ? $" The question is about one of these, in the student's own language: {string.Join(", ", terms)}."
                 : "";
 
-            return $"Expected of a correct answer: {question.Expectation}.{clue}";
+            return $"What this question asks about: {question.Expectation}.{clue}";
         }
     }
 }

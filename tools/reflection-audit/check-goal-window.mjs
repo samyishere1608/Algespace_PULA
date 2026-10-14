@@ -41,6 +41,12 @@ function clear() {
     conn.prepare('DELETE FROM ReflectionQueue WHERE StudentId = ?').run(STUDENT);
     conn.prepare('DELETE FROM GoalCompletions WHERE StudentId = ?').run(STUDENT);
     conn.prepare('DELETE FROM StudentProgress WHERE StudentId = ?').run(STUDENT);
+    // Driving log-goal now writes to the timeline, so a run that does not clear it leaves rows for a
+    // student who never existed. Guarded: the table is created on first use.
+    try {
+        conn.prepare('DELETE FROM StudentEvent WHERE StudentId = ?').run(STUDENT);
+        conn.prepare('DELETE FROM StudentSession WHERE StudentId = ?').run(STUDENT);
+    } catch { /* a database that predates the timeline */ }
 }
 
 function attempt({ type, method, errors, hints, decisions = {}, at }) {

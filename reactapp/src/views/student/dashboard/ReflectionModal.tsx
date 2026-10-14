@@ -1,4 +1,4 @@
-import { faArrowRight, faCheck, faLightbulb, faPen, faRobot, faRotateRight, faSpinner, faTimes } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faCheck, faLightbulb, faRobot, faSpinner, faTimes } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ReactElement, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -87,14 +87,12 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const [itemIndex, setItemIndex] = useState(0);
     const [question, setQuestion] = useState(1);
     const [phase, setPhase] = useState<Phase>("answering");
-    const [answer, setAnswer] = useState("");
     const [choice, setChoice] = useState("");
     const [feedback, setFeedback] = useState("");
     const [nextStep, setNextStep] = useState("");
     const [loading, setLoading] = useState(false);
     const [history, setHistory] = useState<ReflectionHistoryEntry[]>([]);
     const [earnedInsight, setEarnedInsight] = useState(0);
-    const [retryNotice, setRetryNotice] = useState("");
 
     /**
      * WHICH action is in flight, not merely that one is.
@@ -136,39 +134,24 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const questionText = asked.text
         || (question === 1 ? t("reflection-q1") : question === 2 ? t("reflection-q2-generic") : t("reflection-q3"));
 
-    // A chip OR some writing is an answer, and ONE button sends whichever is there.
+    // ONE CHIP IS THE ANSWER, AND ONE BUTTON SENDS IT.
     //
-    // A chip used to submit itself the moment it was tapped, which made a quick answer a different
-    // kind of action from writing one and sent it before the student could change their mind. Now
-    // tapping a chip selects it and the same button sends it, so both ways of answering end the same.
-    const hasAnswer = answer.trim().length > 0 || choice.length > 0;
+    // There is no text box any more: every question in the bank ships chips, so a tap is the only way to
+    // answer and the server grades it from the record without asking the model to judge anything. The
+    // button is still separate from the chips — a chip selects and the button sends, so a mis-tap is
+    // recoverable and a quick answer is decided rather than fired off on contact.
+    const hasAnswer = choice.length > 0;
 
     async function handleAnswer(mode: "self" | "pippin", chipId = choice): Promise<void> {
         if (loading) return;
         setPending(mode);
         setLoading(true);
-        // ── Debug log: what we send to the backend ───────────────────────
-        console.log("[Reflection] SEND", JSON.stringify({
-            studentId,
-            queueItemId: item.id,
-            question,
-            questionId: asked.id,
-            choice,
-            mode,
-            answer: mode === "self" ? answer : "(pippin model answer)",
-            itemLabel: item.itemLabel,
-            itemMethod: item.method,
-            itemErrors: item.errors,
-            itemHints: item.hints,
-            itemPippinMessages: item.pippinMessages,
-        }, null, 2));
         try {
             const result = await evaluateReflection(
                 studentId,
                 item.id,
                 question,
                 mode,
-                mode === "self" ? answer : "",
                 i18n.language?.slice(0, 2) ?? "en",
                 asked.id,
                 mode === "self" ? chipId : "",
@@ -181,28 +164,23 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 aligned: result.aligned,
                 insightXp: result.insightXp,
                 nextStep: result.nextStep,
-                needsRetry: result.needsRetry,
             }, null, 2));
 
-            // An off-topic answer is not a reflection: do not grade it, do not award XP and do not
-            // record a turn. Stay in the answering phase so the student can rewrite it.
-            if (result.needsRetry) {
-                setRetryNotice(result.feedback);
-                setEarnedInsight(0);
-                return;
-            }
-
-            setRetryNotice("");
             setFeedback(result.feedback);
             setNextStep(result.nextStep ?? "");
             setEarnedInsight(result.insightXp ?? 0);
             setPhase("feedback");
 
-            const newEntries: ReflectionHistoryEntry[] = [];
-            if (mode === "self" && answer.trim()) {
-                newEntries.push({ role: "student", text: answer.trim(), insightXp: 0, itemType: item.itemType, itemId: item.itemId, questionId: asked.id, choice: chipId });
-            }
-            newEntries.push({ role: "pippin", text: result.feedback, insightXp: result.insightXp, itemType: item.itemType, itemId: item.itemId, questionId: asked.id, choice });
+            // THE CHIP BELONGS ON THE STUDENT'S ROW.
+            //
+            // It used to be written onto the companion's row as well, which made a chip answer look like
+            // something the companion had chosen — 68 rows carried it, only 2 answered ones did. The
+            // student's row is now the one row that holds the answer: the question it answered and the
+            // chip that was chosen. Nothing reads the companion's copy.
+            const newEntries: ReflectionHistoryEntry[] = [
+                { role: "student", text: "", insightXp: 0, itemType: item.itemType, itemId: item.itemId, questionId: asked.id, choice: chipId },
+                { role: "pippin", text: result.feedback, insightXp: result.insightXp, itemType: item.itemType, itemId: item.itemId, questionId: asked.id },
+            ];
             setHistory((prev) => [...prev, ...newEntries]);
 
             if (result.insightXp > 0) {
@@ -220,12 +198,10 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     async function handleNext(): Promise<void> {
         if (question < totalQuestions) {
             setQuestion((q) => q + 1);
-            setAnswer("");
             setChoice("");
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
-            setRetryNotice("");
             setPhase("answering");
             return;
         }
@@ -236,12 +212,10 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
         if (itemIndex < items.length - 1) {
             setItemIndex((i) => i + 1);
             setQuestion(1);
-            setAnswer("");
             setChoice("");
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
-            setRetryNotice("");
             setPhase("answering");
         } else {
             onClose();
@@ -306,49 +280,34 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 {/* Answering phase */}
                 {phase === "answering" && (
                     <div className="reflection-modal__answer">
-                        {/* Whose turn it is. An empty box under a question does not say that. */}
+                        {/* The chips ARE the answer, so they sit where the answer goes and carry the
+                            "your turn" label themselves. They used to be a row of pills BELOW a text box,
+                            deliberately labelled "quick answer" so they would not read as the expected
+                            answer to a reflection the student was meant to write in their own words. There
+                            is nothing to write now, so that framing is gone with the box: this is the
+                            answer, and the label says so. */}
                         <span className="buddy-turn__label">{t("reflection-your-turn")}</span>
-                        <textarea
-                            className="reflection-modal__input"
-                            value={answer}
-                            onChange={(e) => setAnswer(e.target.value)}
-                            placeholder={t("reflection-answer-placeholder")}
-                            rows={3}
-                            maxLength={400}
-                            autoFocus
-                        />
-                        {/* Quick answers, deliberately UNDER the box. The writing is the reply; a row of pills
-                            above it would read as the expected answer and quietly turn a reflection into a
-                            multiple choice. Nothing here is required, and the question never mentions them. */}
-                        {asked.chips.length > 0 && (
-                            <div className="reflection-modal__quick">
-                                <span className="reflection-modal__quick-label">{t("reflection-quick-answer")}</span>
-                                <div className="reflection-modal__chips" role="group" aria-label={t("reflection-quick-answer")}>
-                                    {asked.chips.map((chip) => (
-                                        <button
-                                            key={chip.id}
-                                            type="button"
-                                            className={`reflection-modal__chip${choice === chip.id ? " reflection-modal__chip--on" : ""}`}
-                                            aria-pressed={choice === chip.id}
-                                            disabled={loading}
-                                            onClick={() => setChoice(choice === chip.id ? "" : chip.id)}
-                                        >
-                                            {chip.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        {retryNotice && (
-                            <div className="reflection-modal__retry" role="status">
-                                <FontAwesomeIcon icon={faRotateRight} />
-                                <p>{retryNotice}</p>
-                            </div>
-                        )}
-                        {/* Two actions, and they are different things: send the answer the student gave,
-                            or have the companion answer this question for them. The submit button sends a
-                            chip or the writing, whichever is there — an answer is one answer, so it is one
-                            button, and nothing is sent until it is pressed. */}
+                        <div
+                            className="reflection-modal__chips reflection-modal__chips--answer"
+                            role="group"
+                            aria-label={t("reflection-pick-answer")}
+                        >
+                            {asked.chips.map((chip) => (
+                                <button
+                                    key={chip.id}
+                                    type="button"
+                                    className={`reflection-modal__chip${choice === chip.id ? " reflection-modal__chip--on" : ""}`}
+                                    aria-pressed={choice === chip.id}
+                                    disabled={loading}
+                                    onClick={() => setChoice(choice === chip.id ? "" : chip.id)}
+                                >
+                                    {chip.label}
+                                </button>
+                            ))}
+                        </div>
+                        {/* Two actions, and they are different things: send the answer the student chose,
+                            or have the companion answer this question for them. A chip selects and the
+                            button sends, so nothing is decided by a single tap. */}
                         <div className="reflection-modal__actions">
                             <button
                                 className="button secondary-button"
@@ -363,7 +322,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                 onClick={() => handleAnswer("self")}
                                 disabled={!hasAnswer || loading}
                             >
-                                {pending === "self" ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faPen} />}
+                                {pending === "self" ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faCheck} />}
                                 {t("reflection-submit-answer")}
                             </button>
                         </div>

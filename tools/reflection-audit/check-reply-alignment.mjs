@@ -15,6 +15,7 @@
 //   node check-reply-alignment.mjs [en|de|ja]
 
 import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -25,6 +26,13 @@ const STUDENT = 7;
 const LANGUAGE = process.argv[2] ?? 'en';
 
 const stamp = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+// Where the timeline had got to before this run, so the guard check at the end reads only the verdict
+// events this run wrote. Null when the database predates the timeline table.
+const eventMark = (() => {
+    try { return conn.prepare('SELECT COALESCE(MAX(Id), 0) AS m FROM StudentEvent').get().m; }
+    catch { return null; }
+})();
 
 // ── The bans ────────────────────────────────────────────────────────────────
 //
@@ -103,13 +111,34 @@ function seedExercise(exerciseType, decisions, errors = 2, hints = 1) {
     return id;
 }
 
-async function evaluate(queueItemId, questionNumber, questionId, choice, choiceLabel, answer, mode = 'self') {
+/**
+ * The words a chip actually shows the student.
+ *
+ * The client resolves each chip's text key against its own locale files before rendering, and sends
+ * those resolved words as the label. This used to send the raw key instead — so the audit handed the
+ * model "flexibility:elimination-method" where the real client hands it "elimination method", and got
+ * replies like "You tapped flexibility:elimination-method" back. The model was blamed for reading what
+ * it was given, and the rejection count this file reports was inflated by a fault of the harness.
+ */
+function labelFor(textKey) {
+    if (!textKey) return '';
+    const [namespace = 'student', key = textKey] = textKey.includes(':') ? textKey.split(':') : ['student', textKey];
+    const file = path.join(ROOT, `reactapp/src/assets/translations/${LANGUAGE}/${namespace}.json`);
+    try {
+        const value = JSON.parse(readFileSync(file, 'utf8'))[key];
+        return typeof value === 'string' ? value : textKey;
+    } catch {
+        return textKey;
+    }
+}
+
+async function evaluate(queueItemId, questionNumber, questionId, choice, choiceLabel, mode = 'self') {
     const response = await fetch(`${API}/student-progress/reflection/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             studentId: STUDENT, queueItemId, questionNumber, questionId,
-            choice, choiceLabel, answer, mode, language: LANGUAGE, subjectTerms: [],
+            choice, choiceLabel, mode, language: LANGUAGE, subjectTerms: [],
         }),
     });
 
@@ -135,15 +164,11 @@ function check(title, reply, verdict) {
         for (const pattern of CONTRADICTS_AN_ALIGNED_VERDICT)
             if (pattern.test(text)) broke.push(`contradicts the +${verdict.insightXp} it paid (${pattern})`);
 
-    // A rejected answer is the ONE case where a question mark is right: the notice asks them to write
-    // it again, and the modal shows this text as that notice. Everything else is a complete statement,
-    // and an empty reply is only wrong here because there would then be nothing to show at all.
-    if (verdict.needsRetry) {
-        if (!text.trim()) broke.push('retry notice was empty');
-    } else {
-        if (!text.trim()) broke.push('empty reply');
-        if (/\?\s*$/.test(text.trim())) broke.push('ends with a question');
-    }
+    // There is no off-topic retry any more — nothing is typed, so nothing can be unrelated to the
+    // question. Every reply is a complete statement, and an empty one would leave the student with
+    // nothing to read at all.
+    if (!text.trim()) broke.push('empty reply');
+    if (/\?\s*$/.test(text.trim())) broke.push('ends with a question');
 
     results.push({ title, verdict: verdict.aligned ? 'aligned' : 'not aligned', xp: verdict.insightXp, broke });
     if (process.env.SHOW && title.startsWith('goal')) console.log(`SHOW  ${title}\n      ${verdict.aligned ? 'aligned' : 'not aligned'} +${verdict.insightXp}: "${text}"`);
@@ -186,13 +211,6 @@ seedExercise('Matching', 'SelfExplanation=Engaged;SolveOnOwn=Declined', 0, 0);
 // ONLY_GOALS=1 skips the exercise cases, for a quicker run when only a goal question changed.
 if (process.env.ONLY_GOALS) items.length = 0;
 
-const FREE_TEXT = [
-    ['vague, still on topic', 'it was fine i think'],
-    ['names a real thing', 'i put the x term on the other side first'],
-    ['ignored it', 'i ignored that part'],
-    ['off topic', 'blah blah keyboard smash zzz'],
-];
-
 for (const item of items) {
     const queue = await (await fetch(`${API}/student-progress/reflection-queue/${STUDENT}`)).json();
     const entry = queue.find(q => q.id === item.id);
@@ -208,21 +226,14 @@ for (const item of items) {
         // Every chip, because the two verdicts need different handling and which chip is which is
         // decided by the record, not by us.
         for (const chip of question.chips) {
-            const result = await evaluate(item.id, number, question.id, chip.id, chip.textKey, '');
+            const result = await evaluate(item.id, number, question.id, chip.id, labelFor(chip.textKey));
             if (result.error) { console.log(`SKIP  ${title('chip ' + chip.id)}: ${result.error}`); continue; }
             check(title(`tap "${chip.id}"`), result.feedback, result);
             checkScope(title(`tap "${chip.id}"`), result.feedback, question.id, result);
         }
 
-        for (const [label, answer] of FREE_TEXT) {
-            const result = await evaluate(item.id, number, question.id, '', '', answer);
-            if (result.error) { console.log(`SKIP  ${title(label)}: ${result.error}`); continue; }
-            check(title(`wrote "${label}"`), result.feedback, result);
-            checkScope(title(`wrote "${label}"`), result.feedback, question.id, result);
-        }
-
         // "Pippin, tell me" is the mode that used to answer with the past whatever was asked.
-        const pippin = await evaluate(item.id, number, question.id, '', '', '', 'pippin');
+        const pippin = await evaluate(item.id, number, question.id, '', '', 'pippin');
         if (!pippin.error) {
             check(title('pressed Pippin, tell me'), pippin.feedback, pippin);
             checkScope(title('pressed Pippin, tell me'), pippin.feedback, question.id, pippin);
@@ -339,9 +350,38 @@ clearGoalItems();
 
 console.log(`\n${results.length} replies checked, ${failures.length} with something wrong.`);
 
+// ── How often the reply guard threw the model's work away ────────────────────
+//
+// The guard sends a reply back once and, if it is wrong again, shows the offline text instead. Its
+// "only hands their answer back" rule counted full stops and demanded two, which rejected 55 of 130
+// good replies in a measured run — every one of them the fact-then-reason shape the prompt asks for,
+// joined by a comma. The student then read generic text on one answer in seven, and the model took the
+// blame for a rule that was reading its punctuation. This reads the verdict events the run just wrote,
+// so the check is on what happened rather than on a regex written here.
+if (eventMark !== null) {
+    try {
+        const verdicts = conn.prepare(
+            "SELECT Value FROM StudentEvent WHERE StudentId = ? AND Id > ? AND EventType = 'reflection.verdict'"
+        ).all(STUDENT, eventMark);
+        const thrownAway = verdicts.filter(row => row.Value === 'reply-rejected-twice').length;
+        const rate = verdicts.length === 0 ? 0 : thrownAway / verdicts.length;
+        const summary = `${thrownAway} of ${verdicts.length} judged answers fell back to the offline text`;
+        // A provider that is down produces fallbacks too, but those arrive as their own outcomes
+        // (no-provider-configured, model-unreachable, model-unreadable) and are not counted here.
+        if (verdicts.length >= 20 && rate > 0.1) {
+            console.log(`FAIL  the reply guard ${summary} (${Math.round(rate * 100)}% — over the 10% ceiling)`);
+            process.exitCode = 1;
+        } else {
+            console.log(`ok    the reply guard let the model's reply through — ${summary}`);
+        }
+    } catch {
+        console.log('NOTE  no timeline table, so the guard rate was not measured');
+    }
+}
+
 // The queue and history rows this check created are not the student's own, so they go.
 conn.prepare('DELETE FROM ReflectionHistory WHERE StudentId = ?').run(STUDENT);
 conn.prepare('DELETE FROM ReflectionQueue WHERE StudentId = ?').run(STUDENT);
 conn.close();
 
-process.exit(failures.length === 0 ? 0 : 1);
+process.exit(failures.length === 0 && !process.exitCode ? 0 : 1);

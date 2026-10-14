@@ -5,9 +5,8 @@ namespace webapi.Models.Student
     /// <summary>
     /// One chip offered under a reflection question.
     ///
-    /// The chip is a QUICK ANSWER, not the expected one. The free text box stays the primary way to
-    /// answer; a chip exists so a student who does not want to write three sentences can still make a
-    /// claim we can check. Which is why the question itself never points at the chips.
+    /// The chip is the answer, and the only way to give one: every question in the bank offers at least
+    /// two, and the record grades the one that was chosen without asking the model to judge anything.
     /// </summary>
     public class ReflectionChip
     {
@@ -71,17 +70,21 @@ namespace webapi.Models.Student
         [JsonIgnore]
         public List<string> AlignedChipIds { get; set; } = [];
 
-        /// <summary>Chip ids that count as a partial answer, worth less Insight. Also withheld.</summary>
+        /// <summary>
+        /// Chip ids that count as a partial answer, worth less Insight. Also withheld.
+        /// </summary>
         [JsonIgnore]
         public List<string> PartialChipIds { get; set; } = [];
 
         /// <summary>
-        /// What a free-text answer has to refer to, for the model to call it aligned. Empty when the
-        /// question has nothing to check.
+        /// What this question asks about, in one line, for the model writing the reply.
         ///
-        /// This is what makes a text-only answer judgeable: instead of asking the model "is this
-        /// aligned", which is how "it was good" used to pass, it is asked the narrow question "does
-        /// this refer to the one thing the record already settled".
+        /// It used to be the answer key for a written answer: a narrow judge was handed this line and
+        /// asked whether the student's words referred to it, which is why the wording reads as a
+        /// description of a correct answer ("they name the part that cost them the most"). Chips are the
+        /// only way to answer now and the record settles the verdict before the model is called, so its
+        /// job is narrower: keeping the reply on the question that was asked. The values are left as they
+        /// are because that is what they still describe — the subject of the question.
         /// </summary>
         [JsonIgnore]
         public string Expectation { get; set; } = "";
@@ -318,9 +321,6 @@ namespace webapi.Models.Student
         /// <summary>"aligned" | "partial" | "not-aligned" | "no-award" | "unjudged".</summary>
         public string Status { get; set; } = "not-aligned";
         public int InsightXp { get; set; }
-
-        /// <summary>True when the record decided the verdict, false when the free text had to be read.</summary>
-        public bool FromRecord { get; set; }
     }
 
     /// <summary>A queue item plus the questions built for it. Never persisted.</summary>

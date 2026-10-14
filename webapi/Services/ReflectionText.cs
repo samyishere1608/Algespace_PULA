@@ -6,8 +6,7 @@ namespace webapi.Services
     /// The AI paths get their sentences from the model, so they only need an instruction. The
     /// rule-based paths assemble their own sentences, and those are read by the student — without this
     /// a Japanese student was shown English coaching inside an otherwise Japanese screen. Same
-    /// reasoning as <see cref="GoalSuggestionText"/> (goal picker) and
-    /// <see cref="OffTopicDetector.RetryMessage"/> (reflection retry).
+    /// reasoning as <see cref="GoalSuggestionText"/> for the goal picker.
     ///
     /// Note the Japanese is machine-written and has NOT been checked by a native speaker. It needs the
     /// same review the rest of the Japanese content does.
