@@ -3526,9 +3526,16 @@ Respond ONLY with JSON, keys in this order: {{""claim"":""what the student claim
             @"exactly (what|that)|that is (just )?what (happened|you did)|that'?s (just )?what (happened|you did)|exactly as you",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
-        // A reply that hedges or points at a difference. It may not sit next to a confirmed answer.
+        // A reply that hedges, points at a difference, or attaches an improvement note to an answer it
+        // is confirming. None of it may sit next to a confirmed answer: the badge says their claim
+        // matched, so the sentence beside it cannot also say they are not there yet.
+        //
+        // The improvement-note family is here because of a reply that reached a student: "You made
+        // progress on your method selection, but there's still room to improve", next to +3 Insight.
+        // A confirmation is a confirmation — the prompt already says to celebrate and stop.
         private static readonly System.Text.RegularExpressions.Regex HedgesAConfirmation = new(
-            @"differently|different from|(a |the )?(little|bit|touch|slightly)( bit)? different|not (quite|exactly)|(does|did|do)(n'?t| not)( quite)? (match|line up)|second (glance|look)|however|in reality|but actually|to be honest",
+            @"differently|different from|(a |the )?(little|bit|touch|slightly)( bit)? different|not (quite|exactly)|(does|did|do)(n'?t| not)( quite)? (match|line up)|second (glance|look)|however|in reality|but actually|to be honest"
+            + @"|still room (to|for)|room (to improve|for improvement)|you can (still )?improve|(needs?|there'?s) (a bit )?more (work|practice)|keep working on|had room to grow",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
         // A reply that confirms. It may not sit next to an answer that was not confirmed.
