@@ -1817,6 +1817,20 @@ namespace webapi.Services
                     // The step IS the answer here: the question asks which part they felt sure about, or
                     // which one cost them the most. It used to be answered with the solve-on-own decision,
                     // which is a different fact about the exercise and left the model nothing to name.
+                    //
+                    // AND IT IS THE STEP THEY NAMED, NOT EVERY STEP THAT QUALIFIES.
+                    //
+                    // This used to answer with every clean step joined together — "you got through the
+                    // part where the method is set up and the part where the solution is found without a
+                    // mistake". A student who tapped "choosing the method" was told about a part they had
+                    // never mentioned, and a student who had made mistakes elsewhere read the list as a
+                    // claim about the whole exercise. The question on screen asks about ONE part, so
+                    // naming theirs back is what ties the reply to the answer it is replying to.
+                    var chosenStep = choice.StartsWith("step-", StringComparison.Ordinal) ? choice[5..] : "";
+                    if (question.Id == "q1-step-sure" && chosenStep.Length > 0
+                        && evidence.CleanStepIds.Contains(chosenStep))
+                        return $"you got through {StepGloss(chosenStep)} without a mistake";
+
                     var clean = evidence.Steps.Where(step => evidence.CleanStepIds.Contains(step.Id)).ToList();
                     if (!string.IsNullOrEmpty(question.Id) && question.Id == "q1-step-sure" && clean.Count > 0)
                         return "you got through " + string.Join(" and ", clean.Select(step => StepGloss(step.Id)))

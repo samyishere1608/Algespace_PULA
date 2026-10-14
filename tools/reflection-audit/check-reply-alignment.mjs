@@ -40,9 +40,9 @@ const eventMark = (() => {
 // break, so a failure says which of the two things went wrong rather than just "bad words".
 
 const REPORT_TONE = [
-    /\bthe data\b/i,
-    /\baccording to\b/i,
     /\bthe record (shows|says)\b/i,
+    /\bthe (data|facts) (show|says|shows|say)\b/i,
+    /\baccording to\b/i,
     /\byour (performance )?data\b/i,
 ];
 
@@ -98,13 +98,46 @@ const SCOPE = {
 
 const items = [];
 let itemId = 9000;
+let stepAttemptId = 0;
 
-function seedExercise(exerciseType, decisions, errors = 2, hints = 1) {
+// Every FlexibilityAttempt row this run creates, so they can all be removed at the end. Declared here
+// rather than beside the goal seeding because the exercise seeding runs first.
+const seededAttempts = [];
+
+/**
+ * A completed exercise with a PER-STEP breakdown, which is what the step questions are built from.
+ *
+ * The plain seed below writes a queue row with no attempt behind it, so `q1-step-sure` and
+ * `q1-step-fight` never appear in this run at all — and a real fault lived there for exactly that
+ * reason. The student made three errors in one part, tapped "choosing the method" on the question
+ * asking which part they felt most sure about, and was told about two parts they had not mentioned.
+ */
+function seedSteps(exerciseType, method, stepErrors) {
+    const total = Object.values(stepErrors).reduce((sum, n) => sum + n, 0);
+    const info = conn.prepare(
+        'INSERT INTO FlexibilityAttempt (StudentId, ExerciseType, ExerciseId, SelectedMethod, AgentCondition, IsStudy, StartedAt, CompletedAt, TotalTime, TotalErrors, TotalHints) ' +
+        "VALUES (?, ?, 1, ?, '2', 0, ?, ?, 40, ?, 0)"
+    ).run(STUDENT, exerciseType, method, stamp(), stamp(), total);
+
+    stepAttemptId = Number(info.lastInsertRowid);
+    seededAttempts.push(stepAttemptId);
+
+    for (const [name, errors] of Object.entries(stepErrors)) {
+        conn.prepare(
+            'INSERT INTO AnchorRecord (AttemptId, StudentId, Name, Choice, MessageType, Actions, Time, Errors, Hints, UpdatedAt) ' +
+            "VALUES (?, ?, ?, '', NULL, '', 5, ?, 0, ?)"
+        ).run(stepAttemptId, STUDENT, name, errors, stamp());
+    }
+
+    return stepAttemptId;
+}
+
+function seedExercise(exerciseType, decisions, errors = 2, hints = 1, attemptId = 0) {
     const label = `${exerciseType} check ${++itemId}`;
     conn.prepare(
         'INSERT INTO ReflectionQueue (StudentId, ItemType, ItemId, ItemLabel, Status, Errors, Hints, PippinMessages, Method, Decisions, Focus, Evidence, AttemptId, CompletedAt) ' +
-        "VALUES (?, 'exercise', ?, ?, 'pending', ?, ?, 0, ?, ?, '', '', 0, ?)"
-    ).run(STUDENT, exerciseType, label, errors, hints, exerciseType, decisions, stamp());
+        "VALUES (?, 'exercise', ?, ?, 'pending', ?, ?, 0, ?, ?, '', '', ?, ?)"
+    ).run(STUDENT, exerciseType, label, errors, hints, exerciseType, decisions, attemptId, stamp());
 
     const id = conn.prepare('SELECT Id FROM ReflectionQueue WHERE StudentId = ? ORDER BY Id DESC LIMIT 1').get(STUDENT).Id;
     items.push({ id, exerciseType, decisions, label });
@@ -195,6 +228,75 @@ function checkScope(title, reply, questionId, verdict, inContext = []) {
     if (out.length) check(title, reply, verdict);
 }
 
+// A reply to an answer that did NOT match has to say the answer back first.
+//
+// This is the fault the researcher hit in a real session: they answered "I compared them myself" on an
+// exercise where they had declined the comparison, the badge correctly went quiet, and the reply was
+// "You went straight on without comparing the two methods" — a bare fact about something they had never
+// claimed, with no sign that anything they said had been read. The grading was right and the reply was
+// useless. The shape is now three beats, their answer then the fact then why it matters, and this checks
+// only the first beat, because it is the one whose absence makes the other two unreadable.
+const ACKNOWLEDGES_THE_ANSWER =
+    /\byou (said|say|told me|mentioned|answered|went with|picked|pick|chose|choose|put|wrote|marked|described)\b|\byour answer\b|\bwhat you (said|say|picked|chose|answered|went with|mentioned)\b|\bthe answer you gave\b/i;
+
+function checkAcknowledgesAnswer(title, reply, kind, verdict) {
+    // Only the graded kinds, and only when the answer did not match. A next-action or session question
+    // has no verdict to deliver and nothing to acknowledge.
+    if (kind !== 'observation' && kind !== 'judgement') return;
+    if (verdict.aligned) return;
+    if (!(reply ?? '').trim()) return;
+
+    if (!ACKNOWLEDGES_THE_ANSWER.test(reply)) {
+        failures.push({ title, verdict, text: reply, broke: ['does not say their answer back'] });
+        console.log(`FAIL  ${title}\n      the answer did not match, but the reply never refers to what they said\n      "${reply}"`);
+        return;
+    }
+    results.push({ title: `${title} (acknowledges)`, verdict: 'ok', xp: verdict.insightXp, broke: [] });
+}
+
+// The step questions must name the step the student chose, and no other.
+//
+// Real fault, from a real exercise: three errors spread over four parts, tapped "choosing the method"
+// on the question asking which part they felt most sure about, and the reply named TWO parts — including
+// one they had never mentioned. The fact string listed every clean step joined with "and", whatever was
+// tapped, so the reply answered a different question than the one on screen and read, after three
+// errors, as a claim about the whole exercise.
+//
+// Only checked when the answer matched, because when it did not the fact deliberately names the part
+// that actually cost them instead of the one they picked — that is the reply doing its job.
+const STEP_GLOSS = {
+    choose: 'the part where the method is chosen',
+    setup: 'the part where the method is set up',
+    solve: 'the part where the solution is found',
+    explain: 'the part where the reasoning is written out',
+};
+
+function checkStepAnswer(title, reply, questionId, choice, verdict) {
+    if (questionId !== 'q1-step-sure') return;
+    if (!String(choice).startsWith('step-')) return;
+    if (!verdict.aligned) return;
+
+    const mine = choice.slice(5);
+    const text = reply ?? '';
+    const broke = [];
+
+    // The model paraphrases the gloss often enough to matter — "you got through THAT PART without a
+    // mistake", "you worked through the method selection on your own" — so there is no reliable positive
+    // test for "names their step". The hard assertion is the NEGATIVE one: it must not name a part they
+    // did not pick, because that is the fault itself. The fact-level fix is what guarantees their own
+    // part is the one being described.
+    for (const [id, gloss] of Object.entries(STEP_GLOSS)) {
+        if (id !== mine && text.includes(gloss)) broke.push(`names a part they did not pick ("${gloss}")`);
+    }
+
+    if (broke.length) {
+        failures.push({ title, verdict, text, broke });
+        console.log(`FAIL  ${title}\n      ${broke.join('; ')}\n      "${text}"`);
+        return;
+    }
+    results.push({ title: `${title} (names their step only)`, verdict: 'ok', xp: verdict.insightXp, broke: [] });
+}
+
 // Which question a reply is about, so the scope rules know what to look for.
 
 // ── The cases ───────────────────────────────────────────────────────────────
@@ -202,9 +304,24 @@ function checkScope(title, reply, questionId, verdict, inContext = []) {
 // Three exercises, one per type, each with a different decision on the record: Suitability where they
 // skipped the comparison and worked the solution out alone, Efficiency where they skipped the
 // explanation, and Matching where they explained. Between them that covers every branch the reply
-// builder has, and the two shapes that actually went wrong in testing.
+// builder has, and the shapes that actually went wrong in testing.
+//
+// The Suitability one carries a real PER-STEP breakdown, because without it `q1-step-sure` and
+// `q1-step-fight` never appear in this run at all — and a real fault lived there for exactly that
+// reason. A student made three errors in one part, tapped "choosing the method" on the question asking
+// which part they felt most sure about, and the reply named two parts, one of which they had never
+// mentioned. `SelectedMethod` and `Transformation` are the "choose" and "setup" steps, `Substitution`
+// is the setup step's work, and the two solutions are the "solve" step.
+const stepSeed = seedSteps('Suitability', 'Substitution', {
+    SelectedMethod: 0,
+    Transformation: 0,
+    Substitution: 3,
+    EquationSelection: 0,
+    FirstSolution: 0,
+    SecondSolution: 0,
+});
 
-seedExercise('Suitability', 'MethodComparison=Declined;SolveOnOwn=Engaged', 1, 0);
+seedExercise('Suitability', 'MethodComparison=Declined;SolveOnOwn=Engaged', 3, 0, stepSeed);
 seedExercise('Efficiency', 'SelfExplanation=Declined;SolveOnOwn=Engaged', 2, 1);
 seedExercise('Matching', 'SelfExplanation=Engaged;SolveOnOwn=Declined', 0, 0);
 
@@ -230,6 +347,8 @@ for (const item of items) {
             if (result.error) { console.log(`SKIP  ${title('chip ' + chip.id)}: ${result.error}`); continue; }
             check(title(`tap "${chip.id}"`), result.feedback, result);
             checkScope(title(`tap "${chip.id}"`), result.feedback, question.id, result);
+            checkAcknowledgesAnswer(title(`tap "${chip.id}"`), result.feedback, question.kind, result);
+            checkStepAnswer(title(`tap "${chip.id}"`), result.feedback, question.id, chip.id, result);
         }
 
         // "Pippin, tell me" is the mode that used to answer with the past whatever was asked.
@@ -250,7 +369,7 @@ for (const item of items) {
 // The reply path is shared with exercises, so what this adds is the part that is goal-only: the
 // what-went-well menu, the pattern question, and the commitment menu.
 
-const goalAttempts = [];
+const goalAttempts = seededAttempts;
 
 function seedAttempt(exerciseType, method, errors, hints, decisions = {}) {
     const info = conn.prepare(
@@ -332,13 +451,14 @@ for (const [category, focus, quality, limit, attempts] of GOALS) {
         // count stated as "all" that the record did not support. Neither shows on the first or last chip alone.
         for (const chip of question.chips) {
             if (!chip) continue;
-            const result = await evaluate(entry.id, number, question.id, chip.id, chip.textKey, '');
+            const result = await evaluate(entry.id, number, question.id, chip.id, labelFor(chip.textKey));
             if (result.error) { console.log(`SKIP  ${title(chip.id)}: ${result.error}`); continue; }
             check(title(`tap "${chip.id}"`), result.feedback, result);
             checkScope(title(`tap "${chip.id}"`), result.feedback, question.id, result, category === 'solveOnOwn' ? ['solution', 'shown', 'asked to'] : []);
+            checkAcknowledgesAnswer(title(`tap "${chip.id}"`), result.feedback, question.kind, result);
         }
 
-        const pippin = await evaluate(entry.id, number, question.id, '', '', '', 'pippin');
+        const pippin = await evaluate(entry.id, number, question.id, '', '', 'pippin');
         if (!pippin.error) {
             check(title('pressed Pippin, tell me'), pippin.feedback, pippin);
             checkScope(title('pressed Pippin, tell me'), pippin.feedback, question.id, pippin);

@@ -2794,18 +2794,34 @@ RULES:
                     "to what they said about their day; do not say that it matched or did not, and do not say " +
                     "anything about what their answer was or was not worth."
                 : verdict.Status == "partial"
-                    ? $"They chose an option, and the facts above cannot single out one right answer for this question, so what they chose is a fair reading and is not marked either way: aligned=false, and the award number to return is {verdict.InsightXp}. Copy this exactly. Reply by saying what the facts above show about their choice, using only the figures stated there. Never say it was the most common, the only one, or true of all the exercises unless the facts say so."
+                    ? $"They chose an option, and what the lines above describe cannot single out one right answer for this question, so what they chose is a fair reading and is not marked either way: aligned=false, and the award number to return is {verdict.InsightXp}. Copy this exactly. Reply by saying what the facts above show about their choice, using only the figures stated there. Never say it was the most common, the only one, or true of all the exercises unless the facts say so."
                 : asked.Id == "goal-q1-went-well" && verdict.InsightXp == 0
-                    ? "They chose an option, and the facts above do not back it as something that happened across this goal: aligned=false, and the award number to return is 0. Copy this exactly. Do not repeat the option back as if it happened, and do not say that it did not. Reply by telling them warmly what the facts above show went well in this goal, using only what they state. Do not mention or paraphrase the option they chose, and do not use any stronger word than the facts do (nothing like perfectly, always, every, first try or on your own unless the facts say so)."
+                    ? "They chose an option, and what the lines above describe does not back it as something that happened across this goal: aligned=false, and the award number to return is 0. Copy this exactly. THE REPLY HAS TWO BEATS. First, say back what they picked, in their terms and without judging it, so they can see that the answer they gave was read. Second, say plainly what the facts above DO show went well in this goal, using only what they state. A reply that gives only the second beat reads as a non-sequitur: they never claimed it, so they cannot tell why you are saying it. Do not assert that their option happened, and do not say that it did not — it is their reading of the goal and the facts name a different one. Never frame the difference as a fault: no 'but you', no 'wrong', no 'actually', no 'in reality', no 'you didn't', no 'you missed' and no 'the record shows'. Use no stronger word than the facts do (nothing like perfectly, always, every, first try or on your own unless the facts say so)."
                 : verdict.InsightXp > 0
-                    ? $"They chose an option and the facts above CONFIRM it: aligned=true, and the award number to return is {verdict.InsightXp}. Copy this exactly. The reply must read as a clear confirmation: one short clause that says it is what happened (in different words from theirs), then the sentence on why it matters. Do not hedge, do not call it interesting, and NEVER sound doubtful about it — the reply is confirming something that is right, and a reply that hedges while the badge shows a positive number is the one thing they will notice."
-                    : "They chose an option and the facts above say it does NOT match what happened: " +
-                      "aligned=false, and the award number to return is 0. Copy this exactly. The reply must " +
-                      "still let them see which way it went: name what they actually chose as the sensible " +
-                      "thing it was, warmly and without judging it, so the difference is theirs to notice. " +
-                      "Do not agree with their version, do not invent a reason why it was right, and do not " +
-                      "deliver a verdict on it either — no 'but', no 'actually', no 'in reality', no " +
-                      "'to be honest', no 'you didn't' and no 'the record shows'.";
+                    ? $"They chose an option and it is CONFIRMED by the lines above: aligned=true, and the award number to return is {verdict.InsightXp}. Copy this exactly. The reply must read as a clear confirmation: one short clause that says it is what happened (in different words from theirs), then the sentence on why it matters. Do not hedge, do not call it interesting, and NEVER sound doubtful about it — the reply is confirming something that is right, and a reply that hedges while the badge shows a positive number is the one thing they will notice."
+                    : "They chose an option and it does NOT match what happened: " +
+                      "aligned=false, and the award number to return is 0. Copy this exactly. " +
+                      "THE REPLY HAS THREE BEATS AND THE FIRST TWO ARE BOTH REQUIRED. First, say back what " +
+                      "they picked, in their terms and without judging it, so they can see that the answer " +
+                      "they gave was read. Second, say where that same thing landed for them, as a plain " +
+                      "warm fact about their work. Third, the sentence on why " +
+                      "it matters. Something of this shape: 'You said you compared them yourself - what " +
+                      "happened here is that you went on without comparing, and that is a fair way to save " +
+                      "time on a run like this. Putting the two side by side is how you learn which one " +
+                      "fits.' " +
+                      "THE FIRST BEAT IS NOT OPTIONAL AND ITS ABSENCE IS THE FAULT THIS RULE EXISTS FOR. " +
+                      "Without it the reply is a bare fact about something the student never claimed, which " +
+                      "reads as a non-sequitur and leaves the difference invisible - a student who says " +
+                      "'I compared them myself' and is told only 'you went straight on without comparing' " +
+                      "has no way to know that sentence was a reply to what they said. " +
+                      "Do not agree with their version and do not invent a reason why it was right. Never " +
+                      "frame the difference as a fault: no 'but you', no 'wrong', no 'actually', no 'in " +
+                      "reality', no 'to be honest', no 'you didn't', no 'you missed', no 'you forgot' and " +
+                      "never 'the record shows', 'the facts show' or 'the data says' — a reply that narrates " +
+                      "what something established is a report about the student, and the " +
+                      "reply is a sentence about their work. " +
+                      "It is a difference in what happened, not a mark " +
+                      "against them, and the third beat is what makes that land.";
 
             Console.WriteLine($"[Reflection] Question {asked.Id} ({asked.Kind}) — choice=\"{request.Choice}\"{(string.IsNullOrWhiteSpace(request.ChoiceLabel) ? "" : $" (\"{request.ChoiceLabel}\")")} => {verdict.Status} ({verdict.InsightXp} XP)");
 
@@ -2875,7 +2891,7 @@ RULES:
                 for (var pass = 0; ; pass++)
                 {
                 var raw = await CallOpenAI(apiKey,
-                    "You are Pippin, a warm encouraging study coach chatting with a student. Write a short reply to their reflection answer from the facts you are given about THIS question, but keep it conversational and kind — like a friend checking in. Always output valid JSON with exactly these keys: feedback (string), aligned (boolean), insightXp (integer 0-3), nextStep (string, filled only for the final question otherwise empty).",
+                    "You are Pippin, a warm encouraging study coach chatting with a student. Write a short reply to their reflection answer from what you are told about THIS question, but keep it conversational and kind — like a friend checking in. Always output valid JSON with exactly these keys: feedback (string), aligned (boolean), insightXp (integer 0-3), nextStep (string, filled only for the final question otherwise empty).",
                     rejected is null
                         ? prompt
                         : prompt + $"\n\nYOUR PREVIOUS REPLY WAS REJECTED because {rejected}. Write the whole JSON again and fix exactly that.");
@@ -3371,7 +3387,7 @@ RULES:
             // phrase in front of the model that the guard then bans, so the prompt was asking for a reply
             // it was going to throw away.
             var mode = request.Mode == "pippin"
-                ? "They did not choose an option, so they are asking you to answer this question for them, from the facts below. For Q1 and Q2 that means stating what they actually did on the one thing this question asks about. For Q3 it means naming what to do next. There is no student answer to grade."
+                ? "They did not choose an option, so they are asking you to answer this question for them, from what is below. For Q1 and Q2 that means stating what they actually did on the one thing this question asks about. For Q3 it means naming what to do next. There is no student answer to grade."
                 : "They answered themselves";
             var langInstruction = request.Language switch
             {
@@ -3389,14 +3405,14 @@ RULES:
             // below forbids. Empty for the questions where the past is not the answer at all.
             var studentLineBlock = string.IsNullOrWhiteSpace(studentLine)
                 ? ""
-                : $"\nWhat they did, said to them rather than about them (state this, in your own warm words, adding no contrast and no \"didn't\", and nothing beyond it: no stronger word than it uses and no extra achievement it does not state): {studentLine}.";
+                : $"\nWhat they did, said to them rather than about them (state this in your own warm words: no stronger word than it uses, and no extra achievement it does not state): {studentLine}.";
 
             var meaningBlock = string.IsNullOrWhiteSpace(meaning)
                 ? ""
                 : $"\nWhy this matters (the one thing your reply adds beyond their answer): {meaning}";
 
             return $@"Student completed: {item.ItemLabel} (item type: {item.ItemType}).
-The ONLY facts about this student that you may use are the ones on the lines below. Nothing else about them is known to you, and nothing about any other exercise, goal or question may appear in the reply.
+The ONLY things you know about this student are what the lines below say. Nothing else about them is known to you, and nothing about any other exercise, goal or question may appear in the reply.
 
 Current question: {questionLabel}
 {questionLine}
@@ -3411,25 +3427,22 @@ NEVER TALK ABOUT AWARDS OR SCORES (very important): the app's own scoreboard mus
 NEVER DESCRIBE THE CONTROLS OR THEIR GESTURES (very important): the reply is about their work, not about how the app was operated. Never write that they asked, tapped, pressed, clicked or selected anything, never mention a button, and never mention asking for help or for the answer. Say what they DID on the exercise itself. ""You asked to be shown the solution"" is exactly the sentence that is not allowed; ""you went on and let the system show you"" says the same fact about their work and is the shape to use instead.
 ANSWER THE QUESTION WITH SOMETHING REAL ABOUT IT (very important): every reply answers the ONE question above with something real about it — for a question about a decision, what they did at that step; for a counting question, the number; for a question about the next exercise, the one thing to do next. A remark that would fit any question at all (""that's interesting"", ""worth another look"", ""sometimes the tricky spots sneak up on us"") does not answer it, and must never be the whole reply. If their answer was too vague to tell you anything, do not comment on how vague it was: give them what the facts line states about this question, warmly, and stop.
 NEVER JUST HAND THEIR ANSWER BACK (very important): a reply that only repeats what they said or did (""you did exactly that"", ""that is exactly what happened"", ""you got through all three without hints"") tells them nothing new. Every reply for Q1 and Q2 has TWO parts: first, ONE short clause that states the fact, in different words from theirs; second, ONE sentence from the ""Why this matters"" line, put in your own words, saying what that thing is for. Do not stack praise on top (""great job"", ""wonderful"", ""it is great to see"") — the second part IS the substance. If there is no ""Why this matters"" line, add one true sentence about why that thing helps, drawn only from the subject of this question.
-SAY WHICH WAY IT WENT (very important): the student cannot see the verdict, so the reply is the only place they learn whether their answer matched. A reply that only says ""interesting, take a look"" tells them nothing and reads as a brush-off. When it matches, say so plainly and warmly. When it does not, name what they actually did so the difference is visible to them — without ever framing it as a mistake.
+SAY WHICH WAY IT WENT (very important): the student cannot see the verdict, so the reply is the only place they learn whether their answer matched. A reply that only says ""interesting, take a look"" tells them nothing and reads as a brush-off. When it matches, say so plainly and warmly. When it does not, SAY THEIR ANSWER BACK FIRST, then say where that same thing actually landed — both, in that order. The sentence alone tells them what happened but not that what they said was read, and the answer alone leaves the difference invisible.
 STAY INSIDE THE QUESTION (very important): the reply answers the ONE question above and nothing else. Do not bring in errors, hints, other decisions, or any other question from this reflection. If the question asked whether they compared two methods, the whole reply is about comparing two methods — a sentence about the solution, the method choice or their mistake count does not belong in it, however true it is. The facts line above states only what this question is about; treat anything it does not mention as unknown to you and do not guess at it.
-NEVER TELL THEM THEY DID NOT DO SOMETHING (very important): every sentence is about what they DID. Write the fact affirmatively, and never build a sentence on a gap — nothing about what their answer left out, what they missed, what did not happen, or what their choice was not. Put no contrast in front of the fact either, and no word that turns it into a correction of their answer. Those sentences read as a telling-off even when they are accurate, and they make a student write what sounds right rather than look at their own work. Where they took the offered help, state what they did plainly and without judgement (""you skipped the comparison here""), then say that asking for help is a real, sensible thing to do — and if there is something genuinely good to name, name it. Use their own words for their choice, never a verdict on it. If the answer was too short or too vague to match against anything, do not point at the gap — state what the facts line says about this question, warmly, and invite them to have a go at the next one. When the answer was vague, or said outright that they ignored the step, this rule matters most of all: state what the facts say as a plain fact, with nothing in front of it, and stop.
-NEVER INVENT WHAT THEY DID (very important): the facts line is the only thing you know about their choices, and it says what it says. Never credit them with something it does not state — do not write that they read, opened, saw, studied or took the time to look at an explanation unless the facts line says they did. If it says only that they did not explain their reasoning, then that is all that happened and the reply says nothing more about it. Where the facts say nothing, you know nothing about that step: never guess, and never fill the gap with something flattering or otherwise.
+NEVER TELL THEM THEY DID NOT DO SOMETHING (very important): every sentence is about what they DID. Write the fact affirmatively, and never build a sentence on a gap — nothing about what their answer left out, what they missed, what did not happen, or what their choice was not. Put no ""but you"" and no ""instead of"" in front of the fact, and never turn naming their answer into a correction of it. Those sentences read as a telling-off even when they are accurate, and they make a student write what sounds right rather than look at their own work. Where they took the offered help, state what they did plainly and without judgement (""you skipped the comparison here""), then say that asking for help is a real, sensible thing to do — and if there is something genuinely good to name, name it. Use their own words for their choice, never a verdict on it. If the answer was too short or too vague to match against anything, do not point at the gap — state what the facts line says about this question, warmly, and invite them to have a go at the next one. When the answer was vague, or said outright that they ignored the step, this rule matters most of all: state what the facts say as a plain fact, and stop.
+NEVER INVENT WHAT THEY DID (very important): the lines above are the only thing you know about their choices, and they say what they say. Never credit them with something it does not state — do not write that they read, opened, saw, studied or took the time to look at an explanation unless the facts line says they did. If it says only that they did not explain their reasoning, then that is all that happened and the reply says nothing more about it. Where the facts say nothing, you know nothing about that step: never guess, and never fill the gap with something flattering or otherwise.
 NO FOLLOW-UP QUESTIONS (very important): This reflection is ONE question and ONE answer. The student cannot reply again. Never ask them anything, never probe for more detail, never invite them to explain further, and never end your feedback with a question mark. Deliver your feedback as a complete statement and stop.
 - If mode is 'Pippin told them': the student pressed ""Pippin, tell me"" instead of writing an answer, so there is nothing to grade, and requesting help pays nothing: return aligned=false with an award number of 0, never say they answered correctly, and never praise an answer there is none of. Never remark on the empty box either, or on there being no answer, or on what they did not write: they asked for help, which is a thing they did, and the reply says nothing about the shape of their turn.
-  * On Q1 and Q2 the student is asking YOU for this question's answer, so ANSWER IT: one or two sentences stating plainly what the facts line above says they did with the one thing this question asks about — the decision they took at that step, or the part of the working the question names. That statement IS the reply. Never replace it with a general tip, and never write that they asked for the model answer, that you are explaining their work, or anything else about the button they pressed.
+  * On Q1 and Q2 the student is asking YOU for this question's answer, so ANSWER IT: one or two sentences stating plainly what the lines above say they did with the one thing this question asks about — the decision they took at that step, or the part of the working the question names. That statement IS the reply. Never replace it with a general tip, and never write that they asked for the model answer, that you are explaining their work, or anything else about the button they pressed.
   * On Q3 the question is about the NEXT exercise, so the reply is ONE concrete thing to try next, taken from this question's own answers, with a few words on why it will help. Say nothing about what they did earlier: a question about the future is not answered by the past.
-  * Speak directly to the student as Pippin, warmly, without judging either choice. Everything the facts line does not mention is unknown to you — do not guess at it and do not credit them with it.
-- If Q1 or Q2 and they answered themselves (no quick answer tapped): whether what they wrote matched the facts is ALREADY DECIDED, and is stated above as the decision on their answer. Copy it, and write the reply to fit it: when it is confirmed, say plainly and warmly that it is what happened, naming the fact that shows it, with no hedge of any kind; when it is not, state what the facts say about this question as a plain, warm fact, and never say or hint that their answer matched. Use only the figures and wording the facts line gives: no stronger word, no extra achievement, and no count it does not state.{sessionOnlyRule}
-- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED, and it is stated above as the decision on their answer. Copy it exactly: do not change it, do not second-guess it, and do not decide the award yourself. Write only the reply. Where the tap and the facts differ, say what they actually chose the way the facts line states it, and make it sound like the reasonable thing it was — no ""but"", no ""actually"", no ""in reality"", no comparing it against what they tapped, and no sentence that could be read as marking them down. They do not need to be told the tap was wrong; the reply is there to end the reflection on something true and warm. Do not repeat their version either, and never write that their answer was right, close, or matches when the facts say it does not.
-- ALWAYS FIND SOMETHING GENUINELY GOOD, AND ESPECIALLY ON Q1. Q1 asks what was good, so the reply LEADS with something real and good that the facts line supports — they worked it out themselves, they got through a part without a mistake, they took no hints, they explained their reasoning, they compared the methods, they asked for help rather than giving up, or they finished an exercise that cost them. Name it first, in their own terms, and let the reply stand on it: every exercise has one, even a rough one. If their answer does not match, state what the facts say warmly and matter-of-factly and then name that good thing. Do not scold, and do not point out that they were wrong.
-- NEVER AGREE WITH SOMETHING THE FACTS CONTRADICT. If they say they worked it out themselves but the facts say they skipped it, do not congratulate them for working it out and never state their claim as fact: that teaches them the reflection is a box to type anything into. Say what they did in a warm, matter-of-fact way, and celebrate the thing that is actually true instead — taking the help on offer is a real, sensible thing to do.
+  * Speak directly to the student as Pippin, warmly, without judging either choice. Everything the lines above do not mention is unknown to you — do not guess at it and do not credit them with it.
+  * Where they SKIPPED the thing this question is about, that is what the lines above say and it decides the verdict. Say it plainly and warmly, without ranking it as a failure, and never carry it into a question it does not belong to. A decision here is a yes or a no: no means they skipped it, not that they asked for the answer to be revealed. If the answer did not match, their answer is said back first — see the bullet above.
+- When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED, and it is stated above as the decision on their answer. Copy it exactly: do not change it, do not second-guess it, and do not decide the award yourself. Write only the reply. WHERE THE TAP AND THE FACTS DIFFER, THE REPLY OPENS BY SAYING THEIR ANSWER BACK, in their own terms and without judgement, and only then says what the facts show. Both halves are required and in that order: a reply that goes straight to the fact is about something they never claimed, and they have no way to know it was a reply to what they said. After that, make their actual choice sound like the reasonable thing it was — no ""but you"", no ""actually"", no ""in reality"", no ""the record shows"", and no sentence that could be read as marking them down. They do not need to be told the tap was wrong; the reply is there to end the reflection on something true and warm. Never write that their answer was right, close, or matches when the facts say it does not.
+- ALWAYS FIND SOMETHING GENUINELY GOOD, AND ESPECIALLY ON Q1. Q1 asks what was good, so a reply to an answer that MATCHED leads with something real and good that the facts line supports — they worked it out themselves, they got through a part without a mistake, they took no hints, they explained their reasoning, they compared the methods, they asked for help rather than giving up, or they finished an exercise that cost them. Name it first, in their own terms, and let the reply stand on it: every exercise has one, even a rough one. When the answer did NOT match, their answer comes first and the good thing follows it, for the reason given above. Do not scold, and do not point out that they were wrong.
+- NEVER AGREE WITH SOMETHING THAT DID NOT HAPPEN. If they say they worked it out themselves but the lines above say they skipped it, do not congratulate them for working it out and never state their claim as fact: that teaches them the reflection is a box to choose anything in. Say their choice back, then what they did, in a warm, matter-of-fact way, and celebrate the thing that is actually true instead — taking the help on offer is a real, sensible thing to do.
 - A TAPPED QUICK ANSWER IS A COMPLETE ANSWER. If the answer text is empty but a quick answer is stated above, they answered: quote or refer to what they chose. NEVER say they did not answer, did not share their thoughts, or missed the question, and never remark on the empty box. There is nothing missing.
-  * If they DID NOT tap a quick answer AND wrote nothing usable, then there is genuinely no answer, and the reply should simply invite them to have a go at the next one. Never remark on the empty box or on what they did not write, and never say they did not share, did not answer or missed the question — there is simply nothing there, and the invitation is the whole reply.
-  * Where they SKIPPED the thing this question is about, that is what the facts say and it decides the verdict. Say it plainly and warmly, without ranking it as a failure, and never carry it into a question it does not belong to. A decision here is a yes or a no: no means they skipped it, not that they asked for the answer to be revealed.
-  If aligned (match is yes, or the tap was confirmed) → aligned=true with an award number of 3, and one or two warm sentences that name the thing they got right. If not → aligned=false, award number 0: give them the one thing the facts line above says about this question, as a plain fact with nothing in front of it — start the sentence with the fact itself, with no phrase about a source, a check, or where the fact came from (for example ""you went straight on without comparing the two methods here"") — and then say warmly why that step is the one worth taking. Never settle for a general observation instead of that fact, never quote their own words back as the thing that went wrong, never quote totals of mistakes or hints (the number of exercises a fact mentions is fine), and never ask them anything. A vague answer gets exactly the same treatment: what the facts line says about this question, and stop.
+  * Where they SKIPPED the thing this question is about, that is what the lines above say and it decides the verdict. Say it plainly and warmly, without ranking it as a failure, and never carry it into a question it does not belong to. A decision here is a yes or a no: no means they skipped it, not that they asked for the answer to be revealed. If the answer did not match, their answer is said back first — see the bullet above.{sessionOnlyRule}
 - If Q3: ignore alignment. The FEEDBACK must ANSWER the question on screen: name ONE concrete thing to do in the next exercise, taken from this question's own quick answers, and say in a few words why it will help. It must be about the subject THIS question is about (comparing, explaining, working it out, hints, the method) and never a general study tip. Put the same thing, one line and phrased as an offer, in nextStep. NEVER open by describing what the student did, what they pressed, or that they asked for anything. Set aligned=false with an award number of 0. The feedback must not end with a question mark — the audit catches that here more than anywhere else, so end on a full stop.
-- OFF-TOPIC: if the answer is clearly unrelated to maths and to this exercise (a random word, a different topic entirely, keyboard mashing), set offTopic=true, aligned=false, insightXp=0, and leave feedback empty — the app shows its own message asking the student to write the reflection again. A reply must be to words that mean something, so placeholder and nonsense text (""blah blah"", ""keyboard smash"", ""asdf"", ""test test"") is unrelated even when it is several words long: flag it rather than replying to it. Beyond that, use this ONLY when the answer is genuinely unrelated: a short, vague, unsure or partly incoherent answer that is still about the exercise is a valid reflection and is NOT off-topic.
 
 IMPORTANT: always include the ""aligned"", ""insightXp"" and ""nextStep"" keys with their exact boolean/integer/string values — never omit them and never quote the numbers as strings.
 
@@ -3438,6 +3451,23 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
 
         private static readonly System.Text.RegularExpressions.Regex ForbiddenReplyShape = new(
             @"\b(insight|xp|award(ed)?|you (just )?(asked|tapped|pressed|clicked|selected)|asked for (help|the answer)|the (help )?button|didn'?t|did not|you (missed|forgot))\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>
+        /// A reply that turns naming their answer into a correction of it.
+        ///
+        /// The rule above asks a reply to say the student's answer back first, and the model reaches for
+        /// the one construction that makes that read as a reproach: "You mentioned X, but the record
+        /// shows Y", "You actually went straight on". Both reached a student in one 72-reply run, and
+        /// both are banned by the prompt already — which is why this is enforced rather than asked for.
+        ///
+        /// "but you" and not "but": the shape the reply is meant to have does introduce the fact, it just
+        /// does not do it as an accusation. "You said you compared them - what happened here is that you
+        /// went on without comparing" is the sentence this wants; "but you skipped it" is the one it does
+        /// not, and the difference between them is entirely in whose voice the fact arrives in.
+        /// </summary>
+        private static readonly System.Text.RegularExpressions.Regex CorrectsTheirAnswer = new(
+            @"\bthe (record|data|facts) (shows|says|show|say)|\byou actually\b|\bbut you\b",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
         // A reply that only repeats the answer back.
@@ -3504,6 +3534,9 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
 
             if (ForbiddenReplyShape.IsMatch(reply))
                 return "it mentions the score or the button, or says what they did not do — write only what they did";
+
+            if (CorrectsTheirAnswer.IsMatch(reply))
+                return "it turns their answer into a correction — say their answer back and then say what happened, in your own voice: no 'but you', no 'you actually', no 'the record shows'";
 
             var judged = questionKind is ReflectionQuestionBank.Observation or ReflectionQuestionBank.Judgement;
             if (!judged) return null;
@@ -3585,9 +3618,22 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
                     ? $"{picked} is a fair reading to take from this one.{why}".Trim()
                     : $"{fact}{why}";
 
+            // NOT ALIGNED, AND THE DIFFERENCE HAS TO BE VISIBLE FROM THE TEXT ALONE.
+            //
+            // This used to be the fact and nothing else, which reads as a non-sequitur. A student who
+            // chose "I compared them myself" on an exercise where they had declined the comparison was
+            // told "you went straight on without comparing the two methods" with no sign that anything
+            // they said had been read — and no way to tell that sentence was a reply to their answer
+            // rather than an unrelated remark. Their answer comes first now, then the fact, and the
+            // second sentence is what makes the difference theirs to see rather than ours to point out.
+            //
+            // This is the same shape the model is told to write, and deliberately so: this text is what
+            // the student reads whenever the model's reply trips the guard, so the two have to be
+            // interchangeable or the reflection would speak in two different voices.
+            var theyChose = string.IsNullOrWhiteSpace(choiceLabel) ? "" : $"You chose \"{choiceLabel}\". ";
             return string.IsNullOrWhiteSpace(fact)
-                ? $"Thanks for looking at that one.{why}".Trim()
-                : $"{fact}{why}";
+                ? $"{theyChose}Thanks for looking at that one.{why}".Trim()
+                : $"{theyChose}What happened here is {char.ToLowerInvariant(fact[0])}{fact[1..]}{why}";
         }
 
         private static ReflectionEvaluateResponse BuildReflectionFallback(
