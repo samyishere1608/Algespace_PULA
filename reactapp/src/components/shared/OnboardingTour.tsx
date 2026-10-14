@@ -5,8 +5,9 @@ import { faArrowLeft, faArrowRight, faXmark } from "@fortawesome/free-solid-svg-
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { TranslationNamespaces } from "@/i18n.ts";
 import {
-    markTourCompleted,
+    finishSectionTour,
     readTourStep,
+    sectionBounds,
     writeTourStep,
     type TourPlacement,
     type TourStep,
@@ -150,8 +151,24 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
     const cardRef = useRef<HTMLDivElement>(null);
 
     const step: TourStep | undefined = steps[index];
-    const total = steps.length;
-    const isLast = index === total - 1;
+
+    /**
+     * The section being played, read ONCE from the step the overlay opened on.
+     *
+     * A section is played on its own — the student opens goal setting and gets the goal tutorial, not
+     * the dashboard tour again — so the overlay starts at the section's first step, ends at its last,
+     * and reports progress within it. It is read once rather than per render because a section's steps
+     * are contiguous: the section cannot change while this is open, and reading it every time would
+     * rebuild `finish` on every step, which would re-register the keyboard handler with it.
+     */
+    const [section] = useState(() => steps[Math.min(readTourStep(), Math.max(steps.length - 1, 0))]?.section);
+    const bounds = useMemo(
+        () => (section === undefined ? { from: 0, to: steps.length - 1 } : sectionBounds(section)),
+        [section, steps.length],
+    );
+    const total = bounds.to - bounds.from + 1;
+    const isLast = index >= bounds.to;
+    const isFirst = index <= bounds.from;
 
     // Keep the stored index in step with the visible one, so a route change resumes in the right
     // place rather than restarting the tour from the beginning.
@@ -271,7 +288,7 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
     }, [index, rect, viewport, closed]);
 
     const finish = useCallback((): void => {
-        markTourCompleted(studentId);
+        if (section !== undefined) finishSectionTour(studentId, section);
         setClosed(true);
         onClose?.();
 
@@ -289,16 +306,16 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
         if (window.location.pathname === Paths.TourFlexibilityPreviewPath) {
             navigate(Paths.StudentDashboardPath);
         }
-    }, [studentId, onClose, navigate]);
+    }, [studentId, section, onClose, navigate]);
 
     const goTo = useCallback((next: number): void => {
-        if (next < 0) return;
-        if (next >= steps.length) {
+        if (next < bounds.from) return;
+        if (next > bounds.to) {
             finish();
             return;
         }
         setIndex(next);
-    }, [steps.length, finish]);
+    }, [bounds.from, bounds.to, finish]);
 
     useEffect(() => {
         // A dismissed tour stops listening, or the arrow keys would still be moving an invisible step
@@ -375,7 +392,7 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
                 </button>
 
                 <span className={"onboarding-tour__progress"}>
-                    {t("tour-step-count", { current: index + 1, total })}
+                    {t("tour-step-count", { current: index - bounds.from + 1, total })}
                 </span>
 
                 <h2 id={`tour-title-${step.id}`} className={"onboarding-tour__title"}>
@@ -412,12 +429,12 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
                 {step.noteKey !== undefined && <p className={"onboarding-tour__note"}>{t(step.noteKey)}</p>}
 
                 <div className={"onboarding-tour__track"} aria-hidden>
-                    <div className={"onboarding-tour__track-fill"} style={{ width: `${((index + 1) / total) * 100}%` }} />
+                    <div className={"onboarding-tour__track-fill"} style={{ width: `${((index - bounds.from + 1) / total) * 100}%` }} />
                 </div>
 
                 <div className={"onboarding-tour__actions"}>
                     <button className={"onboarding-tour__skip"} onClick={finish}>{t("tour-skip")}</button>
-                    {index > 0 && (
+                    {!isFirst && (
                         <button className={"button secondary-button"} onClick={() => goTo(index - 1)}>
                             <FontAwesomeIcon icon={faArrowLeft} /> {t("tour-back")}
                         </button>

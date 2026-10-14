@@ -209,6 +209,21 @@ namespace webapi.Models.Student
         public int Amount { get; set; }
     }
 
+    // ── Tutorial sections ────────────────────────────────────────────────────
+
+    /// <summary>The sections this student has already been offered. Empty means "never toured".</summary>
+    public class TourStateResponse
+    {
+        public List<string> Sections { get; set; } = [];
+    }
+
+    /// <summary>Records that a section has been offered, so it is not offered again.</summary>
+    public class TourSectionRequest
+    {
+        public long StudentId { get; set; }
+        public string Section { get; set; } = "";
+    }
+
     // ── Tutorial / Onboarding Progress ───────────────────────────────────────
 
     /// <summary>Response for GET /student-progress/tutorial/{studentId}.</summary>
@@ -701,5 +716,22 @@ namespace webapi.Models.Student
             "Text TEXT NOT NULL, " +
             "InsightXp INTEGER NOT NULL DEFAULT 0, " +
             "CreatedAt TEXT NOT NULL";
+
+        /// <summary>
+        /// Which tutorials a student has already been offered, one row per section.
+        ///
+        /// A row means "this section has been offered, do not offer it again" — it does NOT mean the
+        /// student watched it. Saying "not now" also writes the row, which is what makes the offer a
+        /// one-off while the section stays replayable from its own button.
+        ///
+        /// On the SERVER rather than in the browser because a student changes device, and "already
+        /// seen" has to follow them.
+        /// </summary>
+        public const string TourStateTable = "StudentTourState";
+        public const string TourStateScheme =
+            "Id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "StudentId INTEGER NOT NULL, " +
+            "Section TEXT NOT NULL, " +
+            "OfferedAt TEXT NOT NULL";
     }
 }

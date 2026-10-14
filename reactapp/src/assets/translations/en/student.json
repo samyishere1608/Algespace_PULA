@@ -538,6 +538,16 @@
   "tour-next": "Next",
   "tour-finish": "Finish",
 
+  "tour-show-btn": "Show tutorial",
+  "tour-offer-show": "Show me",
+  "tour-offer-later": "Not now",
+  "tour-offer-companions-title": "Want a quick look at your buddy?",
+  "tour-offer-companions-body": "Two minutes on the buddy corner: how to change who you study with, and what the XP you earn unlocks. You can also just carry on — the tour stays available here afterwards.",
+  "tour-offer-goals-title": "Want a quick look at setting a goal?",
+  "tour-offer-goals-body": "Two minutes on goals: the two ways to set one, the choice of category and target, and where your goal then appears. You can also just carry on — the tour stays available here afterwards.",
+  "tour-offer-exercises-title": "Want a quick look at the exercises?",
+  "tour-offer-exercises-body": "Two minutes on the exercises: the three kinds, what each one asks of you, and inside a real one so you know what to expect. You can also just carry on — the tour stays available here afterwards.",
+
   "tour-buddy-title": "Hi, I'm {{name}}",
   "tour-buddy-body": "I'm your study buddy, and I'll be with you in every exercise. If you get stuck, ask me for a hint. When you finish, I'll ask you how it went. You can pick a different buddy later if you want to.",
 

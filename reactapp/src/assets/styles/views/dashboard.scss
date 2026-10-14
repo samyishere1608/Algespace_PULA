@@ -2921,6 +2921,78 @@
     }
 }
 
+/* ─── Section tutorials ─────────────────────────────────────── */
+/* The standing invitation to replay one part of the walkthrough, and the one-time offer that asks
+   before playing it. Both are quiet controls: a student who opens goal setting wants to set a goal. */
+.show-tour-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 2rem;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    &:hover {
+        border-color: rgba(33, 158, 188, 0.5);
+        color: rgba(255, 255, 255, 0.9);
+    }
+}
+
+.show-tour-btn--icon {
+    padding: 0.3rem 0.45rem;
+}
+
+.dashboard__section-header-actions,
+.dash-exercises__summary-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tour-offer {
+    max-width: 26rem;
+    text-align: center;
+}
+
+.tour-offer__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin: 0 auto 0.75rem;
+    border-radius: 50%;
+    background: rgba(33, 158, 188, 0.15);
+    color: var(--primary-blue);
+    font-size: 1.1rem;
+}
+
+.tour-offer__title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 0.5rem;
+}
+
+.tour-offer__body {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.tour-offer__actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+}
+
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }

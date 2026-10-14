@@ -538,6 +538,16 @@
   "tour-next": "Weiter",
   "tour-finish": "Fertig",
 
+  "tour-show-btn": "Tutorial zeigen",
+  "tour-offer-show": "Zeig es mir",
+  "tour-offer-later": "Jetzt nicht",
+  "tour-offer-companions-title": "Kurz dein Buddy-Bereich?",
+  "tour-offer-companions-body": "Zwei Minuten zum Buddy-Bereich: wie du wechselst, mit wem du lernst, und was die XP freischalten. Du kannst auch einfach weitermachen — die Tour bleibt hier danach verfügbar.",
+  "tour-offer-goals-title": "Kurz das Zielsetzen ansehen?",
+  "tour-offer-goals-body": "Zwei Minuten zu Zielen: die zwei Wege ein Ziel zu setzen, die Wahl von Kategorie und Zielwert, und wo dein Ziel danach erscheint. Du kannst auch einfach weitermachen — die Tour bleibt hier danach verfügbar.",
+  "tour-offer-exercises-title": "Kurz die Übungen ansehen?",
+  "tour-offer-exercises-body": "Zwei Minuten zu den Übungen: die drei Arten, was jede von dir verlangt, und einmal in einer echten Übung, damit du weißt, was dich erwartet. Du kannst auch einfach weitermachen — die Tour bleibt hier danach verfügbar.",
+
   "tour-buddy-title": "Hallo, ich bin {{name}}",
   "tour-buddy-body": "Ich bin dein Lernbegleiter und bei jeder Aufgabe dabei. Wenn du feststeckst, frag mich nach einem Hinweis. Wenn du fertig bist, frage ich dich, wie es lief. Du kannst später auch einen anderen Begleiter wählen.",
 

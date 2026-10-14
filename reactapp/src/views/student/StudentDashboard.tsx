@@ -65,7 +65,19 @@ import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntention
 import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 import { getOnboardingStep } from "@utils/storageUtils.ts";
 import { OnboardingTour } from "@components/shared/OnboardingTour.tsx";
-import { TOUR_STEPS, isTourActive, shouldAutoStartTour, startTour, type TourStep } from "@utils/onboardingTour.ts";
+import { TourOffer } from "@components/shared/TourOffer.tsx";
+import { ShowSectionTourButton } from "@components/shared/ShowSectionTourButton.tsx";
+import {
+    TOUR_STEPS,
+    isTourActive,
+    recordSectionOffered,
+    shouldAutoStartTour,
+    shouldOfferSection,
+    startSectionTour,
+    syncOfferedSections,
+    type TourSection,
+    type TourStep,
+} from "@utils/onboardingTour.ts";
 import { seedDemoData } from "@utils/demoData.ts";
 import { fetchReflectionQueue, completeReflection, startSessionReflection, settleSessionPromise, ReflectionQueueItem } from "@utils/reflectionUtils.ts";
 import { MilestoneCelebrationOverlay } from "@components/shared/MilestoneCelebrationOverlay.tsx";
@@ -178,6 +190,15 @@ export default function StudentDashboard(): ReactElement {
     // back, which unmounts and re-mounts this page; reading the flag instead of starting at `false`
     // is what stops the overlay vanishing the moment the student presses Back.
     const [showTour, setShowTour] = useState(() => isTourActive());
+
+    /**
+     * The section being offered, with whatever the student was trying to open.
+     *
+     * The offer is the first thing a part of the app does, so the action it interrupted has to be kept
+     * and run if they say "not now" — otherwise asking for a tutorial would cost them the goal picker
+     * they had just asked for.
+     */
+    const [sectionOffer, setSectionOffer] = useState<{ section: TourSection; then?: () => void } | null>(null);
     /**
      * Which step the overlay is on, or null when no tour is running.
      *
@@ -207,6 +228,11 @@ export default function StudentDashboard(): ReactElement {
             : Promise.resolve();
 
         init.then(() => {
+            // Reconcile which sections have been offered with the server. Deliberately not awaited:
+            // the offer is decided from the local cache so the first paint is never held up by it, and
+            // a student who changed device finds out on the next visit at the latest.
+            void syncOfferedSections(student.id);
+
             // Sync agency XP from backend (also updates localStorage)
             syncAgencyFromBackend(student.id).then((progress) => {
                 setAgency(progress);
@@ -263,9 +289,10 @@ export default function StudentDashboard(): ReactElement {
             if (isTourActive()) return;
 
             if (shouldAutoStartTour(student.id, getOnboardingStep(student.id))) {
-                // `startTour` records that a tour is running, so the pages the walkthrough navigates to
-                // know to resume it. The state here only decides whether THIS page mounts the overlay.
-                startTour(student.id);
+                // `startSectionTour` records that a tour is running, so the pages the walkthrough
+                // navigates to know to resume it, and marks the core section offered. The state here
+                // only decides whether THIS page mounts the overlay.
+                startSectionTour(student.id, "core");
                 setShowTour(true);
                 return;
             }
@@ -420,6 +447,30 @@ export default function StudentDashboard(): ReactElement {
 
     const tourPickerStep = tourStep?.picker ?? null;
     const isDemoPicker = tourPickerStep !== null;
+
+    /**
+     * Plays one section on its own, from its first step.
+     *
+     * Used by the offer and by every "Show tutorial" control, so all of them produce the same state.
+     */
+    const playSection = useCallback((section: TourSection): void => {
+        startSectionTour(student?.id ?? "guest", section);
+        setShowTour(true);
+    }, [student?.id]);
+
+    /**
+     * Runs what the student asked for, unless this section has never been offered.
+     *
+     * A section is offered the first time its part is opened — the goal picker on the way in, not a
+     * banner somewhere else — and never again after that, whether they watched it or not.
+     */
+    const openOrOffer = useCallback((section: TourSection, open: () => void): void => {
+        if (student !== undefined && shouldOfferSection(student.id, section, getOnboardingStep(student.id))) {
+            setSectionOffer({ section, then: open });
+            return;
+        }
+        open();
+    }, [student]);
 
     // The walkthrough also opens the real character chooser and wardrobe. Read-only for the same
     // reason the picker is: no-op handlers are passed below in place of the real ones, so a
@@ -776,12 +827,7 @@ export default function StudentDashboard(): ReactElement {
                     className={"dashboard__tour-pill"}
                     title={t("tour-replay-btn")}
                     aria-label={t("tour-replay-btn")}
-                    onClick={() => {
-                        // `startTour` clears the "already seen" flag AND reopens at step one, so the
-                        // replay button and the automatic first run produce identical state.
-                        startTour(student?.id ?? "guest");
-                        setShowTour(true);
-                    }}
+                    onClick={() => playSection("core")}
                 >
                     <FontAwesomeIcon icon={faCircleQuestion} />
                 </button>
@@ -847,7 +893,7 @@ export default function StudentDashboard(): ReactElement {
                         role="tab"
                         aria-selected={activeTab === "exercises"}
                         className={`dashboard__tab${activeTab === "exercises" ? " dashboard__tab--active" : ""}`}
-                        onClick={() => setActiveTab("exercises")}
+                        onClick={() => openOrOffer("exercises", () => setActiveTab("exercises"))}
                     >
                         <FontAwesomeIcon icon={faClipboardList} />
                         <span>{t("dashboard-tab-exercises")}</span>
@@ -914,16 +960,19 @@ export default function StudentDashboard(): ReactElement {
                     <section className={"goals-section"} aria-labelledby={"goals-active-title"} data-tour={"goals-panel"}>
                         <div className={"dashboard__section-header dashboard__section-header--active-goals"}>
                             <h2 id={"goals-active-title"}>{t("goals-active-heading")}</h2>
-                            {displayedGoals.length > 0 && (
-                                <button
-                                    className={"dashboard__section-header-cta dashboard__section-header-cta--active-goals"}
-                                    data-tour={"goals-cta"}
-                                    onClick={() => setShowGoals(true)}
-                                >
-                                    <FontAwesomeIcon icon={faPlus} />
-                                    {t("goals-add-cta")}
-                                </button>
-                            )}
+                            <div className={"dashboard__section-header-actions"}>
+                                <ShowSectionTourButton section={"goals"} onPlay={playSection} />
+                                {displayedGoals.length > 0 && (
+                                    <button
+                                        className={"dashboard__section-header-cta dashboard__section-header-cta--active-goals"}
+                                        data-tour={"goals-cta"}
+                                        onClick={() => openOrOffer("goals", () => setShowGoals(true))}
+                                    >
+                                        <FontAwesomeIcon icon={faPlus} />
+                                        {t("goals-add-cta")}
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {displayedGoals.length === 0 && (
@@ -933,7 +982,7 @@ export default function StudentDashboard(): ReactElement {
                                 <button
                                     className={"goals-empty__cta"}
                                     data-tour={"goals-cta"}
-                                    onClick={() => setShowGoals(true)}
+                                    onClick={() => openOrOffer("goals", () => setShowGoals(true))}
                                 >
                                     <FontAwesomeIcon icon={faPlus} />
                                     {t("goals-set-cta")}
@@ -1259,7 +1308,7 @@ export default function StudentDashboard(): ReactElement {
                     </div>
                     )}
 
-                    {activeTab === "exercises" && <DashboardExercises />}
+                    {activeTab === "exercises" && <DashboardExercises onShowTutorial={() => playSection("exercises")} />}
                 </div>
             </div>
 
@@ -1294,16 +1343,27 @@ export default function StudentDashboard(): ReactElement {
                     <div className={"buddy-popup"}>
                         <button
                             className={"buddy-popup__btn"}
-                            onClick={() => { setShowBuddyPopup(false); setShowBuddyChooser(true); }}
+                            onClick={() => {
+                                // The popup closes either way: a full-screen tour cannot be read with
+                                // the menu it came from still hanging behind it.
+                                setShowBuddyPopup(false);
+                                openOrOffer("companions", () => setShowBuddyChooser(true));
+                            }}
                         >
                             {t("dashboard-change-buddy")}
                         </button>
                         <button
                             className={"buddy-popup__btn"}
-                            onClick={() => { setShowBuddyPopup(false); setShowShop(true); }}
+                            onClick={() => {
+                                setShowBuddyPopup(false);
+                                openOrOffer("companions", () => setShowShop(true));
+                            }}
                         >
                             {t("dashboard-wardrobe")}
                         </button>
+                        {/* The standing invitation, so saying "not now" to the offer above is never the
+                            end of it: the companions tutorial stays here for good. */}
+                        <ShowSectionTourButton section={"companions"} onPlay={playSection} />
                     </div>
                 )}
                 <button
@@ -1408,6 +1468,27 @@ export default function StudentDashboard(): ReactElement {
                         if (!getDailyIntention(student.id)) {
                             setShowDailyIntention(true);
                         }
+                    }}
+                />
+            )}
+            {sectionOffer !== null && (
+                <TourOffer
+                    section={sectionOffer.section}
+                    onAccept={() => {
+                        // The tour demonstrates the part, so the action that triggered the offer is NOT
+                        // run: the picker the tour opens is the read-only one, and opening the real one
+                        // underneath it would leave the student two dialogs deep.
+                        const { section } = sectionOffer;
+                        setSectionOffer(null);
+                        playSection(section);
+                    }}
+                    onDismiss={() => {
+                        // "Not now" is recorded, the same as watching it would be, so the offer is made
+                        // once — and then the thing they actually asked for happens.
+                        const { section, then } = sectionOffer;
+                        void recordSectionOffered(student?.id ?? "guest", section);
+                        setSectionOffer(null);
+                        then?.();
                     }}
                 />
             )}

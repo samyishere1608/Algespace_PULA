@@ -107,6 +107,14 @@ namespace webapi.Controllers
                 $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.ReflectionHistoryTable} " +
                 $"({StudentProgressDBSettings.ReflectionHistoryScheme})");
 
+            // One row per section already offered, so the upsert below is idempotent.
+            conn.Execute(
+                $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.TourStateTable} " +
+                $"({StudentProgressDBSettings.TourStateScheme})");
+            conn.Execute(
+                $"CREATE UNIQUE INDEX IF NOT EXISTS IX_{StudentProgressDBSettings.TourStateTable}_StudentSection " +
+                $"ON {StudentProgressDBSettings.TourStateTable} (StudentId, Section)");
+
             // Which question was asked, and which chip was tapped. The first makes it possible to
             // compare questions later; the second is the evidence the Insight award was decided from.
             try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionHistoryTable} ADD COLUMN QuestionId TEXT NOT NULL DEFAULT ''"); } catch { }
@@ -1027,6 +1035,59 @@ namespace webapi.Controllers
                 OnboardingStep = onboardingStep,
                 TutorialsCompleted = tutorials
             });
+        }
+
+        // ── GET /student-progress/tour-state/{studentId} ─────────────────────
+        /// <summary>
+        /// Which tutorial sections this student has already been offered.
+        ///
+        /// The client keeps its own copy so the first paint never waits on the network, and asks this
+        /// to reconcile — a student who changed device has the sections here and nowhere local.
+        /// </summary>
+        [HttpGet("tour-state/{studentId}")]
+        public ActionResult<TourStateResponse> GetTourState(long studentId)
+        {
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            var sections = conn.Query<string>(
+                $"SELECT Section FROM {StudentProgressDBSettings.TourStateTable} WHERE StudentId = @StudentId",
+                new { StudentId = studentId }).ToList();
+
+            return Ok(new TourStateResponse { Sections = sections });
+        }
+
+        // ── POST /student-progress/tour-state ────────────────────────────────
+        /// <summary>
+        /// Records that a section has been OFFERED — whether the student then watched it or said
+        /// "not now". That is what makes the offer a one-off; the section itself stays replayable from
+        /// its own button, which does not need to write anything.
+        ///
+        /// Idempotent on (StudentId, Section), so a double tap cannot produce a second row.
+        /// </summary>
+        [HttpPost("tour-state")]
+        public ActionResult RecordTourSection([FromBody] TourSectionRequest request)
+        {
+            if (request.StudentId <= 0 || string.IsNullOrWhiteSpace(request.Section))
+                return BadRequest("Invalid request.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            conn.Execute(
+                $"INSERT INTO {StudentProgressDBSettings.TourStateTable} (StudentId, Section, OfferedAt) " +
+                "VALUES (@StudentId, @Section, @OfferedAt) " +
+                "ON CONFLICT(StudentId, Section) DO NOTHING",
+                new
+                {
+                    request.StudentId,
+                    request.Section,
+                    OfferedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
+                });
+
+            return Ok();
         }
 
         // ── GET /student-progress/exercises/{studentId} ──────────────────────

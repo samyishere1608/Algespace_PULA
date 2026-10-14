@@ -10,6 +10,7 @@ import { GeneralTranslations } from "@/types/shared/generalTranslations.ts";
 import { FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
 import type { FlexibilityExerciseResponse } from "@/types/flexibility/flexibilityExerciseResponse.ts";
 import Loader from "@components/shared/Loader.tsx";
+import { ShowSectionTourButton } from "@components/shared/ShowSectionTourButton.tsx";
 import { getCompletedPKExercises } from "@utils/storageUtils.ts";
 import { getExerciseNumber, isExerciseCompleted } from "@utils/utils.ts";
 import { exerciseNavTarget } from "@utils/flexibilityExercises.ts";
@@ -35,7 +36,7 @@ import { FLEXIBILITY_EXERCISE_TYPES, exerciseTypeMeta } from "@utils/flexibility
  *    the list. The per-row tooltip is a shortcut for people who hover or tab, never the only route
  *    to the meaning — this app is used on tablets, where hover does not exist.
  */
-export default function DashboardExercises(): ReactElement {
+export default function DashboardExercises({ onShowTutorial }: { onShowTutorial?: () => void } = {}): ReactElement {
     const { t } = useTranslation([
         TranslationNamespaces.Student,
         TranslationNamespaces.General,
@@ -86,9 +87,14 @@ export default function DashboardExercises(): ReactElement {
             <div className={"dash-exercises__summary"} data-tour={"flex-info"}>
                 <div className={"dash-exercises__summary-head"}>
                     <h2 className={"dash-exercises__title"}>{t("dashboard-exercises-title")}</h2>
-                    <span className={"dash-exercises__count"}>
-                        {t("dashboard-exercises-count", { done: doneCount, total: exercises.length })}
-                    </span>
+                    <div className={"dash-exercises__summary-actions"}>
+                        {onShowTutorial !== undefined && (
+                            <ShowSectionTourButton section={"exercises"} onPlay={onShowTutorial} />
+                        )}
+                        <span className={"dash-exercises__count"}>
+                            {t("dashboard-exercises-count", { done: doneCount, total: exercises.length })}
+                        </span>
+                    </div>
                 </div>
                 <div
                     className={"dash-exercises__track"}

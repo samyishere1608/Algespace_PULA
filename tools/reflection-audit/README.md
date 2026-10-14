@@ -665,7 +665,7 @@ Results: live 111 replies / 0 failures, written answers + gap 49/49, goal window
 
 ---
 
-# NEXT TASK — section-based onboarding. Agreed with the user, NOT started.
+# DONE — section-based onboarding. Built 14 Oct 2026; see the log below.
 
 ## The requirement
 
@@ -736,8 +736,65 @@ part renders a persistent "Show tutorial" control so the offer is never a one-of
 product and everything else is mechanical once it exists. Then the table and the two endpoints, then the
 prompt, then the per-section button.
 
+---
+
+# DONE 14 Oct 2026 — the sections, and the walkthrough story
+
+## The split
+
+32 steps, four contiguous sections (verified by reading the source, not by hand):
+
+| Section | What it covers | Steps | Triggered by |
+|---|---|---|---|
+| `core` | what the platform is for, and how the dashboard is laid out | 9 (`buddy` … `tabs`) | the first dashboard visit, by itself — there is nothing to open first |
+| `companions` | the buddy, and what XP unlocks | 3 (`buddy-corner` … `outfits`) | the first entry into the buddy menu, either button |
+| `goals` | setting a goal, start to finish | 8 (`goals` … `goal-set`) | the first tap on a set-a-goal CTA |
+| `exercises` | the list, the three kinds, and inside a real exercise | 12 (`to-training` … `done`) | the first tap on the Exercises tab |
+
+## Server
+
+`StudentTourState (Id, StudentId, Section, OfferedAt)` with a UNIQUE index on `(StudentId, Section)`;
+`GET /student-progress/tour-state/{studentId}` returns the sections offered; `POST
+/student-progress/tour-state` records one with `ON CONFLICT ... DO NOTHING`. A row means "offered, do
+not ask again" — it does NOT mean watched, which is why saying "not now" writes the same row.
+
+## Client
+
+- `onboardingTour.ts`: `TourSection`, a `section` field on every step, `sectionBounds(section)`,
+  `hasOfferedSection` / `recordSectionOffered` / `shouldOfferSection` / `syncOfferedSections`, and
+  `startSectionTour` / `finishSectionTour`. The local cache is per student and per tour version; the
+  server's rows are the truth and are reconciled on dashboard load without blocking the first paint.
+- `OnboardingTour.tsx` plays ONE section: it reads the section from the step it opened on, starts at
+  that section's first step, ends at its last, disables Back on the first, and counts
+  "Step n of <section length>".
+- `TourOffer.tsx` — the one-time offer ("Show me" / "Not now"), a blocking dialog because the student was
+  on their way somewhere else and the answer is take-it-or-carry-on.
+- `ShowSectionTourButton.tsx` — the standing invitation, in the goals section header, the exercises
+  summary and the buddy menu; the dashboard's `?` pill replays the core section.
+- `StudentDashboard.openOrOffer(section, then)`: on the first entry the offer appears and the action the
+  student asked for is held and run if they dismiss. Accepting plays the section instead — the tour
+  demonstrates the part with its own read-only picker, so opening the real one underneath would leave
+  them two dialogs deep.
+
+## Migration
+
+A student who watched the old single tour has only the old localStorage flag. On first dashboard load
+that flag is mirrored to the server as all four sections, so splitting the tour does not re-tour everyone
+who had already seen it. `finishSectionTour` keeps writing that legacy flag for the core section.
+
+## Verified
+
+- Endpoints: `GET` empty → `{"sections":[]}`; `POST` 200 twice leaves ONE row; a bad body 400s.
+- The split: 32 steps, four contiguous sections, no step left untagged.
+- `npx tsc --noEmit` clean, `eslint` clean (one pre-existing warning), `npm run build` succeeds, and Vite
+  transforms the changed modules.
+- Regression: bank harness "All checks passed", session reflection 27/27, goal window 16/16, baseline
+  residue `{0,0,0}`.
+
+**Not verified:** any of it in a browser. The offer/accepted/dismissed flows and the per-section buttons
+have not been clicked.
+
 ## Also uncommitted at the time of writing
 
-The reflection modal fix: a chip now submits itself, each of the three actions has its own loading
-state, and the writing button requires text. Type-checks clean. Not committed, not pushed.
+Nothing — the reflection fixes and this are both committed and pushed.
 
