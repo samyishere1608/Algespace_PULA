@@ -528,32 +528,15 @@
     }
 }
 
-// ── Footer buttons ────────────────────────────────────────────────────────────
+// ── Footer note ──────────────────────────────────────────────────────────────
 //
-// "Fertig" closes the picker; it does not complete anything. Adding a goal is the action that does,
-// so the dismissal is drawn as a secondary button. Two full-width primaries stacked on each other
-// made the one that does nothing the loudest thing on screen.
-
-.dash-modal.setgoals .dash-modal__action-btn {
-    width: 100%;
-    background-color: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 1.05rem;
-    font-weight: 700;
-    border-radius: 0.6rem;
-    padding: 0.6rem;
-    cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-
-    &:hover {
-        background-color: rgba(255, 255, 255, 0.06);
-        border-color: rgba(255, 255, 255, 0.3);
-        color: #fff;
-    }
-}
+// There is no dismissal button any more: the header's cross closes the picker, and adding a goal is
+// the only action this panel has. A second control that only dismissed was a full-width button doing
+// nothing, which made it the loudest thing on screen. What is left is the one line explaining what
+// finishing a goal is worth.
 
 .dash-modal.setgoals .dash-modal__default-note {
+    display: block;
     font-size: 0.92rem;
     line-height: 1.4;
     text-align: center;
@@ -580,7 +563,6 @@
 .setgoals__back,
 .setgoals__plan-take,
 .setgoals__retry,
-.dash-modal.setgoals .dash-modal__action-btn,
 .dashboard__section-header-cta--active-goals {
     &:focus-visible {
         outline: 2px solid #8ecae6;

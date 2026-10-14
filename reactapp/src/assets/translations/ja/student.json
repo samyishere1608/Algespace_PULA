@@ -327,7 +327,6 @@
   "goals-remove": "目標を削除",
   "goals-back": "戻る",
   "goals-add": "この目標を追加",
-  "goals-done": "完了",
   "goals-go-to-exercises": "課題に進む",
   "goals-resolve-note": "目標を達成すると Resolve XP を {{xp}} 獲得します。",
   "goals-ask-ai": "目標を提案してもらう",

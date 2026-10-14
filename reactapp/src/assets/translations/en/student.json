@@ -327,7 +327,6 @@
   "goals-remove": "Remove goal",
   "goals-back": "Back",
   "goals-add": "Add this goal",
-  "goals-done": "Done",
   "goals-go-to-exercises": "Go to exercises",
   "goals-resolve-note": "Finishing a goal earns {{xp}} Resolve XP.",
   "goals-ask-ai": "Suggest goals for me",

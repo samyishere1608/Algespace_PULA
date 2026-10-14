@@ -233,10 +233,11 @@ export default function SetGoalsModal({ studentId, initialCategory = null, demo 
                     )}
                 </div>
 
+                {/* No dismissal button. The header's cross already closes this, and adding a goal is
+                    the only action the panel has — a second control that did nothing but dismiss made
+                    the quietest thing on screen look like the one that mattered. The note stays: it is
+                    the only place the Resolve reward for finishing a goal is explained. */}
                 <div className={"dash-modal__footer"}>
-                    <button className={"dash-modal__action-btn"} onClick={onClose}>
-                        <FontAwesomeIcon icon={faCheck} /> {t("goals-done")}
-                    </button>
                     <span className={"dash-modal__default-note"}>
                         {t("goals-resolve-note", { xp: GOAL_RESOLVE_XP })}
                     </span>

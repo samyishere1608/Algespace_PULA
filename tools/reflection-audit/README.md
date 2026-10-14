@@ -831,3 +831,13 @@ the five intended keys. Resolve follow-through audit still passes, baseline resi
 
 **Not verified:** the modal in a browser.
 
+## Also the same afternoon: the goal picker's "Done" button
+
+Removed. The header cross already closes it, and adding a goal is the only action the panel has, so the
+footer button dismissed a dialog the cross dismissed and made the quietest control on screen the widest
+one. The footer keeps the one line explaining what finishing a goal is worth (`goals-resolve-note`), now
+`display: block` so it stays centred as the footer's only child. `goals-done` removed from all three
+locales, and the scoped `.dash-modal__action-btn` rules and its focus-ring entry with it (nothing else
+used that class). The picker's real Add button (`data-tour="goals-confirm"`) is untouched, and no tour
+step anchors the removed one.
+
