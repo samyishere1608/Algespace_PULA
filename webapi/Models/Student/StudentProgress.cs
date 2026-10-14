@@ -191,6 +191,24 @@ namespace webapi.Models.Student
         public string Source { get; set; } = "";     // e.g. "daily-intention", "solo-solve", "retry"
     }
 
+    /// <summary>Asks whether engaging with an avoided element, in this attempt, earns Insight.</summary>
+    public class InsightGapAwardRequest
+    {
+        public long StudentId { get; set; }
+
+        /// <summary>One of the AnchorElement values: SolveOnOwn, SelfExplanation, MethodComparison.</summary>
+        public string Element { get; set; } = "";
+
+        /// <summary>The attempt the engagement happened in. It is excluded from every count.</summary>
+        public long AttemptId { get; set; }
+    }
+
+    /// <summary>What to pay. Zero means nothing: the element was not a gap, or this gap was already paid for.</summary>
+    public class InsightGapAwardResponse
+    {
+        public int Amount { get; set; }
+    }
+
     // ── Tutorial / Onboarding Progress ───────────────────────────────────────
 
     /// <summary>Response for GET /student-progress/tutorial/{studentId}.</summary>

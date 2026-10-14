@@ -54,7 +54,9 @@ $stale = @(
     'reflection-q1-held-together', 'reflection-q2-explained',
     'reflection-q2-count-explained', 'reflection-q2-count-compared', 'reflection-q2-count-focus',
     'reflection-q2-decision', 'reflection-q2-self-explanation',
-    'reflection-q2-method-comparison', 'reflection-q2-solve-on-own'
+    'reflection-q2-method-comparison', 'reflection-q2-solve-on-own',
+    # The three ways of answering became one submit button, so the button label was renamed.
+    'reflection-answer-myself'
 )
 
 foreach ($lang in @('en', 'de', 'ja')) {

@@ -1,6 +1,8 @@
+import axios from "axios";
 import { addInsightXP } from "@utils/agencyUtils.ts";
-import { getAvoidanceProfile } from "@utils/avoidanceProfile.ts";
 import { showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
+
+const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
 /**
  * Insight for facing something you have been avoiding.
@@ -10,38 +12,42 @@ import { showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
  * own has done exactly the same difficult thing. Requiring the nudge would mean paying only the
  * students who needed telling.
  *
- * WHY IT CANNOT BE FARMED, and why that is structural rather than a rule:
- *
- * The award is conditional on the element being a gap, and engaging is precisely what closes a gap.
- * The server calls it a gap after three opportunities with at most a fifth of them engaged, which at
- * that floor means no engagement at all — so working through the thing you avoid makes you stop
- * qualifying within a couple of attempts and the awards stop on their own. There is no counter to
- * maintain and no daily cap to tune — the reward extinguishes itself by the same measurement that
- * switched it on.
+ * ONE AWARD PER GAP, decided by the server. The first version paid every engagement while the
+ * element still counted as a gap on an all-time rate, and with a long record of declines that rate
+ * takes several engagements to recover — so a single change of habit was paid three times. The server
+ * now pays once, and pays again only after the student has fallen back into avoiding the element
+ * (the last three opportunities all declined) and then faces it again.
+ * See `AwardInsightForGap` in StudentProgressController for the rule.
  *
  * That also means the award is worth little by design. It is for STARTING, not for continuing, and a
- * student who has genuinely changed gets nothing more from it. The alternative — paying per
- * engagement — would turn the thing we are trying to encourage into a tap to be held down.
+ * student who has genuinely changed gets nothing more from it.
  */
-
-/** Small, and deliberately so: see above. Comparable to a completed goal's Resolve. */
-export const INSIGHT_XP_FOR_FACING_GAP = 8;
 
 /**
- * Awards Insight if the element is currently a gap. Returns the amount awarded, or 0.
+ * Asks the server whether this engagement earns Insight and pays what it says. Returns the amount
+ * paid, or 0.
  *
  * Callers are expected to have de-duplicated per exercise: the two solution points both map to the
- * same element, and being paid twice in one exercise for one act would be wrong.
+ * same element, and being paid twice in one exercise for one act would be wrong. The server also
+ * refuses a second award for the same attempt.
  */
-export async function awardInsightForFacingGap(studentId: number, element: string): Promise<number> {
-    const profile = await getAvoidanceProfile(studentId);
+export async function awardInsightForFacingGap(studentId: number, element: string, attemptId: number): Promise<number> {
+    try {
+        const { data } = await axios.post<{ amount: number }>(`${BACKEND}/student-progress/insight-gap-award`, {
+            studentId,
+            element,
+            attemptId,
+        });
 
-    // No profile means we do not know, which must never pay out. Awarding on a failed request would
-    // make the reward random rather than a reflection of anything.
-    const gap = profile?.gaps.find((stat) => stat.element === element);
-    if (!gap) return 0;
+        // A failed or unclear answer must never pay out: awarding on a failed request would make the
+        // reward random rather than a reflection of anything.
+        const amount = data?.amount ?? 0;
+        if (amount <= 0) return 0;
 
-    addInsightXP(studentId, INSIGHT_XP_FOR_FACING_GAP, "faced-a-gap");
-    showAgencyToast("insight", INSIGHT_XP_FOR_FACING_GAP);
-    return INSIGHT_XP_FOR_FACING_GAP;
+        addInsightXP(studentId, amount, `faced-a-gap:${element}`);
+        showAgencyToast("insight", amount);
+        return amount;
+    } catch {
+        return 0;
+    }
 }

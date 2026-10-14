@@ -229,6 +229,7 @@ namespace webapi.Models.Student
         public int InSet { get; set; }
 
         // Run counts across the set, each for the dimension its question asks about.
+        /// <summary>Exercises in the set that went by with no mistakes. Hints are counted separately, in <see cref="HintFreeRuns"/>.</summary>
         public int CleanRuns { get; set; }
         public int HintFreeRuns { get; set; }
         public int SolvedOnOwnRuns { get; set; }

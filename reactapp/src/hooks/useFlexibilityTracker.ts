@@ -212,16 +212,16 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
      * difficult thing. See `insightAwards.ts` for why it cannot be farmed.
      */
     function considerInsight(choice: string, phase: FlexibilityExerciseChoicePhase): void {
-        if (!useLogger) return;
+        if (!useLogger || ourEntryId === undefined) return;
 
         const engaged = engagedElement(choice, phase);
         if (engaged === null) return;
         if (insightPaidFor.current.has(engaged.element)) return;
 
         // Claimed before the async lookup, so a second engagement in the same exercise cannot slip
-        // through while the profile is still in flight.
+        // through while the server is still deciding.
         insightPaidFor.current.add(engaged.element);
-        void awardInsightForFacingGap(user.id, engaged.element);
+        void awardInsightForFacingGap(user.id, engaged.element, ourEntryId);
     }
 
     /**

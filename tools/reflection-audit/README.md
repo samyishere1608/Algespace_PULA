@@ -40,6 +40,13 @@ node .\check-attempt-link.mjs     # a reflection reads its own attempt (uses a t
 #    the promise the second one records, and the Resolve the next day's intention pays.
 #    Writes to the database; follow it with restore-baseline.mjs.
 node .\check-session-reflection.mjs
+
+# 7. The same reply check as (3), against the fallback text instead of the model. Start the API
+#    with a deliberately broken key in the same process, so every reply is the offline wording:
+#      $env:OpenAI__ApiKey = 'broken'; dotnet run
+#    Then the usual check, and the usual restore afterwards.
+node .\check-reply-alignment.mjs
+node .\restore-baseline.mjs
 ```
 
 Two more, for when something looks wrong and you need to see the real thing rather than reason
@@ -470,3 +477,242 @@ node restore-baseline.mjs                   # and then this, always
 
 Backend 7273 (Development), frontend 5173. Test student `e2etest2` (id 7): baseline Choice 15 /
 Insight 40 / Resolve 0 / lifetime 55, and `residue` must come back `{history:0, queue:0, agency:0}`.
+
+---
+
+# SESSION LOG — 13 Oct 2026, evening. The reply shape, and one button for the answer.
+
+Read this after the log above; where the two disagree, this one is what the code does.
+
+## What the user asked for
+
+1. Every answer tied to the question that was asked, and never vague — if there is little to say,
+   say something real about the thing on screen.
+2. No pointing at mistakes, no XP or award names, no "nothing to award here" kind of wording.
+3. "Pippin, tell me" means Pippin answers THAT question: Q1/Q2 with what the student did on the goal or
+   exercise, Q3 with what to do next.
+4. A chip must not submit itself. Chips select; one common submit button sends the chip or the writing.
+
+## The buttons — `ReflectionModal.tsx`
+
+Tapping a chip toggles the selection and nothing else; the single submit button sends whichever of the
+two is there, so a chip and a written answer are the same kind of action again. The per-action `pending`
+spinner stays (the old `loading` flag made both buttons spin). `reflection-answer-myself` was renamed to
+`reflection-submit-answer` in all three locales, and `check-keys.ps1` lists the old key as stale.
+
+## The reply — `StudentProgressController` and `ReflectionQuestionBank`
+
+- **The contradiction is gone.** The help-button mode label said "nothing about them to say" while the
+  bullet below told the model to state what the facts show they did. Two instructions pulling opposite
+  ways is what a vague, off-question reply looks like from the inside.
+- **`ReflectionQuestionBank.DescribeRecordToStudent`** is the record's own facts in the second person,
+  scoped to the question: the comparison, the explanation, a step, the exercise's went-well options, and
+  the three counts. The prompt carries it as *state this, in your own warm words, adding no contrast and
+  no "didn't"*, and the same string answers the help button and the offline reply.
+- **No award tokens in anything the model reads**, except the JSON schema it must return. "Insight",
+  "XP" and `insightXp=` are gone from the instructions and the verdict lines, and the ban is phrased as
+  the app's scoreboard in any form. Naming the words taught the model to use them: one reply came back
+  "you got the insight you needed".
+- **No enumerations of forbidden phrases.** Listing *"the record shows…"* and *"you didn't…"* as examples
+  put both straight back into replies. The rules now state the shape instead: affirmative sentences only,
+  nothing built on a gap, no source framing, no contrast in front of the fact.
+- **`StepGloss` and `NextActionSubject`** give the model plain English for the four steps and for what a
+  next-step question is about. The student's copy is translation keys the server never renders, so Q3 was
+  guessing its own subject and could not name the thing it was asking about.
+- **A commitment is not a claim.** The promise question used to be handed the "does NOT match" verdict
+  line, because a commitment has no verdict from this call; the model read it as a mark against
+  something the student had just done.
+- **The offline reply is question-aware and award-free.** The Q3 branch used to hand over the weakest
+  area's own recommendation ("Try 2 more Suitability exercises…"), which answers a different question
+  than the one on screen — and it reached the student on the live path too, whenever the model returned
+  no nextStep.
+
+## What the audits say
+
+| Check | Result |
+|---|---|
+| `dotnet run` | All checks passed. Settled-case counts unchanged. |
+| `check-keys.ps1` | 590 / 590 / 589, 0 missing. |
+| `node check-reply-alignment.mjs` | **100 replies, 0 failures.** |
+| the same, against a broken AI key | **96 replies, 0 failures.** |
+
+The last row is open item 2 from the log above — **the offline pass had never been run before this
+session**. To run it, start the API with a deliberately broken key (`$env:OpenAI__ApiKey = 'broken'` in
+the same process as `dotnet run`) so every reply is the fallback text, then run the same check and
+follow it with `restore-baseline.mjs`.
+
+Before this session: 107 replies and 3 failures, all of them the vague answer on a decision question.
+That class is gone; the two that replaced it in earlier runs were both the prompt's own example wording
+coming back out, which is why the examples were removed rather than reworded.
+
+## Follow-up the same evening: two goal-question replies from the real UI
+
+Reported by the user (3 Suitability exercises goal): (1) Q1 "what went well", tapped "my method choices got
+better" — the reply was about asking for the solution; (2) Q2 "which method did you pick when it wasn't
+suitable" — the reply said they picked equalization in "all three" exercises when it was once.
+
+Causes: no facts line existed for the goal questions, so the model fell back on the goal's whole decision
+list; and nothing stated per-method counts, so it invented "all three". Neither was in the audit, which only
+tapped the first and last chip of a goal menu and had no scope rule for goal questions.
+
+Fixes:
+- `ReflectionQuestion` has two server-only fields: `RecordFact` (the question's own second-person tally)
+  and `ChipFacts` (what is true behind each goal Q1 chip; the "no mistakes / no hints" ones carry counts).
+  The goal builders set them. `GoalChipFacts` in `ReflectionQuestionBank` is the chip-id -> fact table.
+- `DescribeRecordToStudent(evidence, question, choice)` now answers goal Q1 from the tapped chip (or, when
+  the chip is not backed, from what the record does back) and returns `RecordFact` for the other goal
+  questions. `DescribeRecord` scopes goal Q1/Q2/count questions: no decision list, no totals, method per
+  exercise, and an instruction never to say "all"/"every" or a count the facts do not state.
+- Q2 pick-method facts give the tally in the not-suitable exercises AND over the whole window.
+- Verdict lines: a new branch for a partial (tie / unsettled) verdict, so the reply does not claim "the
+  one picked most", and a goal-Q1 branch for an unbacked chip that says what went well without repeating it.
+- `ReplyBreaksTheRules` (English only): a model reply that talks about the score, the button, or "didn't"
+  is swapped for the record-based reply. Prompt for behaviour, code for guarantees.
+- `check-reply-alignment.mjs`: goals now tap EVERY chip, goal Q1 and Q2 have scope rules, the Suitability
+  goal has a third exercise, `SHOW=1` prints goal replies and `ONLY_GOALS=1` skips the exercise cases.
+
+Audits after this: live 114 replies / 0 failures; broken key 113 / 0; session 27/27; keys 0 missing;
+`tsc` clean; baseline residue 0/0/0. NB the AI provider returns 429 if the whole audit is run twice in
+quick succession; the replies then silently become the fallback text and the live audit proves nothing.
+Check `api.out.log` for `[AI] attempt ... 429` when a "live" run looks too plain.
+
+## 14 Oct 2026 — written answers, relevant data only, and Insight for facing a gap
+
+Reported by the user: after a goal of three exercises with no hints, the reply said "what happened here
+reads a little differently" while the badge paid +3 Insight; replies did not match the question or the
+answer; and Insight for "solve on own" was paid three times for one change of habit.
+
+**Root causes, found in the stored history, not guessed**
+1. The `reads a little differently` text is the OLD offline free-text fallback, reached because my reply
+   guard (`ReplyBreaksTheRules`) swapped the model's feedback for the fallback's text while keeping the
+   model's `aligned=true, insightXp=3`. Reply and badge came from two different verdicts. The offline
+   fallback itself also judged written answers by keyword ("hint", "good") and paid 3 on the guess.
+2. Goal Q2 for a hints goal asked "which method took the most hints" when there were none, a question
+   whose premise is false. "I didn't use hints" was the honest answer and had no chip to match.
+3. The prompt carried the student's weakest area, the item's raw error/hint totals and the last two
+   reflection turns (from whichever item was answered last) into EVERY reply.
+4. Insight for facing a gap used the all-time engagement rate (`>= 3` opportunities, `<= 20%` engaged),
+   which with a long record of declines takes several engagements to climb out of, and every one paid.
+   Separately, `CleanRuns` counted "no mistakes AND no hints" under a question that says "without a
+   single mistake", so a student with hints but no mistakes was graded wrong.
+
+**What changed**
+- **One verdict per answer.** A written answer is judged by a SEPARATE narrow call (`JudgeWrittenAnswer`:
+  topic + facts + answer, temperature 0, outcome `agrees|contradicts|no_claim`). Insight 3 is paid only
+  for `agrees`. The writer is then told the verdict, exactly as for a tapped chip. No judgement (provider
+  down, 429 after retries) means the offline reply and NO award.
+- **Reply guard retries instead of swapping.** `ReplyProblem` (English only) rejects a reply that talks
+  about the score or the button, says what they did not do, hedges a confirmed answer, or confirms an
+  unconfirmed one. The model is asked once more with the reason; if it fails again the offline reply goes
+  out WITH its own verdict, so what is shown is always consistent. `CallOpenAI` now also retries a 429.
+- **Offline free text pays nothing** and states the question's own fact (`RecordFact` / chip facts).
+- **Questions with a false premise are not asked.** `BuildGoalPickMethodQuestion` falls back to
+  `BuildGoalAccuracyQuestion` when there is no unsuitable choice to name or nothing to place on a method;
+  that question counts hint-free exercises for a hints goal and mistake-free ones otherwise.
+- **Only this question's data reaches the model.** Removed from the prompt: weakest area, raw totals, last
+  reflection turns. `ExerciseRuns` shows only the measures the question is about (a hints goal is shown
+  hints only, except on Q1 whose menu offers both). `JudgeFacts` gives the judge plain facts with none of
+  the writer's instructions; the instruction "never say all" had made the judge mark "all of them" wrong.
+- **Insight for facing a gap: once per episode, decided by the server.** New `POST
+  /student-progress/insight-gap-award` and table `InsightGapAward`. First award: the element is a gap over
+  the whole record, counted WITHOUT the current exercise. Later awards: the last three opportunities after
+  the previous award were all declined. The client (`insightAwards.ts`) pays only what the server returns.
+
+**New audits**
+- `check-written-answers-and-gap.mjs [--offline]` — the reported hints-goal case with four written answers on
+  Q1 and Q2 (true, true in other words, false, a bare verdict), verdict/badge/reply consistency, and the gap
+  rule (paid once, nothing for the next three engagements, paid again after three declines, never for a
+  student who always does it, nothing under three opportunities). Spaces its calls: every written answer is
+  two provider calls.
+- `check-goal-window.mjs` — the stored goal window contains only exercises since the goal started, narrowed
+  to the goal's method/type, capped at five, oldest first, with each decision on ITS OWN exercise. Uses its
+  own student id (99002) and cleans up after itself.
+- `Program.cs` (bank): the all-correct Efficiency goal now expects the count question for Q2.
+
+**Results:** live 114 replies / 0 failures; broken key 114 / 0; written answers + gap 39/39 live, 43/43
+offline; goal window 16/16; session 27/27; keys 0 missing; `tsc` clean; baseline residue 0/0/0. In the live
+run about one reply in seven was rejected by `ReplyProblem` on the first pass (most often "didn't quite
+match"), and a handful fell back to the offline text after the second.
+
+**Known limits.** The reply guard is English-only (the judge is not). A reply the guard cannot recognise
+can still be vague, so the verdict is the guarantee and the wording is best effort. Offline, a written
+answer is never paid, by design.
+
+---
+
+# NEXT TASK — section-based onboarding. Agreed with the user, NOT started.
+
+## The requirement
+
+One 33-step tour becomes **sections**, each shown when it is first relevant:
+
+1. **First visit ever:** the core section only — what the agency is and how the dashboard works.
+2. **Each other part, on first entry into it:** its own tutorial, or a prompt asking whether they want
+   to see it. First time they open goal setting → the goal tutorial. First exercise → the exercise
+   tutorial. The companion, and so on for each part.
+3. **The state must live in the DATABASE, not the browser.** A student changes PC or device, and
+   "already seen" has to follow them.
+
+## What exists now
+
+- `reactapp/src/utils/onboardingTour.ts` — the tour steps and the state. **The state is the defect:**
+  `TOUR_COMPLETED_KEY(studentId)` is a `localStorage` key (`onboardingTour.ts:250-300`). One flag for the
+  whole tour, per browser. Nothing is sent to the server.
+- `reactapp/src/components/shared/OnboardingTour.tsx` and `TourHost.tsx` — the rendering and hosting.
+- One long tour, played once, with no notion of which part a step belongs to.
+
+## The shape of the change
+
+**Server first, because it is the part that must not be guessed at later.** A table keyed on the student
+and a section name:
+
+```
+StudentTourState (StudentId, Section, CompletedAt)   -- presence of a row means "shown"
+```
+
+plus `GET /student-progress/tour-state/{studentId}` returning the sections that are done, and
+`POST /student-progress/tour-state` to record one. Follow the existing pattern for such endpoints:
+`EnsureTables` for the DDL, an upsert that is idempotent on `(StudentId, Section)`.
+
+**Client.** The section is what a step is tagged with, so the 33 steps get grouped rather than
+rewritten. `hasSeenTour` becomes `hasSeenSection(section)`, reading a local cache for immediacy and
+reconciling with the server, because a first paint must not wait on the network. The core section is
+shown on first visit if nothing is recorded; every other section is checked at the moment its part is
+opened.
+
+## Decisions — answered by the user, do not re-ask
+
+1. **"Not now" is NOT permanent dismissal, and it is not a re-ask either.** If they say no the first
+   time, they are never prompted for that section again automatically, and the section keeps a
+   **"Show tutorial" button** of its own so they can play it whenever they choose. First time is an
+   offer; after that it is entirely their decision.
+2. **One section can be replayed**, on its own, from that button. Completing a replay does not need to
+   change the stored state, because "do not prompt again" was already true.
+3. **A section is tied to first entry into its part.** Opening goal setting for the first time is what
+   triggers the goal-setting section. First exercise triggers the exercise section. The companion, and
+   so on for each part. So a section maps to *entering a part*, which is what the 33 steps have to be
+   sorted into.
+4. **The server is not a concern.** The backend runs anyway, so there is no offline case to design for.
+
+## The design that follows
+
+**Server.** `StudentTourState (StudentId, Section, OfferedAt)` — the row means "this student has been
+offered this section, do not prompt again". `GET /student-progress/tour-state/{studentId}` returns the
+sections already offered; `POST` records one. `EnsureTables` for the DDL, upsert idempotent on
+`(StudentId, Section)`.
+
+**Client.** The 33 steps get **tagged with a section** rather than rewritten. `hasSeenTour` becomes
+`hasSeenSection(section)`, read from a local cache for the first paint and reconciled with the server.
+The core section runs on the first visit when nothing is recorded. Every other section is checked at the
+moment its part is opened, which is where the "do you want to see this?" prompt belongs, and each such
+part renders a persistent "Show tutorial" control so the offer is never a one-off.
+
+**Order of work:** sort the 33 steps into sections first, since the split is a judgement about the
+product and everything else is mechanical once it exists. Then the table and the two endpoints, then the
+prompt, then the per-section button.
+
+## Also uncommitted at the time of writing
+
+The reflection modal fix: a chip now submits itself, each of the three actions has its own loading
+state, and the writing button requires text. Type-checks clean. Not committed, not pushed.
+

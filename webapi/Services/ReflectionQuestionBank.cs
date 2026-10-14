@@ -983,18 +983,30 @@ namespace webapi.Services
             }
         }
 
-        /// <summary>The goal question used when the pattern question has nothing to go on.</summary>
+        /// <summary>
+        /// The goal question used when the pattern question would rest on something that did not happen
+        /// — no mistakes or hints to place on a method, or no unsuitable choice to name. A question
+        /// whose premise is false has no answer the student could give, and "I didn't use hints" is the
+        /// honest reply to "which method took you the most hints", so it is replaced by a count that
+        /// has a true answer whichever way the goal went.
+        ///
+        /// A goal about hints counts exercises without hints; every other goal counts those without a
+        /// mistake, which is what the question text says.
+        /// </summary>
         private static ReflectionQuestion BuildGoalAccuracyQuestion(ReflectionEvidence evidence)
         {
             var window = evidence.GoalExercises;
-            var clean = window.Count(e => e.Errors == 0 && e.Hints == 0);
+            var aboutHints = evidence.GoalQuality == "hints";
+            var runs = aboutHints
+                ? window.Count(e => e.Hints == 0)
+                : window.Count(e => e.Errors == 0);
 
             return new ReflectionQuestion
             {
                 Id = "q2-count",
                 Kind = Judgement,
                 ItemType = "goal",
-                TextKey = "reflection-q2-count-clean",
+                TextKey = aboutHints ? "reflection-q2-count-hintfree" : "reflection-q2-count-clean",
                 Values = new Dictionary<string, string> { ["total"] = window.Count.ToString() },
                 Chips =
                 [
@@ -1003,8 +1015,11 @@ namespace webapi.Services
                     new ReflectionChip { Id = "band-some", TextKey = "reflection-chip-band-some" },
                     new ReflectionChip { Id = "band-none", TextKey = "reflection-chip-band-none" },
                 ],
-                AlignedChipIds = [BandFor(clean, window.Count)],
-                Expectation = $"they are honest about how often it happened: {clean} of {window.Count} exercises",
+                AlignedChipIds = [BandFor(runs, window.Count)],
+                Expectation = $"they are honest about how often it happened: {runs} of {window.Count} exercises",
+                RecordFact = aboutHints
+                    ? $"{runs} of the {window.Count} exercises went by with no hints at all"
+                    : $"{runs} of the {window.Count} exercises went by without a single mistake",
             };
         }
 
@@ -1018,10 +1033,21 @@ namespace webapi.Services
             ReflectionEvidence evidence,
             bool byErrors = false)
         {
+            var rows = subset.ToList();
+
+            // The premise has to be true before the question is asked: there must be an unsuitable
+            // choice to name, or mistakes / hints to place on a method.
+            var hintsQuestion = textKey == "reflection-goal-q2-most-hints";
+            var premiseHolds = textKey switch
+            {
+                "reflection-goal-q2-pick-unsuitable" or "reflection-goal-q2-pick-inefficient" => rows.Count > 0,
+                _ => rows.Sum(e => hintsQuestion ? e.Hints : e.Errors) > 0,
+            };
+            if (!premiseHolds) return BuildGoalAccuracyQuestion(evidence);
+
             question.TextKey = textKey;
             question.Chips = chips;
 
-            var rows = subset.ToList();
             var weakest = MostCommonMethod(rows);
             if (byErrors || weakest is null) weakest = MethodWithMost(rows, byErrors);
 
@@ -1487,6 +1513,10 @@ namespace webapi.Services
         {
             var parts = new List<string>();
 
+            // The goal questions that are answered from the window's own pattern, which are told only
+            // what they are about (see below).
+            var aboutGoalPattern = evidence.IsGoal && question?.Id is "goal-q1-went-well" or "goal-q2-pattern" or "q2-count";
+
             if (evidence.IsSession)
             {
                 parts.Add(evidence.GoalExercises.Count > 0
@@ -1499,8 +1529,9 @@ namespace webapi.Services
                 parts.Add($"This is a goal they completed, covering {evidence.InSet} exercise(s).");
                 // Said outright, because the number in the row is a TOTAL and reads like a count of
                 // something. "4 errors" over a three-exercise goal became "4 exercises" in a reply.
-                parts.Add("The mistake and hint numbers below are TOTALS across all of those, not one " +
-                          "exercise's numbers.");
+                if (!aboutGoalPattern)
+                    parts.Add("The mistake and hint numbers below are TOTALS across all of those, not one " +
+                              "exercise's numbers.");
             }
 
             // ONE DECISION AT A TIME. The record carries three of them, and handing all three over on
@@ -1520,8 +1551,6 @@ namespace webapi.Services
             // named here for the same reason.
             var aboutThePromise = question?.Id is "q3-next-action" or "session-q2-next";
 
-            var aboutGoalPattern = evidence.IsGoal && question?.Id is "goal-q1-went-well" or "goal-q2-pattern" or "q2-count";
-            var showDecisions = !aboutGoalPattern || evidence.Focus is "selfExplanation" or "methodComparison" or "solveOnOwn";
             if (aboutThePromise)
             {
                 parts.Add("This question asks what they will do next time. Nothing about what already "
@@ -1612,16 +1641,7 @@ namespace webapi.Services
             // things that may have gone well, and the model can only reply to it honestly if it can see
             // what the day consisted of.
             if ((evidence.IsGoal || evidence.IsSession) && evidence.GoalExercises.Count > 0)
-            {
-                var runs = evidence.GoalExercises.Select((exercise, index) =>
-                    $"#{index + 1}: {MethodKey(exercise.Method)} method, {exercise.Errors} mistake(s), {exercise.Hints} hint(s), {Fmt(exercise.Time)}s" +
-                    (showDecisions && exercise.Own ? ", worked out alone" : showDecisions && exercise.WasShown ? ", asked to be shown" : "") +
-                    (showDecisions && exercise.Explained ? ", explained their reasoning" : "") +
-                    (showDecisions && exercise.Compared ? ", compared the methods" : "") +
-                    (exercise.Correct ? ", chose a method the exercise allowed" : ""));
-
-                parts.Add($"{(evidence.IsGoal ? "The goal's" : "The session's")} exercises, oldest first — {string.Join("; ", runs)}.");
-            }
+                parts.Add($"{(evidence.IsGoal ? "The goal's" : "The session's")} exercises, oldest first — {ExerciseRuns(evidence, question)}.");
 
             // The figure the question is actually about. For a count question this IS the answer, and
             // the model is meant to check the student's claim against it.
@@ -1637,6 +1657,60 @@ namespace webapi.Services
                     parts.Add($"Of those {evidence.InSet} exercises, {evidence.CleanRuns} went by without a single mistake.");
                     break;
             }
+
+            return string.Join(" ", parts);
+        }
+
+        /// <summary>
+        /// The window's exercises one by one, reduced to the measures THIS question is about.
+        ///
+        /// A goal on hints is told its hints and nothing about its mistakes, and the reverse; time only
+        /// matters to the questions that ask about speed; the decisions only to the goals about a
+        /// decision. Everything else is left out so a reply cannot be built from it. The first question's
+        /// menu offers both kinds of measure, so it is shown both.
+        /// </summary>
+        private static string ExerciseRuns(ReflectionEvidence evidence, ReflectionQuestion? question)
+        {
+            var aboutGoalPattern = evidence.IsGoal && question?.Id is "goal-q1-went-well" or "goal-q2-pattern" or "q2-count";
+            var showDecisions = !aboutGoalPattern || evidence.Focus is "selfExplanation" or "methodComparison" or "solveOnOwn";
+
+            var narrowToQuality = question?.Id != "goal-q1-went-well";
+            var onlyHints = narrowToQuality && evidence.Focus == "hintsAndErrors" && evidence.GoalQuality == "hints";
+            var onlyMistakes = narrowToQuality && evidence.Focus == "hintsAndErrors" && evidence.GoalQuality == "errors";
+            var showTime = !aboutGoalPattern || evidence.Focus is "method" or "exerciseType";
+
+            return string.Join("; ", evidence.GoalExercises.Select((exercise, index) =>
+                $"#{index + 1}: {MethodKey(exercise.Method)} method" +
+                (onlyHints ? "" : $", {exercise.Errors} mistake(s)") +
+                (onlyMistakes ? "" : $", {exercise.Hints} hint(s)") +
+                (showTime ? $", {Fmt(exercise.Time)}s" : "") +
+                (showDecisions && exercise.Own ? ", worked out alone" : showDecisions && exercise.WasShown ? ", asked to be shown" : "") +
+                (showDecisions && exercise.Explained ? ", explained their reasoning" : "") +
+                (showDecisions && exercise.Compared ? ", compared the methods" : "") +
+                (exercise.Correct && (!aboutGoalPattern || evidence.Focus == "exerciseType") ? ", chose a method the exercise allowed" : "")));
+        }
+
+        /// <summary>
+        /// Only the facts, for judging what a student wrote: no instructions to a writer, no tone rules.
+        ///
+        /// <see cref="DescribeRecord"/> carries sentences such as "never say all" that are meant for the
+        /// model writing the reply. A judge reads them as facts, and one marked "I got through all of
+        /// them without a hint" as contradicting a record that said exactly that.
+        /// </summary>
+        public static string JudgeFacts(ReflectionEvidence evidence, ReflectionQuestion question, string studentLine)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(studentLine)) parts.Add($"{char.ToUpperInvariant(studentLine[0])}{studentLine[1..]}.");
+            if (!string.IsNullOrWhiteSpace(question.RecordFact) && question.RecordFact != studentLine)
+                parts.Add($"{char.ToUpperInvariant(question.RecordFact[0])}{question.RecordFact[1..]}.");
+
+            if (question.Id == "goal-q1-went-well" && question.ChipFacts.Count > 0)
+                parts.Add("What is true of this goal: " + string.Join("; ", question.ChipFacts.Values) + ".");
+
+            if ((evidence.IsGoal || evidence.IsSession) && evidence.GoalExercises.Count > 0)
+                parts.Add($"The exercises, oldest first — {ExerciseRuns(evidence, question)}.");
+            else if (!evidence.IsGoal)
+                parts.Add(DescribeRecord(evidence, question));
 
             return string.Join(" ", parts);
         }

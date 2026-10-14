@@ -750,7 +750,9 @@ CheckGoal("goal-window/suitability-worked", suitability,
     q2Aligned: ["pick-substitution"],
     q3Chips: ["act-suitable-choice", "act-no-hints", "act-solve-alone", "act-explain", "act-compare"]);
 
-// An Efficiency goal: the best method was picked every time, one run was clean, and they sped up.
+// An Efficiency goal: the best method was picked every time, one run was clean, and they sped up. With
+// no unsuitable choice to name, Q2 is the count of mistake-free exercises instead of a question whose
+// premise did not happen.
 var efficiency = new ReflectionEvidence
 {
     IsGoal = true, Focus = "exerciseType", GoalFocus = "Efficiency",
@@ -762,7 +764,7 @@ var efficiency = new ReflectionEvidence
 };
 
 CheckGoal("goal-window/efficiency-worked", efficiency,
-    "reflection-goal-q1-efficiency", "reflection-goal-q2-pick-inefficient", "reflection-goal-q3-efficiency",
+    "reflection-goal-q1-efficiency", "reflection-q2-count-clean", "reflection-goal-q3-efficiency",
     q1Aligned: ["went-always-correct", "went-no-errors", "went-faster"],
     q3Chips: ["act-best-choice", "act-no-hints", "act-solve-alone", "act-no-errors"]);
 

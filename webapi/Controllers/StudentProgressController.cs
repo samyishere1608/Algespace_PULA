@@ -129,6 +129,14 @@ namespace webapi.Controllers
             // to the old behaviour for those rather than failing.
             try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionQueueTable} ADD COLUMN AttemptId INTEGER NOT NULL DEFAULT 0"); } catch { }
 
+            // One row per Insight paid for facing a gap, so a gap is paid for once per EPISODE rather
+            // than on every engagement while an all-time average is still catching up.
+            conn.Execute(
+                $"CREATE TABLE IF NOT EXISTS {InsightGapAwardTable} " +
+                "(Id INTEGER PRIMARY KEY AUTOINCREMENT, StudentId INTEGER NOT NULL, Element TEXT NOT NULL, " +
+                "AttemptId INTEGER NOT NULL, AwardedAt TEXT NOT NULL)");
+            conn.Execute(
+                $"CREATE INDEX IF NOT EXISTS IX_{InsightGapAwardTable}_Student ON {InsightGapAwardTable} (StudentId, Element)");
             // Only after every statement above has succeeded, so a partial failure is retried on the
             // next request rather than leaving the schema permanently half-built.
             _schemaChecked = true;
@@ -851,6 +859,106 @@ namespace webapi.Controllers
                 new { request.StudentId });
 
             return Ok(newValue);
+        }
+
+        private const string InsightGapAwardTable = "InsightGapAward";
+
+        /// <summary>Small by design: it is for STARTING on something avoided, not for continuing.</summary>
+        private const int InsightForFacingGapXp = 8;
+
+        // ── POST /student-progress/insight-gap-award ────────────────────────
+        /// <summary>
+        /// Decides whether engaging with something the student has been avoiding earns Insight, and
+        /// records it when it does. The client pays out only what this returns.
+        ///
+        /// WHY IT LIVES HERE. The rule used to be "the element is currently a gap" on an ALL-TIME
+        /// engagement rate. With a long record of declines that rate takes several engagements to climb
+        /// past a fifth, and every one of them was paid — a student who simply started working things
+        /// out themselves collected the award three times for one change of habit.
+        ///
+        /// THE RULE. One award per gap EPISODE:
+        ///   1. Before this exercise, the element was a gap over the whole record (at least three
+        ///      opportunities, at most a fifth engaged).
+        ///   2. If it was already paid for, a NEW gap has to have formed since: the last three
+        ///      opportunities after that award were all declined. Working on it next time pays nothing;
+        ///      falling back into avoiding it, and then facing it again, pays again.
+        ///
+        /// The exercise being engaged in is excluded from every count, so the answer does not depend on
+        /// whether the decision it just wrote has landed yet.
+        /// </summary>
+        [HttpPost("insight-gap-award")]
+        public ActionResult<InsightGapAwardResponse> AwardInsightForGap([FromBody] InsightGapAwardRequest request)
+        {
+            if (request.StudentId <= 0 || request.AttemptId <= 0)
+                return Ok(new InsightGapAwardResponse());
+
+            var names = request.Element switch
+            {
+                AnchorElement.SolveOnOwn => AnchorDimension.SolveOnOwn,
+                AnchorElement.SelfExplanation => AnchorDimension.SelfExplanation,
+                AnchorElement.MethodComparison => AnchorDimension.MethodComparison,
+                _ => null,
+            };
+            if (names is null) return Ok(new InsightGapAwardResponse());
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            // The same exercise paid twice (two solution points, or a retried request) is one act.
+            var alreadyForThisAttempt = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(1) FROM {InsightGapAwardTable} WHERE StudentId = @StudentId AND Element = @Element AND AttemptId = @AttemptId",
+                new { request.StudentId, request.Element, request.AttemptId });
+            if (alreadyForThisAttempt > 0) return Ok(new InsightGapAwardResponse());
+
+            var attemptIds = conn.Query<long>(
+                $"SELECT Id FROM {AnchorStoreSettings.Table} WHERE StudentId = @StudentId AND Id <> @AttemptId ORDER BY Id",
+                new { request.StudentId, request.AttemptId }).ToList();
+
+            var records = attemptIds.Count == 0
+                ? []
+                : conn.Query<DecisionRecordRow>(
+                    $"SELECT AttemptId, Name, Choice FROM {AnchorStoreSettings.RecordTable} WHERE StudentId = @StudentId",
+                    new { request.StudentId }).ToList();
+
+            var lastAwardedAttempt = conn.ExecuteScalar<long?>(
+                $"SELECT MAX(AttemptId) FROM {InsightGapAwardTable} WHERE StudentId = @StudentId AND Element = @Element",
+                new { request.StudentId, request.Element }) ?? 0;
+
+            // Whether they engaged, for each exercise that carried this decision at all, oldest first.
+            List<bool> Opportunities(long afterAttempt)
+            {
+                var flags = new List<bool>();
+
+                foreach (var id in attemptIds.Where(id => id > afterAttempt))
+                {
+                    var answers = Answers(id, names, records).ToList();
+                    if (answers.Count == 0) continue;
+
+                    flags.Add(AnchorDimension.Engaged(answers));
+                }
+
+                return flags;
+            }
+
+            bool IsGap(List<bool> flags) =>
+                flags.Count >= GapThresholds.MinOpportunities
+                && (double)flags.Count(engaged => engaged) / flags.Count <= GapThresholds.MaxEngagementRate;
+
+            // The first award reads the whole record, as the profile does. Every later one reads only
+            // what has happened SINCE the last award, and only its most recent three opportunities: the
+            // engagements right after an award are the change of habit being rewarded, so they must not
+            // hold the gap shut for the next dozen declines, nor count as a reason to pay again.
+            var qualifies = lastAwardedAttempt == 0
+                ? IsGap(Opportunities(0))
+                : IsGap(Opportunities(lastAwardedAttempt).TakeLast(GapThresholds.MinOpportunities).ToList());
+            if (!qualifies) return Ok(new InsightGapAwardResponse());
+
+            conn.Execute(
+                $"INSERT INTO {InsightGapAwardTable} (StudentId, Element, AttemptId, AwardedAt) VALUES (@StudentId, @Element, @AttemptId, @AwardedAt)",
+                new { request.StudentId, request.Element, request.AttemptId, AwardedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss") });
+
+            return Ok(new InsightGapAwardResponse { Amount = InsightForFacingGapXp });
         }
 
         // ── GET /student-progress/tutorial/{studentId} ───────────────────────
@@ -2206,7 +2314,9 @@ RULES:
 
                     set = window.Exercises.Count;
                     evidence.InSet = set;
-                    evidence.CleanRuns = window.Exercises.Count(e => e.Errors == 0 && e.Hints == 0);
+                    // "Without a single mistake" is what the count question says, so it counts mistakes only:
+                    // hints are a different question, answered by HintFreeRuns.
+                    evidence.CleanRuns = window.Exercises.Count(e => e.Errors == 0);
                     evidence.HintFreeRuns = window.Exercises.Count(e => e.Hints == 0);
                     evidence.SolvedOnOwnRuns = window.Exercises.Count(e => e.Own);
                     evidence.ExplainedSelfRuns = window.Exercises.Count(e => e.Explained);
@@ -2242,7 +2352,7 @@ RULES:
             if (evidence.GoalExercises.Count == 0)
             {
                 // One exercise, so every count is the decision itself.
-                evidence.CleanRuns = item.Errors == 0 && item.Hints == 0 ? 1 : 0;
+                evidence.CleanRuns = item.Errors == 0 ? 1 : 0;
                 evidence.HintFreeRuns = item.Hints == 0 ? 1 : 0;
                 evidence.SolvedOnOwnRuns = evidence.DidSolveOnOwn ? 1 : 0;
                 evidence.ExplainedSelfRuns = evidence.DidExplain ? 1 : 0;
@@ -2414,7 +2524,6 @@ RULES:
                     NextStep = ""
                 });
 
-            var weakness = ComputeWeakness(conn, request.StudentId);
             Console.WriteLine($"[Reflection] Evaluate — student={request.StudentId}, itemId={request.QueueItemId}, label=\"{item.ItemLabel}\", type={item.ItemType}, method={item.Method}, errors={item.Errors}, hints={item.Hints}, pippin={item.PippinMessages}, Q={request.QuestionNumber}, mode={request.Mode}, answer=\"{request.Answer}\"");
 
             // Deterministic features of the student's own words, extracted once and used for two
@@ -2443,15 +2552,10 @@ RULES:
                 });
             }
 
-            // Last 2 history turns for context (oldest → newest)
-            var history = conn.Query<ReflectionHistoryRecord>(
-                $"SELECT * FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
-                "WHERE StudentId = @StudentId ORDER BY Id DESC LIMIT 2",
-                new { StudentId = request.StudentId }).ToList();
-            history.Reverse();
-            var historyText = history.Count > 0
-                ? string.Join("\n", history.Select(h => $"{h.Role}: {h.Text}"))
-                : "(none)";
+            // NOTHING ABOUT THE STUDENT BEYOND THIS QUESTION'S OWN FACTS reaches the model. It used to be
+            // handed the last two reflection turns (from whichever item was answered last), the student's
+            // weakest area across everything, and the item's raw error and hint totals — all of which are
+            // about something other than the question on screen, and all of which turned up in replies.
 
             // ── The record decides when it can ────────────────────────────────
             //
@@ -2504,7 +2608,7 @@ RULES:
                     "to what they said about their day; do not say that it matched or did not, and do not say " +
                     "anything about what their answer was or was not worth."
                 : !verdict.FromRecord
-                ? "No quick answer was tapped, so the free-text answer above decides: judge it yourself against the stated expectation. Whatever you decide, the reply has to SAY which way it went — the student cannot see the verdict, so a reply that leaves it open tells them nothing."
+                ? "No quick answer was tapped, so what they wrote is judged against the facts above: set 'match' first, as the instructions describe, and write a reply that fits it. The student cannot see the verdict, so the reply has to say which way it went."
                 : verdict.Status == "partial"
                     ? $"They tapped a quick answer, and the facts above cannot single out one right answer for this question, so what they tapped is a fair reading and is not marked either way: aligned=false, and the award number to return is {verdict.InsightXp}. Copy this exactly. Reply by saying what the facts above show about their pick, using only the figures stated there. Never say it was the most common, the only one, or true of all the exercises unless the facts say so."
                 : asked.Id == "goal-q1-went-well" && verdict.InsightXp == 0
@@ -2573,12 +2677,49 @@ RULES:
                         $"uncertainty={promptFeatures.UncertaintyMarkers.Count}, affect={promptFeatures.AffectMarkers.Count}");
                 }
 
-                var prompt = BuildReflectionPrompt(request, item, weakness, historyText, promptFeatures, questionLine, recordLine, verdictLine,
-                    ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked, request.Choice ?? ""));
+                var studentLine = ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked, request.Choice ?? "");
 
+                // A written answer to a question the record can check is judged by a SEPARATE, narrow
+                // call that sees only the question's facts and the answer, and the award follows its
+                // verdict. The writer is then told that verdict, exactly as it is for a tapped chip, so
+                // one answer gets one verdict and the badge and the sentence beside it cannot disagree.
+                // Judging and writing in one call let a long prompt pull the two apart.
+                var judgesWriting = !verdict.FromRecord
+                    && request.Mode != "pippin"
+                    && !string.IsNullOrWhiteSpace(request.Answer)
+                    && item.ItemType != "session"
+                    && asked.Kind is ReflectionQuestionBank.Observation or ReflectionQuestionBank.Judgement;
+
+                var writtenMatch = "";
+                if (judgesWriting)
+                {
+                    writtenMatch = await JudgeWrittenAnswer(
+                        apiKey, asked, ReflectionQuestionBank.JudgeFacts(evidence, asked, studentLine), request.Answer ?? "");
+
+                    // No judgement, no award: the offline reply is built from the record and pays nothing.
+                    if (writtenMatch.Length == 0) return Ok(fallback);
+
+                    Console.WriteLine($"[Reflection] Written answer judged: {writtenMatch}");
+
+                    verdictLine = writtenMatch == "yes"
+                        ? "Their written answer is CONFIRMED by the facts above: aligned=true, and the award number to return is 3. The reply must read as a clear confirmation: one or two warm sentences saying it is what happened and naming the fact that shows it. Do not hedge, and never sound doubtful about it."
+                        : "Their written answer is NOT confirmed by the facts above: aligned=false, and the award number to return is 0. The reply must not say or suggest that it matched. State what the facts above say about this question as a plain, warm fact, starting with the fact itself, using only the figures stated there.";
+                }
+
+                var prompt = BuildReflectionPrompt(request, item, promptFeatures, questionLine, recordLine, verdictLine, studentLine);
+
+                string? rejected = null;
+
+                // Two tries: the second one is told exactly what was wrong with the first. A reply that
+                // still breaks the rules is replaced by the offline one, whose verdict is its own, so
+                // what is shown is always internally consistent.
+                for (var pass = 0; ; pass++)
+                {
                 var raw = await CallOpenAI(apiKey,
-                    "You are Pippin, a warm encouraging study coach chatting with a student. Compare their reflection answer to their real performance, but keep it conversational and kind — like a friend checking in. Always output valid JSON with exactly these keys: feedback (string), aligned (boolean), insightXp (integer 0-3), nextStep (string, filled only for the final question otherwise empty).",
-                    prompt);
+                    "You are Pippin, a warm encouraging study coach chatting with a student. Write a short reply to their reflection answer from the facts you are given about THIS question, but keep it conversational and kind — like a friend checking in. Always output valid JSON with exactly these keys: feedback (string), aligned (boolean), insightXp (integer 0-3), offTopic (boolean), nextStep (string, filled only for the final question otherwise empty).",
+                    rejected is null
+                        ? prompt
+                        : prompt + $"\n\nYOUR PREVIOUS REPLY WAS REJECTED because {rejected}. Write the whole JSON again and fix exactly that.");
 
                 if (raw == null) return Ok(fallback);
 
@@ -2588,6 +2729,7 @@ RULES:
 
                 using var doc = JsonDocument.Parse(raw.Substring(jsonStart, jsonEnd - jsonStart + 1));
                 var root = doc.RootElement;
+                var match = writtenMatch;
                 var feedback = root.TryGetProperty("feedback", out var fb) ? fb.GetString() ?? "" : fallback.Feedback;
 
                 // GPT occasionally returns booleans/integers as strings — parse leniently.
@@ -2665,16 +2807,26 @@ RULES:
                     aligned = verdict.Status == "aligned";
                     insightXp = verdict.InsightXp;
                 }
-
-                Console.WriteLine($"[Reflection] AI result — aligned={aligned}, insightXp={insightXp}, feedback=\"{feedback}\", nextStep=\"{nextStep}\"");
-
-                // The prompt forbids these and the model still produces them now and then, so the worst
-                // of them are caught here and the offline reply, which is built from the record, goes
-                // out instead. English only: the patterns are words.
-                if (ReplyBreaksTheRules(feedback, request.Language, request.Mode))
+                else if (judgesWriting)
                 {
-                    Console.WriteLine("[Reflection] AI reply broke a rule — sending the record-based reply instead");
-                    feedback = fallback.Feedback;
+                    // The award follows the separate judgement and nothing else: "yes" is the only way a
+                    // written answer pays, and the amount is fixed rather than whatever number the writer chose.
+                    aligned = match == "yes";
+                    insightXp = aligned ? 3 : 0;
+                }
+
+                Console.WriteLine($"[Reflection] AI result (pass {pass + 1}) — match={match}, aligned={aligned}, insightXp={insightXp}, feedback=\"{feedback}\", nextStep=\"{nextStep}\"");
+
+                // The prompt forbids these and the model still produces them now and then. A reply that
+                // talks about the score, the button or what they did not do, or that says the opposite
+                // of the verdict above it, is sent back once with the reason; if it comes back wrong
+                // again the offline reply goes out instead, together with ITS verdict.
+                rejected = ReplyProblem(feedback, aligned, request.Language, request.Mode, asked.Kind);
+                if (rejected is not null)
+                {
+                    Console.WriteLine($"[Reflection] AI reply rejected (pass {pass + 1}): {rejected}");
+                    if (pass >= 1) return Ok(fallback);
+                    continue;
                 }
                 return Ok(new ReflectionEvaluateResponse
                 {
@@ -2689,6 +2841,7 @@ RULES:
                     NextStep = AiTextFormatter.StripMathDelimiters(
                         string.IsNullOrWhiteSpace(nextStep) ? fallback.NextStep : nextStep)
                 });
+                }
             }
             catch
             {
@@ -3120,8 +3273,6 @@ RULES:
         private static string BuildReflectionPrompt(
             ReflectionEvaluateRequest request,
             ReflectionQueueRecord item,
-            WeaknessResponse weakness,
-            string historyText,
             NlpFeatures? features = null,
             string questionLine = "",
             string recordLine = "",
@@ -3163,10 +3314,6 @@ RULES:
             var mode = request.Mode == "pippin"
                 ? "The student pressed the help button instead of answering, so they are asking you to answer this question for them, from the facts below. For Q1 and Q2 that means stating what they actually did on the one thing this question asks about. For Q3 it means naming what to do next. There is no student answer to grade."
                 : "They answered themselves";
-            var weakest = weakness.Weakest;
-            var weakestText = weakest != null
-                ? $"{weakest.Label} (score {weakest.Score}/100, recommended exercise: {weakest.RecommendedExercise})"
-                : "(not computed yet)";
             var langInstruction = request.Language switch
             {
                 "de" => "You must respond ONLY in German.",
@@ -3185,13 +3332,8 @@ RULES:
                 ? ""
                 : $"\nWhat they did, said to them rather than about them (state this, in your own warm words, adding no contrast and no \"didn't\", and nothing beyond it: no stronger word than it uses and no extra achievement it does not state): {studentLine}.";
 
-            return $@"Student completed: {item.ItemLabel} (item type: {item.ItemType}, method/exercise type: {item.Method}).
-Actual performance on it: {item.Errors} errors, {item.Hints} hints, {item.PippinMessages} Pippin messages.
-What they decided during it is stated below, but ONLY the part this question is about: those decisions are stated once, on the facts line, so nothing from a different question can leak into this reply.
-Weakest area: {weakestText}.
-
-Previous reflection turns (for context):
-{historyText}
+            return $@"Student completed: {item.ItemLabel} (item type: {item.ItemType}).
+The ONLY facts about this student that you may use are the ones on the lines below. Nothing else about them is known to you, and nothing about any other exercise, goal or question may appear in the reply.
 
 Current question: {questionLabel}
 {questionLine}
@@ -3215,15 +3357,15 @@ NO FOLLOW-UP QUESTIONS (very important): This reflection is ONE question and ONE
   * On Q1 and Q2 the student is asking YOU for this question's answer, so ANSWER IT: one or two sentences stating plainly what the facts line above says they did with the one thing this question asks about — the decision they took at that step, or the part of the working the question names. That statement IS the reply. Never replace it with a general tip, and never write that they asked for the model answer, that you are explaining their work, or anything else about the button they pressed.
   * On Q3 the question is about the NEXT exercise, so the reply is ONE concrete thing to try next, taken from this question's own answers, with a few words on why it will help. Say nothing about what they did earlier: a question about the future is not answered by the past.
   * Speak directly to the student as Pippin, warmly, without judging either choice. Everything the facts line does not mention is unknown to you — do not guess at it and do not credit them with it.
-- If Q1 or Q2 and they answered themselves: judge ALIGNMENT against the thing the question asked about, which is stated above as ""Expected of a correct answer"". They are ALIGNED when their answer refers to that one thing, in their own words, and says something about it. An answer that only gives a general verdict — ""it was fine"", ""it was good"", ""I don't know"" — is NOT aligned, however warm it sounds.{sessionOnlyRule}
+- If Q1 or Q2 and they answered themselves (no quick answer tapped): whether what they wrote matched the facts is ALREADY DECIDED, and is stated above as the decision on their answer. Copy it, and write the reply to fit it: when it is confirmed, say plainly and warmly that it is what happened, naming the fact that shows it, with no hedge of any kind; when it is not, state what the facts say about this question as a plain, warm fact, and never say or hint that their answer matched. Use only the figures and wording the facts line gives: no stronger word, no extra achievement, and no count it does not state.{sessionOnlyRule}
 - When they tapped a quick answer, ALIGNMENT IS ALREADY DECIDED, and it is stated above as the decision on their answer. Copy it exactly: do not change it, do not second-guess it, and do not decide the award yourself. Write only the reply. Where the tap and the facts differ, say what they actually chose the way the facts line states it, and make it sound like the reasonable thing it was — no ""but"", no ""actually"", no ""in reality"", no comparing it against what they tapped, and no sentence that could be read as marking them down. They do not need to be told the tap was wrong; the reply is there to end the reflection on something true and warm. Do not repeat their version either, and never write that their answer was right, close, or matches when the facts say it does not.
 - ALWAYS FIND SOMETHING GENUINELY GOOD, AND ESPECIALLY ON Q1. Q1 asks what was good, so the reply LEADS with something real and good that the facts line supports — they worked it out themselves, they got through a part without a mistake, they took no hints, they explained their reasoning, they compared the methods, they asked for help rather than giving up, or they finished an exercise that cost them. Name it first, in their own terms, and let the reply stand on it: every exercise has one, even a rough one. If their answer does not match, state what the facts say warmly and matter-of-factly and then name that good thing. Do not scold, and do not point out that they were wrong.
 - NEVER AGREE WITH SOMETHING THE FACTS CONTRADICT. If they say they worked it out themselves but the facts say they skipped it, do not congratulate them for working it out and never state their claim as fact: that teaches them the reflection is a box to type anything into. Say what they did in a warm, matter-of-fact way, and celebrate the thing that is actually true instead — taking the help on offer is a real, sensible thing to do.
 - A TAPPED QUICK ANSWER IS A COMPLETE ANSWER. If the answer text is empty but a quick answer is stated above, they answered: quote or refer to what they chose. NEVER say they did not answer, did not share their thoughts, or missed the question, and never remark on the empty box. There is nothing missing.
   * If they DID NOT tap a quick answer AND wrote nothing usable, then there is genuinely no answer, and the reply should simply invite them to have a go at the next one. Never remark on the empty box or on what they did not write, and never say they did not share, did not answer or missed the question — there is simply nothing there, and the invitation is the whole reply.
   * Where they SKIPPED the thing this question is about, that is what the facts say and it decides the verdict. Say it plainly and warmly, without ranking it as a failure, and never carry it into a question it does not belong to. A decision here is a yes or a no: no means they skipped it, not that they asked for the answer to be revealed.
-  If aligned → aligned=true with an award number of 3, and one or two warm sentences that name the thing they got right. If not → aligned=false, award number 0: give them the one thing the facts line above says about this question, as a plain fact with nothing in front of it — start the sentence with the fact itself, with no phrase about a source, a check, or where the fact came from (for example ""you went straight on without comparing the two methods here"") — and then say warmly why that step is the one worth taking. Never settle for a general observation instead of that fact, never quote their own words back as the thing that went wrong, never quote error or hint counts, and never ask them anything. A vague answer gets exactly the same treatment: what the facts line says about this question, and stop.
-- If Q3: ignore alignment. The FEEDBACK must ANSWER the question on screen: name ONE concrete thing to do in the next exercise, taken from this question's own quick answers, and say in a few words why it will help. It must be about the subject THIS question is about (comparing, explaining, working it out, hints, the method) and never a general study tip, and the weakest area is background only — do not build the reply or the next step out of it unless the question itself is about that. Put the same thing, one line and phrased as an offer, in nextStep. NEVER open by describing what the student did, what they pressed, or that they asked for anything. Set aligned=false with an award number of 0. The feedback must not end with a question mark — the audit catches that here more than anywhere else, so end on a full stop.
+  If aligned (match is yes, or the tap was confirmed) → aligned=true with an award number of 3, and one or two warm sentences that name the thing they got right. If not → aligned=false, award number 0: give them the one thing the facts line above says about this question, as a plain fact with nothing in front of it — start the sentence with the fact itself, with no phrase about a source, a check, or where the fact came from (for example ""you went straight on without comparing the two methods here"") — and then say warmly why that step is the one worth taking. Never settle for a general observation instead of that fact, never quote their own words back as the thing that went wrong, never quote totals of mistakes or hints (the number of exercises a fact mentions is fine), and never ask them anything. A vague answer gets exactly the same treatment: what the facts line says about this question, and stop.
+- If Q3: ignore alignment. The FEEDBACK must ANSWER the question on screen: name ONE concrete thing to do in the next exercise, taken from this question's own quick answers, and say in a few words why it will help. It must be about the subject THIS question is about (comparing, explaining, working it out, hints, the method) and never a general study tip. Put the same thing, one line and phrased as an offer, in nextStep. NEVER open by describing what the student did, what they pressed, or that they asked for anything. Set aligned=false with an award number of 0. The feedback must not end with a question mark — the audit catches that here more than anywhere else, so end on a full stop.
 - OFF-TOPIC: if the answer is clearly unrelated to maths and to this exercise (a random word, a different topic entirely, keyboard mashing), set offTopic=true, aligned=false, insightXp=0, and leave feedback empty — the app shows its own message asking the student to write the reflection again. A reply must be to words that mean something, so placeholder and nonsense text (""blah blah"", ""keyboard smash"", ""asdf"", ""test test"") is unrelated even when it is several words long: flag it rather than replying to it. Beyond that, use this ONLY when the answer is genuinely unrelated: a short, vague, unsure or partly incoherent answer that is still about the exercise is a valid reflection and is NOT off-topic.
 
 IMPORTANT: always include the ""aligned"", ""insightXp"" and ""offTopic"" keys with their exact boolean/integer values — never omit them and never quote the numbers as strings.
@@ -3272,25 +3414,102 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
         }
 
         private static readonly System.Text.RegularExpressions.Regex ForbiddenReplyShape = new(
-            @"\b(insight|xp|award(ed)?|you (just )?(asked|tapped|pressed|clicked|selected)|didn'?t|did not|you (missed|forgot))\b",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
-
-        private static readonly System.Text.RegularExpressions.Regex MentionsHelpButton = new(
-            @"\b(help|you asked|the button)\b",
+            @"\b(insight|xp|award(ed)?|you (just )?(asked|tapped|pressed|clicked|selected)|asked for (help|the answer)|the (help )?button|didn'?t|did not|you (missed|forgot))\b",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
         /// <summary>
-        /// Whether a model reply says something the rules forbid: talking about the score, about the
-        /// button they pressed, or about what they did not do. English only, because these are words.
+        /// Whether what a student WROTE agrees with the facts about the one question asked: "yes", "no" or
+        /// "unclear", or empty when no judgement could be made.
+        ///
+        /// A call of its own, with nothing in it but the topic, the facts and the answer. Judging used to
+        /// happen inside the call that also wrote the reply, and a long prompt full of tone rules pulled
+        /// the two apart: a true claim was marked as not matching, and a reply that confirmed was paid
+        /// nothing. A narrow question gets a reliable answer, and the reply is then written to it.
         /// </summary>
-        private static bool ReplyBreaksTheRules(string reply, string? language, string? mode)
+        private async Task<string> JudgeWrittenAnswer(
+            string apiKey, ReflectionQuestion asked, string facts, string answer)
         {
-            if (string.IsNullOrWhiteSpace(reply)) return false;
-            if (!string.IsNullOrWhiteSpace(language) && !language.StartsWith("en", StringComparison.OrdinalIgnoreCase))
-                return false;
+            var prompt = $@"A student answered a reflection question about their own work. Decide whether what they wrote agrees with the facts.
 
-            return ForbiddenReplyShape.IsMatch(reply)
-                   || (mode == "pippin" && MentionsHelpButton.IsMatch(reply));
+What the question asks about: {asked.Expectation}
+Facts (these are true): {facts}
+What the student wrote: ""{answer}""
+
+Choose exactly one outcome:
+- ""agrees"": they make a claim about what the question asks about, and the facts confirm every part of it. A claim that says the same thing as a fact in different words agrees.
+- ""contradicts"": they make a claim about it that the facts contradict, including a count, a method, or a word like all, every, always, never or none that the facts do not support.
+- ""no_claim"": they make no claim about it that could be checked: a general verdict such as ""it was fine"" or ""I don't know"", or something about a different question.
+Read the claim literally and compare it with the facts, claim by claim. Count the exercises the facts mention; do not guess. First write what they claim and what the facts say about the same thing, then choose.
+
+Respond ONLY with JSON, keys in this order: {{""claim"":""what the student claims, in a few words"",""facts"":""what the facts say about that same thing"",""outcome"":""agrees|contradicts|no_claim""}}";
+
+            var raw = await CallOpenAI(apiKey,
+                "You check a student's written answer against facts and reply with one JSON object only.", prompt, temperature: 0);
+            if (raw == null) return "";
+
+            Console.WriteLine($"[Reflection] Judge raw: {raw.Replace("\n", " ")[..Math.Min(400, raw.Replace("\n", " ").Length)]}");
+
+            var start = raw.IndexOf('{');
+            var end = raw.LastIndexOf('}');
+            if (start < 0 || end <= start) return "";
+
+            try
+            {
+                using var doc = JsonDocument.Parse(raw.Substring(start, end - start + 1));
+                var outcome = doc.RootElement.TryGetProperty("outcome", out var m) && m.ValueKind == JsonValueKind.String
+                    ? (m.GetString() ?? "").Trim().ToLowerInvariant()
+                    : "";
+                return outcome switch
+                {
+                    "agrees" => "yes",
+                    "contradicts" => "no",
+                    "no_claim" => "unclear",
+                    _ => "",
+                };
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        // A reply that hedges or points at a difference. It may not sit next to a confirmed answer.
+        private static readonly System.Text.RegularExpressions.Regex HedgesAConfirmation = new(
+            @"differently|different from|(a |the )?(little|bit|touch|slightly)( bit)? different|not (quite|exactly)|(does|did|do)(n'?t| not)( quite)? (match|line up)|second (glance|look)|however|in reality|but actually|to be honest",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        // A reply that confirms. It may not sit next to an answer that was not confirmed.
+        private static readonly System.Text.RegularExpressions.Regex ConfirmsTheAnswer = new(
+            @"spot on|exactly (what|right|as)|that matches|matches what|you'?re (absolutely |completely )?right|you are (absolutely |completely )?right|that'?s (absolutely |completely )?(right|correct)|is correct\b|nailed it",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>
+        /// Why a model reply cannot be shown, or null when it can.
+        ///
+        /// Three things are checked, all of them mistakes the model keeps making in spite of the prompt:
+        /// talking about the score, the button or what they did not do; confirming an answer that was not
+        /// confirmed; and hedging an answer that was. The last two matter most — the badge says one thing
+        /// and the sentence beside it says the other, which is the one inconsistency a student will see.
+        /// English only, because these are words.
+        /// </summary>
+        private static string? ReplyProblem(string reply, bool aligned, string? language, string? mode, string questionKind)
+        {
+            if (string.IsNullOrWhiteSpace(reply)) return null;
+            if (!string.IsNullOrWhiteSpace(language) && !language.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            if (ForbiddenReplyShape.IsMatch(reply))
+                return "it mentions the score or the button, or says what they did not do — write only what they did";
+
+            var judged = questionKind is ReflectionQuestionBank.Observation or ReflectionQuestionBank.Judgement;
+            if (!judged) return null;
+
+            if (aligned && HedgesAConfirmation.IsMatch(reply))
+                return "their answer matched the facts but the reply hedges or points at a difference — confirm it plainly, with no hedge";
+            if (!aligned && mode != "pippin" && ConfirmsTheAnswer.IsMatch(reply))
+                return "their answer did not match the facts but the reply confirms it — state what the facts say instead, without saying it matched";
+
+            return null;
         }
 
         /// <summary>
@@ -3417,8 +3636,6 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
                 };
             }
 
-            var answer = request.Answer?.ToLowerInvariant() ?? "";
-
             // The question is named on the request, and the decision is on the item's own summary, so
             // this needs nothing that is built later in the caller.
             var aboutADecision = request.QuestionId is "q2-compared" or "q2-explained";
@@ -3446,31 +3663,24 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
                 };
             }
 
-            bool claimsStruggle = answer.Contains("hard") || answer.Contains("struggl") || answer.Contains("difficult")
-                || answer.Contains("mistake") || answer.Contains("error") || answer.Contains("wrong") || answer.Contains("hint");
-            bool claimsEasy = answer.Contains("easy") || answer.Contains("good") || answer.Contains("great")
-                || answer.Contains("well") || answer.Contains("perfect") || answer.Contains("fine");
-
-            // Help taken means a low error count is not evidence of anything: the help produced it. A
-            // student who asked to be shown the answer and then said it felt easy has not read their
-            // own performance accurately, and counting that as good self-assessment would reward
-            // exactly the students who did the least of the work.
-            bool tookHelp = item.Decisions.Contains("=Declined", StringComparison.Ordinal);
-            bool lowErrors = (item.Errors + item.Hints) < 2;
-            bool easyClaimIsBackedByEvidence = lowErrors && !tookHelp;
-
-            bool aligned = (claimsStruggle && !lowErrors) || (claimsEasy && easyClaimIsBackedByEvidence);
+            // A WRITTEN ANSWER IS NEVER PAID OFFLINE.
+            //
+            // This used to guess from keywords ("hint", "easy", "good") whether the answer matched, and
+            // paid Insight on the guess — which is how a student writing "I didn't use hints" on a goal
+            // with no hints at all was shown "this reads a little differently" next to +3. Nothing here can
+            // read what they wrote against what happened, so no judgement is made: the reply says what the
+            // record shows about THIS question, as a plain fact, and the badge stays empty. A tapped chip
+            // never reaches this point; the record settles it and VerdictFeedback answers it.
+            var shown = ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked);
 
             return new ReflectionEvaluateResponse
             {
-                // The free-text path, on the one occasion the AI cannot be reached. This text is shown to
-                // the student on its own, so it may not talk about "the data", may not read numbers back at
-                // them, and must still let them see which way it went.
-                Feedback = aligned
-                    ? "That matches what happened, and reading your own work that closely is the whole point. Nicely done."
-                    : "Thanks for taking a look at that one. What happened here reads a little differently, so it is worth a second glance — and asking for help when you need it is still a good call.",
-                Aligned = aligned,
-                InsightXp = aligned ? 3 : 0,
+                Feedback = string.IsNullOrWhiteSpace(shown)
+                    ? "Thanks for writing that down. Looking back at your own work like this is what makes the "
+                      + "next exercise easier to plan."
+                    : $"Thanks for writing that down. On this question, {shown}.",
+                Aligned = false,
+                InsightXp = 0,
                 NextStep = ""
             };
         }
@@ -3508,7 +3718,7 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
 
         // ── OpenAI Helper ────────────────────────────────────────────────────
 
-        private async Task<string?> CallOpenAI(string apiKey, string systemPrompt, string userPrompt)
+        private async Task<string?> CallOpenAI(string apiKey, string systemPrompt, string userPrompt, double temperature = 0.3)
         {
             var payload = new Dictionary<string, object>
             {
@@ -3518,7 +3728,7 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
                     new { role = "system", content = systemPrompt },
                     new { role = "user", content = userPrompt }
                 },
-                ["temperature"] = 0.3,
+                ["temperature"] = temperature,
                 ["max_tokens"] = 500
             };
             AiProvider.ApplyThinkingFlag(payload, _configuration);
@@ -3547,9 +3757,12 @@ How to use these: they exist ONLY to help you choose wording. Never mention that
                     $"[AI] attempt {attempt}/3: {(int)response.StatusCode} from {AiProvider.BaseUrl(_configuration)} " +
                     $"(model={AiProvider.Model(_configuration)}) — {responseBody[..Math.Min(300, responseBody.Length)]}");
 
-                // A 4xx is about this request and will fail identically; only 5xx is worth asking twice.
-                if ((int)response.StatusCode < 500) return null;
-                if (attempt < 3) await Task.Delay(250 * attempt);
+                // A 4xx is about this request and will fail identically, so only 5xx is worth asking twice
+                // — except 429, which is the provider asking us to slow down. Giving up on it sent the
+                // student the offline text, which pays nothing, over a limit that lifts within seconds.
+                var tooManyRequests = (int)response.StatusCode == 429;
+                if ((int)response.StatusCode < 500 && !tooManyRequests) return null;
+                if (attempt < 3) await Task.Delay((tooManyRequests ? 2500 : 250) * attempt);
             }
 
             // Log the failure rather than silently returning null. A null here is indistinguishable at

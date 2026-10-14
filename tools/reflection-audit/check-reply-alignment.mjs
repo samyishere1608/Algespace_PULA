@@ -81,6 +81,8 @@ const AWARD_LANGUAGE = [
 const SCOPE = {
     compare: [/\bsolution\b/i, /\berrors?\b/i, /\bmistakes?\b/i, /\bhints?\b/i, /\bexplain\b/i],
     explain: [/\bsolution\b/i, /\berrors?\b/i, /\bmistakes?\b/i, /\bhints?\b/i, /\bcompar/i],
+    goalPattern: [/\bsolution\b/i, /\bshown\b/i, /\basked (to|for)\b/i],
+    goalPick: [/\ball (three|3|of them|the exercises)\b/i, /\bevery (single )?(time|exercise)\b/i, /\beach (time|exercise)\b/i],
     promise: [/\byou asked\b/i, /\byou chose to see\b/i, /\basked to be shown\b/i, /\byou were shown\b/i],
 };
 
@@ -144,6 +146,7 @@ function check(title, reply, verdict) {
     }
 
     results.push({ title, verdict: verdict.aligned ? 'aligned' : 'not aligned', xp: verdict.insightXp, broke });
+    if (process.env.SHOW && title.startsWith('goal')) console.log(`SHOW  ${title}\n      ${verdict.aligned ? 'aligned' : 'not aligned'} +${verdict.insightXp}: "${text}"`);
 
     if (broke.length) {
         failures.push({ title, verdict, text, broke });
@@ -155,6 +158,8 @@ function checkScope(title, reply, questionId, verdict, inContext = []) {
     const kind = questionId === 'q2-compared' ? 'compare'
         : questionId === 'q2-explained' ? 'explain'
         : questionId === 'q3-next-action' ? 'promise'
+        : questionId === 'goal-q1-went-well' ? 'goalPattern'
+        : questionId === 'goal-q2-pattern' ? 'goalPick'
         : null;
 
     if (kind === null) return;
@@ -177,6 +182,9 @@ function checkScope(title, reply, questionId, verdict, inContext = []) {
 seedExercise('Suitability', 'MethodComparison=Declined;SolveOnOwn=Engaged', 1, 0);
 seedExercise('Efficiency', 'SelfExplanation=Declined;SolveOnOwn=Engaged', 2, 1);
 seedExercise('Matching', 'SelfExplanation=Engaged;SolveOnOwn=Declined', 0, 0);
+
+// ONLY_GOALS=1 skips the exercise cases, for a quicker run when only a goal question changed.
+if (process.env.ONLY_GOALS) items.length = 0;
 
 const FREE_TEXT = [
     ['vague, still on topic', 'it was fine i think'],
@@ -280,6 +288,7 @@ const GOALS = [
     ['exerciseType', 'Suitability', '', 0, [
         ['Suitability', 'Substitution', 2, 1],
         ['Suitability', 'Elimination', 0, 0],
+        ['Suitability', 'Equalization', 1, 0],
     ]],
     ['solveOnOwn', '', '', 0, [
         ['Efficiency', 'Substitution', 3, 1, { FirstSolutionChoice: 'No' }],
@@ -308,13 +317,14 @@ for (const [category, focus, quality, limit, attempts] of GOALS) {
         const number = index + 1;
         const title = (suffix) => `goal ${category} Q${number} ${question.id} — ${suffix}`;
 
-        // First and last chip, which between them cover both verdicts for every menu.
-        for (const chip of [question.chips[0], question.chips[question.chips.length - 1]]) {
+        // Every chip: the two reported failures were a chip whose reply was about a different fact, and a
+        // count stated as "all" that the record did not support. Neither shows on the first or last chip alone.
+        for (const chip of question.chips) {
             if (!chip) continue;
             const result = await evaluate(entry.id, number, question.id, chip.id, chip.textKey, '');
             if (result.error) { console.log(`SKIP  ${title(chip.id)}: ${result.error}`); continue; }
             check(title(`tap "${chip.id}"`), result.feedback, result);
-            checkScope(title(`tap "${chip.id}"`), result.feedback, question.id, result);
+            checkScope(title(`tap "${chip.id}"`), result.feedback, question.id, result, category === 'solveOnOwn' ? ['solution', 'shown', 'asked to'] : []);
         }
 
         const pippin = await evaluate(entry.id, number, question.id, '', '', '', 'pippin');
