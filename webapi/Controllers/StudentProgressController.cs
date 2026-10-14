@@ -3441,8 +3441,16 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
             System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
         // A reply that only repeats the answer back.
+        //
+        // Narrow on purpose, and it was not. A bare "exactly what" was enough to reject a reply, and the
+        // explanation sentence the prompt asks for is written in exactly that shape: "that independent
+        // practice is exactly what builds your ability to solve problems" echoes nothing, it IS the second
+        // half of every good reply. Two of the three rejections left in a 47-reply sample were this
+        // pattern misfiring on the sentence it is supposed to be asking for. The restatement verb has to
+        // be there now, which is what the real echoes ("that is exactly what happened", "you did exactly
+        // that") all have and the explanation sentence does not.
         private static readonly System.Text.RegularExpressions.Regex EchoesTheAnswer = new(
-            @"exactly (what|that)|that is (just )?what (happened|you did)|that'?s (just )?what (happened|you did)|exactly as you",
+            @"you did exactly that|exactly (what|that) (happened|you did|you said|you wrote)|that is (just )?what (happened|you did)|that'?s (just )?what (happened|you did)|exactly as you (said|did|wrote)",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
         /// <summary>
@@ -3509,10 +3517,13 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
             // the fact in different words and then the reason for it, joined by a comma, which is good
             // English and exactly what the prompt asks for. At that rate the student read the generic
             // offline text on one answer in seven and the model got the blame for it. Counting a
-            // comma-joined clause as well takes the same sample to 3 rejections out of 130, and what stays
-            // rejected is genuinely thin: "You got through it with no hints. Naming what went well is how
-            // you find the habits worth repeating." — 99 characters, two throwaway sentences.
-            if (EchoesTheAnswer.IsMatch(reply) || reply.Trim().Length < 100 || ClausesIn(reply) < 2)
+            // comma-joined clause as well takes the same sample to 3 rejections out of 130.
+            //
+            // The 100-character floor that used to sit beside it is gone too. It rejected "You explained
+            // your own reasoning, which is exactly how you find the habits worth repeating." at 91
+            // characters — a fact and a reason with nothing wrong with it — and the clause count already
+            // covers what the floor was there for: "You did well." is one clause, whatever its length.
+            if (EchoesTheAnswer.IsMatch(reply) || ClausesIn(reply) < 2)
                 return "it only hands their answer back — state the fact in different words, then add one sentence on why that thing matters";
 
             if (aligned && HedgesAConfirmation.IsMatch(reply))
