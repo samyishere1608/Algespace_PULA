@@ -655,21 +655,16 @@
   "daily-intention-review": "進捗を確認したい",
   "daily-intention-review-hint": "統計を見る",
   "daily-intention-focus-text": "これが今のきみの状態です。これを見て、今日は何に取り組みたい？",
-  "daily-intention-custom": "その他...",
   "daily-intention-skip": "今日はスキップ",
-  "daily-intention-custom-prompt": "今日やりたいことを教えてください：",
-  "daily-intention-custom-placeholder": "計画を入力してください...",
   "daily-intention-back": "戻る",
-  "daily-intention-submit": "これが私の計画です！",
   "daily-intention-retry": "もう一度やり直す",
   "daily-intention-skip-anyway": "それでもスキップ",
   "daily-intention-analyzing": "分析中...",
-  "daily-intention-feedback-title": "AIがあなたの統計と比較しました：",
   "daily-intention-feedback-fallback": "自分の進歩について振り返り続けてください — 自己認識は強力なスキルです！",
-  "daily-intention-close": "閉じる",
   "daily-intention-cat-practice": "AIは練習したいと判断しました",
   "daily-intention-cat-goal": "AIは目標を達成したいと判断しました",
   "daily-intention-cat-both": "AIは練習と目標達成の両方を望んでいると判断しました",
   "daily-intention-cat-no_xp": "これは数学の練習に関連していないようです",
-  "daily-intention-cat-unclear": "AIは意図を分類できませんでした"
+  "daily-intention-cat-unclear": "AIは意図を分類できませんでした",
+  "daily-intention-close": "閉じる"
 }

@@ -50,7 +50,7 @@ import SetGoalsModal from "./dashboard/SetGoalsModal.tsx";
 import type { GoalOrigin } from "./dashboard/SetGoalsModal.tsx";
 import CharacterShopModal, { CHARACTER_CATALOGUE, resolveOutfitSrc, type CharacterDef } from "./dashboard/CharacterShopModal.tsx";
 import CharacterUnlockModal from "./dashboard/CharacterUnlockModal.tsx";
-import { DailyIntentionModal } from "./dashboard/DailyIntentionModal.tsx";
+import { DailyIntentionModal, type DailyIntentionChoice } from "./dashboard/DailyIntentionModal.tsx";
 import { EndSessionModal } from "./dashboard/EndSessionModal.tsx";
 import { ReflectionModal } from "./dashboard/ReflectionModal.tsx";
 import { getEquippedOutfitId, persistEquippedOutfitId, getActiveBuddyId, persistActiveBuddyId, getAgencyLevel, getWalletXp, getAnnouncedUnlocks, markUnlockAnnounced } from "@utils/wardrobeUtils.ts";
@@ -604,15 +604,15 @@ export default function StudentDashboard(): ReactElement {
         navigate(Paths.HomePath);
     }
 
-    function handleDailyIntention(choice: string, customText?: string, detectedCategory?: string): void {
+    function handleDailyIntention(choice: DailyIntentionChoice): void {
         if (!student) return;
-        setDailyIntention(student.id, choice, customText ?? "", exercisesCompleted, detectedCategory ?? "unclear");
-        settleSessionPromiseIfAny(choice, customText ?? "", detectedCategory ?? "unclear");
 
-        // Don't close modal for custom text — AI feedback shows inside modal
-        if (choice !== "custom") {
-            setShowDailyIntention(false);
-        }
+        // The three plans are the recorded intention, so there is no text and no category to store —
+        // they WERE the categories. The promise check matches on the choice id alone.
+        setDailyIntention(student.id, choice, "", exercisesCompleted, "unclear");
+        settleSessionPromiseIfAny(choice);
+
+        setShowDailyIntention(false);
 
         // Navigate based on choice
         if (choice === "practice") {
@@ -625,7 +625,6 @@ export default function StudentDashboard(): ReactElement {
             setActiveTab("analytics");
             setShowIntentionFocus(true);
         }
-        // "custom" — AI feedback shows inside modal, then stays on dashboard
     }
 
     /**
@@ -677,9 +676,9 @@ export default function StudentDashboard(): ReactElement {
      * itself — it is the only writer — so the wallets are re-read from it afterwards rather than paid
      * here as well, which would pay the student twice.
      */
-    function settleSessionPromiseIfAny(choice: string, customText: string, detectedCategory: string): void {
+    function settleSessionPromiseIfAny(choice: DailyIntentionChoice): void {
         if (!student) return;
-        void settleSessionPromise(student.id, choice, customText, detectedCategory)
+        void settleSessionPromise(student.id, choice, "", "")
             .then((resolveXp) => {
                 if (resolveXp <= 0) return;
                 void syncAgencyFromBackend(student.id).then((progress) => {
@@ -1498,7 +1497,6 @@ export default function StudentDashboard(): ReactElement {
                 already been cleared while this state update is still in flight. */}
             {showDailyIntention && !showTour && (
                 <DailyIntentionModal
-                    studentId={student?.id ?? "guest"}
                     studentName={student?.username ?? "Student"}
                     buddyName={activeBuddy.name}
                     buddyEmoji={activeBuddy.emoji}

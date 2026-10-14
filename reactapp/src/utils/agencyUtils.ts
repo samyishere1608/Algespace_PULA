@@ -109,11 +109,15 @@ function dailyKey(studentId: number | string): string {
 }
 
 export interface DailyIntention {
-    /** "practice" | "goal" | "review" | "custom" | null */
+    /** "practice" | "goal" | "review" | "skip" | null. */
     choice: string | null;
-    /** Free-text if student chose "Something else..." */
+    /**
+     * LEGACY. The free-text plan, from when the check-in also offered "Something else…". Nothing
+     * writes it any more — the three options replaced it — but a row stored before that change still
+     * carries it, and reading it back costs nothing.
+     */
     customText: string;
-    /** For custom intentions: AI-detected category ("practice" | "goal" | "unclear") */
+    /** LEGACY, as above: the category the model put that free text into. */
     detectedCategory: string;
     /** Whether student completed ≥2 exercises today (checked on dashboard load) */
     followedThrough: boolean;
@@ -179,7 +183,9 @@ export function checkIntentionFollowThrough(
             resolved = goalsCompletedToday >= 1;
             break;
         case "custom":
-            // Use AI-detected category for follow-through
+            // LEGACY. Written only by the old "Something else…" option, which the three plans replaced.
+            // Kept because a student who set one before that change still has it for today, and the
+            // category is the only thing that can judge a plan written in words.
             if (intention.detectedCategory === "both") {
                 // Both practice AND goal — must satisfy BOTH
                 const practiceOk = (currentExercisesCompleted - intention.exercisesAtSet) >= 2;

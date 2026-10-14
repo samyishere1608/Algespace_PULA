@@ -798,3 +798,36 @@ have not been clicked.
 
 Nothing — the reflection fixes and this are both committed and pushed.
 
+---
+
+# DONE 14 Oct 2026 (later) — the daily check-in is three answers, not four
+
+The check-in offered practice / goal / review plus a "Something else…" box. The box sent the typed plan
+to the model to be sorted into one of the same three, and the follow-through check then judged it by that
+guess.
+
+- `DailyIntentionModal.tsx`: the three plans are one `PLANS` array (id, icon, two keys) rendered as a
+  grid, so the cards cannot drift from each other. The free-text panel, the AI feedback, the gibberish
+  retry and the classifier are gone, and so are the four states and two handlers that carried them. The
+  modal now decides nothing but the choice: `onSelectPlan(choice: DailyIntentionChoice)`.
+- `StudentDashboard.handleDailyIntention(choice)` records the plan with no text and no category — the
+  three plans WERE the categories — closes the modal and navigates. `settleSessionPromiseIfAny(choice)`
+  passes empty text: the session-promise match is settled by the choice ids on both sides and never
+  needed the words.
+- Dead copy removed from all three locales: `daily-intention-custom`, `-custom-prompt`,
+  `-custom-placeholder`, `-submit`, `-feedback-title`.
+- KEPT, and this was nearly a bug: `daily-intention-cat-*` looked unused but `EndSessionModal` renders
+  `daily-intention-cat-${feedbackCategory}` and `…-no_xp` by name for the END-OF-SESSION free-text
+  reflection, which still classifies. A scan for exact quoted keys misses template literals — check for
+  `daily-intention-<anything>` before deleting copy again.
+- Dead SCSS removed: the custom panel and its button, the AI feedback block, and the category indicator.
+- `agencyUtils`: the `custom` branch and the two stored fields stay, marked LEGACY — a student who set a
+  custom intention earlier the same day still has it, and its category is the only thing that judges it.
+
+Verified: `tsc` clean, `eslint` clean (one pre-existing warning), `npm run build` succeeds, the dev
+server serves the rewritten module with no `customText`/`textarea`/`requestReflection` left in it, every
+`daily-intention-*` token the code mentions resolves in all three locales, and the exception is down to
+the five intended keys. Resolve follow-through audit still passes, baseline residue `{0,0,0}`.
+
+**Not verified:** the modal in a browser.
+
