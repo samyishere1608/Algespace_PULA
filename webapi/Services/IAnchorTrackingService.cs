@@ -399,15 +399,18 @@ namespace webapi.Services
             stats.AddRange(Distribution(AnchorElement.ExerciseType, attempts, a => a.ExerciseType,
                 AnchorDimension.ExerciseTypes));
 
-            // The rest are yes/no, read from the decision points.
+            // The rest are yes/no, read from the decision points. Each carries the attempt it was last
+            // paid Insight in, so it can sit out its grace period instead of being a gap straight away.
+            var awards = LoadLastAwards(conn, studentId);
+
             stats.Add(YesNo(AnchorElement.SolveOnOwn, "Work out the solution yourself", attempts, byAttempt,
-                AnchorDimension.SolveOnOwn));
+                AnchorDimension.SolveOnOwn, awards.GetValueOrDefault(AnchorElement.SolveOnOwn)));
 
             stats.Add(YesNo(AnchorElement.SelfExplanation, "Explain your own reasoning", attempts, byAttempt,
-                AnchorDimension.SelfExplanation));
+                AnchorDimension.SelfExplanation, awards.GetValueOrDefault(AnchorElement.SelfExplanation)));
 
             stats.Add(YesNo(AnchorElement.MethodComparison, "Compare methods", attempts, byAttempt,
-                AnchorDimension.MethodComparison));
+                AnchorDimension.MethodComparison, awards.GetValueOrDefault(AnchorElement.MethodComparison)));
 
             var completed = attempts.Where(a => a.TotalErrors > 0 || a.TotalHints > 0).ToList();
 
@@ -442,12 +445,31 @@ namespace webapi.Services
             }
         }
 
+        /// <summary>The attempt each element was last paid Insight in. Empty when nothing has been paid.</summary>
+        private static Dictionary<string, long> LoadLastAwards(SqliteConnection conn, long studentId)
+        {
+            try
+            {
+                return conn.Query<(string Element, long AttemptId)>(
+                        $"SELECT Element, MAX(AttemptId) AS AttemptId FROM {AnchorStoreSettings.InsightAwardTable} " +
+                        "WHERE StudentId = @StudentId GROUP BY Element",
+                        new { StudentId = studentId })
+                    .ToDictionary(row => row.Element, row => row.AttemptId);
+            }
+            catch
+            {
+                // The table is created at startup; a store that predates it simply has no awards yet.
+                return [];
+            }
+        }
+
         private static ElementStat YesNo(
             string element, string label, List<AttemptRow> attempts,
-            Dictionary<long, List<RecordRow>> byAttempt, string[] decisionNames)
+            Dictionary<long, List<RecordRow>> byAttempt, string[] decisionNames, long lastAwardAttempt = 0)
         {
             var opportunities = 0;
             var engaged = 0;
+            var sinceAward = 0;
 
             foreach (var attempt in attempts)
             {
@@ -460,6 +482,7 @@ namespace webapi.Services
                 if (decisions.Count == 0) continue;
 
                 opportunities++;
+                if (lastAwardAttempt > 0 && attempt.Id > lastAwardAttempt) sinceAward++;
 
                 // "Yes to Elimination" and a bare "Yes" both count as engaging, matching the reader above.
                 // A decline anywhere beats a yes anywhere, though, because the two solution points are
@@ -469,7 +492,11 @@ namespace webapi.Services
                     engaged++;
             }
 
-            return Build(element, string.Empty, opportunities, engaged, label);
+            var stat = Build(element, string.Empty, opportunities, engaged, label);
+
+            // In its grace period after an award: not a gap yet, whatever the whole record says.
+            var inGrace = lastAwardAttempt > 0 && sinceAward < GapThresholds.GraceOpportunities;
+            return inGrace ? stat with { IsGap = false } : stat;
         }
 
         private static ElementStat Build(string element, string value, int opportunities, int engaged, string label)

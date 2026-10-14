@@ -157,51 +157,53 @@ async function ask(attemptId, element = 'SolveOnOwn') {
     return result.amount ?? -1;
 }
 
-for (let i = 0; i < 6; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, DECLINE);
+// The record: twenty declines, then the first engagement. A huge deficit, so the old rule kept paying.
+for (let i = 0; i < 20; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, DECLINE);
+
+async function nudgeSeesAGap(element = 'SolveOnOwn') {
+    // The nudge reads the profile's gaps, so this is what it would act on.
+    const profile = await (await fetch(`${API}/anchor-tracking/profile/${GAP_STUDENT}`)).json();
+    return (profile.gaps ?? []).some(g => g.element === element);
+}
+
+expect('before any award the nudge sees the gap', await nudgeSeesAGap());
 
 const first = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
 expect('the first engagement after a run of declines is paid', (await ask(first)) > 0);
 expect('the same exercise is not paid twice', (await ask(first)) === 0);
+expect('right after the award the nudge no longer sees a gap', !(await nudgeSeesAGap()));
 
-// The old rule paid each of these while the all-time rate caught up.
-for (let i = 0; i < 3; i++) {
-    const next = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
-    expect(`engagement ${i + 2} after the award pays nothing`, (await ask(next)) === 0);
+// GRACE: the next three opportunities are not a deficit, whether they are taken or declined, and
+// however large the historical deficit still is (one engagement in twenty-one).
+const graceChoices = [ENGAGE, DECLINE, DECLINE];
+for (const [i, choice] of graceChoices.entries()) {
+    // The nudge and the award both fire at the moment of the decision, when only the EARLIER attempts
+    // are recorded, so that is the moment the profile is read.
+    expect(`attempt ${i + 1} after the award: the nudge sees no gap`, !(await nudgeSeesAGap()));
+    const next = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, choice);
+    expect(`attempt ${i + 1} after the award pays nothing`, (await ask(next)) === 0);
 }
 
-// THE EXPLOIT: decline on purpose, straight away, then engage. The element is being monitored, so five
-// quick declines buy nothing: a week has to pass as well.
-for (let i = 0; i < 6; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, DECLINE);
-const quick = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
-expect('declining on purpose straight after an award, then engaging, pays nothing', (await ask(quick)) === 0);
+// After the third, the weakness counts again: the deficit is still there, so the nudge returns and the
+// next engagement is paid again.
+expect('after three attempts the nudge sees the gap again', await nudgeSeesAGap());
+const again = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
+expect('and the next engagement is paid again', (await ask(again)) > 0);
 
-// A week later, with the deficit still there over the last five opportunities, it is paid again.
-conn.prepare('UPDATE InsightGapAward SET AwardedAt = ? WHERE StudentId = ?')
-    .run(new Date(Date.now() - 8 * 86_400_000).toISOString().slice(0, 19), GAP_STUDENT);
-const later = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
-expect('after a week of monitoring with the deficit back, it pays again', (await ask(later)) > 0);
+// ...and that award starts a new grace period.
+const graceAgain = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
+expect('the award after that starts its own three-attempt grace', (await ask(graceAgain)) === 0);
 
-// A week passes but the student has been doing it: no deficit, nothing to pay.
-conn.prepare('UPDATE InsightGapAward SET AwardedAt = ? WHERE StudentId = ?')
-    .run(new Date(Date.now() - 8 * 86_400_000).toISOString().slice(0, 19), GAP_STUDENT);
-for (let i = 0; i < 5; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
-const kept = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
-expect('a week later but doing it regularly: no deficit, no award', (await ask(kept)) === 0);
-
-// Five opportunities, a deficit, but less than a week: still monitored.
+// Each element has its own grace: one weakness being paid does not silence another.
 clearStudent(GAP_STUDENT);
-for (let i = 0; i < 6; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, DECLINE);
-const firstAgain = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
-await ask(firstAgain);
-for (let i = 0; i < 5; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, DECLINE);
-conn.prepare('UPDATE InsightGapAward SET AwardedAt = ? WHERE StudentId = ?')
-    .run(new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 19), GAP_STUDENT);
-const early = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, ENGAGE);
-expect('a deficit after only three days is still inside the monitoring period', (await ask(early)) === 0);
-
-// Each element is monitored on its own.
-const other = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, { SelfExplanationChoice: 'Yes' });
-expect('an element that was never avoided is not paid because another one was', (await ask(other, 'SelfExplanation')) === 0);
+for (let i = 0; i < 20; i++) seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 1, 0, { FirstSolutionChoice: 'No', SelfExplanationChoice: 'No' });
+const both = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, { FirstSolutionChoice: 'Yes', SelfExplanationChoice: 'Yes' });
+expect('solve on own is paid', (await ask(both, 'SolveOnOwn')) > 0);
+expect('self-explanation, a different weakness, is paid too', (await ask(both, 'SelfExplanation')) > 0);
+const bothNext = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, { FirstSolutionChoice: 'Yes', SelfExplanationChoice: 'Yes' });
+expect('each is then in its own grace', (await ask(bothNext, 'SolveOnOwn')) === 0 && (await ask(bothNext, 'SelfExplanation')) === 0);
+const unrelated = seedAttempt(GAP_STUDENT, 'Suitability', 'Elimination', 0, 0, { ComparisonChoice: 'Yes' });
+expect('a weakness that was never avoided is not paid because others were', (await ask(unrelated, 'MethodComparison')) === 0);
 
 // A student who has never avoided it is not paid.
 clearStudent(GAP_STUDENT);

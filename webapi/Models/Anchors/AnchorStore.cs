@@ -27,6 +27,9 @@ namespace webapi.Models.Anchors
         public const string Table = "FlexibilityAttempt";
         public const string RecordTable = "AnchorRecord";
 
+        /// <summary>One row per Insight paid for facing a weakness. Also what starts that weakness's grace period.</summary>
+        public const string InsightAwardTable = "InsightGapAward";
+
         public const string Scheme =
             "Id INTEGER PRIMARY KEY AUTOINCREMENT, " +
             "StudentId INTEGER NOT NULL, " +
@@ -71,6 +74,12 @@ namespace webapi.Models.Anchors
         {
             conn.Execute($"CREATE TABLE IF NOT EXISTS {Table} ({Scheme})");
             conn.Execute($"CREATE TABLE IF NOT EXISTS {RecordTable} ({RecordScheme})");
+            conn.Execute(
+                $"CREATE TABLE IF NOT EXISTS {InsightAwardTable} " +
+                "(Id INTEGER PRIMARY KEY AUTOINCREMENT, StudentId INTEGER NOT NULL, Element TEXT NOT NULL, " +
+                "AttemptId INTEGER NOT NULL, AwardedAt TEXT NOT NULL)");
+            conn.Execute(
+                $"CREATE INDEX IF NOT EXISTS IX_{InsightAwardTable}_Student ON {InsightAwardTable} (StudentId, Element)");
 
             // One row per named tracking point per attempt. The unique index also makes the
             // upsert idempotent, so a retried tracking call cannot duplicate a decision.

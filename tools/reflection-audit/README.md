@@ -647,20 +647,21 @@ answer is never paid, by design.
   Offline replies are fact + meaning too (`FactAndMeaning`, `VerdictFeedback`); "Spot on ... exactly what
   happened" is gone. In a live run about a quarter of first replies were sent back for this; a few fell back
   to the offline fact + meaning text after the second.
-- **Insight for facing a gap is now monitored, not merely once-per-episode.** The user's rule: after an award
-  the element is watched, and it is offered again only when there is again a sufficient deficit. Declining
-  three times on purpose then engaging was still farmable. Now: first award = whole-record gap before the
-  current exercise (unchanged); every later award needs BOTH at least 7 days since the previous award AND at
-  least 5 opportunities since it with at most one taken. Constants `InsightMonitoringDays` and
-  `InsightMonitoringOpportunities` in `StudentProgressController`. Each element (solve on own, self-explanation,
-  method comparison) is monitored on its own. `check-written-answers-and-gap.mjs` covers the exploit, the
-  week-later paid case, the week-later-but-doing-it case and the three-days-is-too-soon case by back-dating
-  `AwardedAt`.
-- Not changed: the nudge and goal suggestions still read the whole-record gap from the profile. Only the
-  Insight payment was made time-aware.
+- **Insight for facing a gap: a 3-attempt grace after each award, shared with the nudge.** (Replaces the
+  7-day / 5-opportunity monitoring I first built; the user said days are far too long because students use
+  the app rarely.) Rule: once Insight is paid for a weakness, that weakness is NOT a gap for the next
+  `GapThresholds.GraceOpportunities` (3) opportunities, however large the historical deficit still is;
+  after them the normal whole-record gap applies again, so the nudge returns and the next engagement is
+  paid again. The grace lives in `AnchorTrackingService.GetProfile` (`YesNo(..., lastAwardAttempt)`), which
+  is what BOTH the nudge and the award read, so they cannot disagree. The award endpoint applies the same
+  condition (gap over the record excluding the current exercise, and not in grace). The award table moved
+  to `AnchorStoreSettings.InsightAwardTable`, created at startup with the other anchor tables. Each element
+  has its own grace. `check-written-answers-and-gap.mjs` checks both the award and `/anchor-tracking/profile`
+  (what the nudge acts on) through the grace and out the other side.
+- Goal suggestions also read the profile, so a weakness in its grace is not suggested as a goal either.
 
-Results: live 111 replies / 0 failures, broken key 114 / 0, written answers + gap 42/42 live and 46/46
-offline, goal window 16/16, session 27/27, keys 0 missing, `tsc` clean, baseline residue 0/0/0.
+Results: live 111 replies / 0 failures, written answers + gap 49/49, goal window 16/16, session 27/27,
+`tsc` clean, baseline residue 0/0/0.
 
 ---
 

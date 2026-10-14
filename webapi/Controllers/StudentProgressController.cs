@@ -129,14 +129,6 @@ namespace webapi.Controllers
             // to the old behaviour for those rather than failing.
             try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionQueueTable} ADD COLUMN AttemptId INTEGER NOT NULL DEFAULT 0"); } catch { }
 
-            // One row per Insight paid for facing a gap, so a gap is paid for once per EPISODE rather
-            // than on every engagement while an all-time average is still catching up.
-            conn.Execute(
-                $"CREATE TABLE IF NOT EXISTS {InsightGapAwardTable} " +
-                "(Id INTEGER PRIMARY KEY AUTOINCREMENT, StudentId INTEGER NOT NULL, Element TEXT NOT NULL, " +
-                "AttemptId INTEGER NOT NULL, AwardedAt TEXT NOT NULL)");
-            conn.Execute(
-                $"CREATE INDEX IF NOT EXISTS IX_{InsightGapAwardTable}_Student ON {InsightGapAwardTable} (StudentId, Element)");
             // Only after every statement above has succeeded, so a partial failure is retried on the
             // next request rather than leaving the schema permanently half-built.
             _schemaChecked = true;
@@ -861,22 +853,10 @@ namespace webapi.Controllers
             return Ok(newValue);
         }
 
-        private const string InsightGapAwardTable = "InsightGapAward";
-
-        private sealed class InsightAwardRow
-        {
-            public long AttemptId { get; set; }
-            public string AwardedAt { get; set; } = "";
-        }
+        private const string InsightGapAwardTable = AnchorStoreSettings.InsightAwardTable;
 
         /// <summary>Small by design: it is for STARTING on something avoided, not for continuing.</summary>
         private const int InsightForFacingGapXp = 8;
-
-        /// <summary>After an award the element is watched for at least this long before it can be paid again.</summary>
-        private const int InsightMonitoringDays = 7;
-
-        /// <summary>...and for at least this many opportunities, of which at most a fifth may be taken.</summary>
-        private const int InsightMonitoringOpportunities = 5;
 
         // ── POST /student-progress/insight-gap-award ────────────────────────
         /// <summary>
@@ -888,14 +868,12 @@ namespace webapi.Controllers
         /// past a fifth, and every one of them was paid — a student who simply started working things
         /// out themselves collected the award three times for one change of habit.
         ///
-        /// THE RULE. A gap is paid once, then monitored:
-        ///   1. First award: before this exercise, the element was a gap over the whole record (at least
-        ///      three opportunities, at most a fifth engaged).
-        ///   2. After an award the element is MONITORED. It is paid again only when a deficit has built up
-        ///      again over a period long enough to mean something: at least seven days since the award,
-        ///      and at least five opportunities since it, of which at most one was taken. Working on it
-        ///      next time pays nothing, and declining a few times on purpose to set it up buys nothing
-        ///      either, because the deficit has to last across days.
+        /// THE RULE, the same one the nudge follows (both read the profile's gap):
+        ///   1. The element is a gap over the whole record before this exercise (at least three
+        ///      opportunities, at most a fifth engaged).
+        ///   2. And it is not in its GRACE PERIOD: once it has been paid, the next three opportunities are
+        ///      not counted as a deficit however large the history still is. After those three it can be
+        ///      paid, and nudged about, again.
         ///
         /// The exercise being engaged in is excluded from every count, so the answer does not depend on
         /// whether the decision it just wrote has landed yet.
@@ -935,53 +913,27 @@ namespace webapi.Controllers
                     $"SELECT AttemptId, Name, Choice FROM {AnchorStoreSettings.RecordTable} WHERE StudentId = @StudentId",
                     new { request.StudentId }).ToList();
 
-            var lastAward = conn.QueryFirstOrDefault<InsightAwardRow>(
-                $"SELECT AttemptId, AwardedAt FROM {InsightGapAwardTable} WHERE StudentId = @StudentId AND Element = @Element ORDER BY Id DESC LIMIT 1",
-                new { request.StudentId, request.Element });
-            var lastAwardedAttempt = lastAward?.AttemptId ?? 0;
+            var lastAwardedAttempt = conn.ExecuteScalar<long?>(
+                $"SELECT MAX(AttemptId) FROM {InsightGapAwardTable} WHERE StudentId = @StudentId AND Element = @Element",
+                new { request.StudentId, request.Element }) ?? 0;
 
             // Whether they engaged, for each exercise that carried this decision at all, oldest first.
-            List<bool> Opportunities(long afterAttempt)
+            var opportunities = new List<(long Id, bool Engaged)>();
+            foreach (var id in attemptIds)
             {
-                var flags = new List<bool>();
+                var answers = Answers(id, names, records).ToList();
+                if (answers.Count == 0) continue;
 
-                foreach (var id in attemptIds.Where(id => id > afterAttempt))
-                {
-                    var answers = Answers(id, names, records).ToList();
-                    if (answers.Count == 0) continue;
-
-                    flags.Add(AnchorDimension.Engaged(answers));
-                }
-
-                return flags;
+                opportunities.Add((id, AnchorDimension.Engaged(answers)));
             }
 
-            bool IsGap(List<bool> flags, int minimum) =>
-                flags.Count >= minimum
-                && (double)flags.Count(engaged => engaged) / flags.Count <= GapThresholds.MaxEngagementRate;
+            var isGap = opportunities.Count >= GapThresholds.MinOpportunities
+                && (double)opportunities.Count(o => o.Engaged) / opportunities.Count <= GapThresholds.MaxEngagementRate;
 
-            bool qualifies;
-            if (lastAwardedAttempt == 0)
-            {
-                // The first award reads the whole record, as the profile does.
-                qualifies = IsGap(Opportunities(0), GapThresholds.MinOpportunities);
-            }
-            else
-            {
-                // AFTER AN AWARD THE ELEMENT IS MONITORED, and it is paid again only if a deficit has
-                // built up again over a monitoring period long enough to mean something: at least a week
-                // since the award AND at least five opportunities since it, of which at most one was taken.
-                // Declining a few times in a row on purpose therefore buys nothing by itself — it has to
-                // last, and it has to last across days.
-                var awardedAt = DateTime.TryParse(lastAward!.AwardedAt, CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var at) ? at : DateTime.UtcNow;
-                var monitored = DateTime.UtcNow - awardedAt >= TimeSpan.FromDays(InsightMonitoringDays);
+            var inGrace = lastAwardedAttempt > 0
+                && opportunities.Count(o => o.Id > lastAwardedAttempt) < GapThresholds.GraceOpportunities;
 
-                qualifies = monitored && IsGap(
-                    Opportunities(lastAwardedAttempt).TakeLast(InsightMonitoringOpportunities).ToList(),
-                    InsightMonitoringOpportunities);
-            }
-            if (!qualifies) return Ok(new InsightGapAwardResponse());
+            if (!isGap || inGrace) return Ok(new InsightGapAwardResponse());
 
             conn.Execute(
                 $"INSERT INTO {InsightGapAwardTable} (StudentId, Element, AttemptId, AwardedAt) VALUES (@StudentId, @Element, @AttemptId, @AwardedAt)",

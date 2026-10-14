@@ -222,11 +222,20 @@ namespace webapi.Models.Anchors
     /// The floor was lowered from five opportunities to three on 2026-10-12. It stays ONE floor for
     /// both the nudge and the Insight award, because they are two reactions to a single judgement —
     /// a student must never be nudged about something the award would not recognise, or the reverse.
+    ///
+    /// GRACE AFTER AN AWARD. Once Insight has been paid for facing a weakness, that weakness is not
+    /// counted as a gap for the next <see cref="GraceOpportunities"/> opportunities, however large the
+    /// historical deficit still is. Without it a long record of declines keeps the element a gap for
+    /// several engagements and every one of them would be paid and nudged about. Because the profile is
+    /// what both the nudge and the award read, the grace lives in the profile and they cannot disagree.
     /// </summary>
     public static class GapThresholds
     {
         /// <summary>At least this many opportunities before avoidance can be judged.</summary>
         public const int MinOpportunities = 3;
+
+        /// <summary>After an award, this many opportunities pass before the weakness can be a gap again.</summary>
+        public const int GraceOpportunities = 3;
 
         /// <summary>
         /// Engagement at or below this counts as avoidance. 0.20 is one in five, so at the
