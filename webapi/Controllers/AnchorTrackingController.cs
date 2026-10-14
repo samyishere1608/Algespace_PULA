@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using webapi.Models.Anchors;
+using webapi.Models.Database;
+using webapi.Models.Student;
 using webapi.Models.Studies.Flexibility;
 using webapi.Services;
 
@@ -45,6 +47,17 @@ namespace webapi.Controllers
                     data.AgentCondition.ToString(),
                     isStudy: data.IsStudy);
 
+                // The timeline records that the exercise was opened. It is written here rather than in
+                // the service so it lands in the same request as the attempt row, and an attempt that
+                // is never completed is what the session's end reports as abandoned.
+                using (var conn = DBSettings.GetSQLiteConnectionForStudentsDB())
+                {
+                    conn.Open();
+                    StudentEventLog.Write(conn, data.UserId, LogEventType.ExerciseStarted, attemptId: attemptId,
+                        value: data.ExerciseType.ToString(),
+                        data: new { exerciseId = data.ExerciseId, agentCondition = data.AgentCondition.ToString(), isStudy = data.IsStudy });
+                }
+
                 return Ok(attemptId);
             }
             catch (Exception exception)
@@ -75,6 +88,17 @@ namespace webapi.Controllers
             try
             {
                 _anchors.TrackChoice(data.UserId, data.Id, data.Phase.ToString(), data.Choice);
+
+                // The yes/no the study is about. The choice itself already lives on the anchor record;
+                // this is the same fact placed on the session's timeline, so a sitting reads in order
+                // without joining anything.
+                using (var conn = DBSettings.GetSQLiteConnectionForStudentsDB())
+                {
+                    conn.Open();
+                    StudentEventLog.Write(conn, data.UserId, LogEventType.DecisionMade, attemptId: data.Id,
+                        refId: data.Phase.ToString(), value: data.Choice);
+                }
+
                 return Ok();
             }
             catch (Exception exception)
@@ -125,6 +149,17 @@ namespace webapi.Controllers
             try
             {
                 _anchors.CompleteAttempt(data.UserId, data.Id, data.Time, data.Errors, data.Hints);
+
+                // Finished, with the numbers the exercise ended on. The attempt row carries the same
+                // figures; this event is what puts them in the session's timeline in order.
+                using (var conn = DBSettings.GetSQLiteConnectionForStudentsDB())
+                {
+                    conn.Open();
+                    StudentEventLog.Write(conn, data.UserId, LogEventType.ExerciseCompleted, attemptId: data.Id,
+                        amount: (int)Math.Round(data.Time),
+                        data: new { errors = data.Errors, hints = data.Hints, seconds = Math.Round(data.Time, 2) });
+                }
+
                 return Ok();
             }
             catch (Exception exception)

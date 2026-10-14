@@ -64,6 +64,7 @@ import { awardChoiceForSettingAGoal } from "@utils/choiceAwards.ts";
 import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addInsightXP, addChoiceXP } from "@utils/agencyUtils.ts";
 import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 import { getOnboardingStep } from "@utils/storageUtils.ts";
+import { startSession, endSession, currentSessionId, recordIntention } from "@utils/sessionLog.ts";
 import { OnboardingTour } from "@components/shared/OnboardingTour.tsx";
 import { TourOffer } from "@components/shared/TourOffer.tsx";
 import { ShowSectionTourButton } from "@components/shared/ShowSectionTourButton.tsx";
@@ -140,7 +141,7 @@ function getLevelInfo(xp: number): { level: number; levelName: string } {
 export default function StudentDashboard(): ReactElement {
     const { student, logoutStudent } = useAuth();
     const navigate = useNavigate();
-    const { t } = useTranslation(TranslationNamespaces.Student);
+    const { t, i18n } = useTranslation(TranslationNamespaces.Student);
 
     // ── Agency XP (replaces old XP + coins system) ───────────────────────────
     const [agency, setAgency] = useState(() => getAgencyProgress(student?.id ?? "guest"));
@@ -228,6 +229,13 @@ export default function StudentDashboard(): ReactElement {
             : Promise.resolve();
 
         init.then(() => {
+            // Open the sitting, so everything that happens from here is grouped into one session on the
+            // server. Once per tab: the server resumes an open session rather than starting a new one,
+            // but there is no reason to ask again on every remount.
+            if (!currentSessionId()) {
+                void startSession(student.id, i18n.language?.slice(0, 2) ?? "en");
+            }
+
             // Reconcile which sections have been offered with the server. Deliberately not awaited:
             // the offer is decided from the local cache so the first paint is never held up by it, and
             // a student who changed device finds out on the next visit at the latest.
@@ -600,6 +608,9 @@ export default function StudentDashboard(): ReactElement {
     }
 
     function handleLogout(): void {
+        // Leaving is the end of the sitting. Not closed here, it would stay open and swallow the next
+        // visit's actions into a session the student has already finished with.
+        if (student) void endSession(student.id, "logout");
         logoutStudent();
         navigate(Paths.HomePath);
     }
@@ -611,6 +622,10 @@ export default function StudentDashboard(): ReactElement {
         // they WERE the categories. The promise check matches on the choice id alone.
         setDailyIntention(student.id, choice, "", exercisesCompleted, "unclear");
         settleSessionPromiseIfAny(choice);
+
+        // On the server too. This decision is the point of the check-in and it used to be kept in the
+        // browser alone, which meant no analysis could ever see what a student set out to do.
+        void recordIntention(student.id, choice, false);
 
         setShowDailyIntention(false);
 
@@ -643,6 +658,9 @@ export default function StudentDashboard(): ReactElement {
         // Re-recorded rather than amended: the commitment starts NOW, so the exercise count has to
         // be today's number at the moment they chose, not the one from when the modal opened.
         setDailyIntention(student.id, choice, "", exercisesCompleted, "unclear");
+        // The answer to the follow-up is the real plan - "review" committed to nothing, which is why
+        // the follow-up exists - so the timeline records this one as the plan, marked as the follow-up.
+        void recordIntention(student.id, choice, true);
         setShowIntentionFocus(false);
 
         if (choice === "goal") {

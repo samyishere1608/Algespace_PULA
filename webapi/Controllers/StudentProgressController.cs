@@ -115,6 +115,18 @@ namespace webapi.Controllers
                 $"CREATE UNIQUE INDEX IF NOT EXISTS IX_{StudentProgressDBSettings.TourStateTable}_StudentSection " +
                 $"ON {StudentProgressDBSettings.TourStateTable} (StudentId, Section)");
 
+            // The agency log's idempotency key and its element, in a column rather than glued into the
+            // source string. See AwardCommitmentChoice: the row id used to be appended to the source,
+            // which is what made one of these categories 25 categories.
+            try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.AgencyLogTable} ADD COLUMN RefId TEXT NOT NULL DEFAULT ''"); } catch { }
+            conn.Execute(
+                $"CREATE UNIQUE INDEX IF NOT EXISTS IX_{StudentProgressDBSettings.AgencyLogTable}_CommitGuard " +
+                $"ON {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, RefId) " +
+                $"WHERE RefId <> '' AND Source = '{LogAgencySource.ReflectionCommit}'");
+
+            // The timeline and the sessions it is grouped into.
+            StudentEventLog.EnsureTables(conn);
+
             // Which question was asked, and which chip was tapped. The first makes it possible to
             // compare questions later; the second is the evidence the Insight award was decided from.
             try { conn.Execute($"ALTER TABLE {StudentProgressDBSettings.ReflectionHistoryTable} ADD COLUMN QuestionId TEXT NOT NULL DEFAULT ''"); } catch { }
@@ -195,6 +207,12 @@ namespace webapi.Controllers
                     AttemptId = attemptId,
                     CompletedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
                 });
+
+            // A reflection was put in front of the student. Whether they then answered it or skipped it
+            // is the next two events, so "did they reflect" is three rows rather than an inference.
+            StudentEventLog.Write(conn, studentId, LogEventType.ReflectionAsked, attemptId: attemptId,
+                refId: itemId, value: itemType,
+                data: new { label = itemLabel, errors, hints, method, focus });
 
             // Cap at 3 pending: keep the latest 3, skip the rest.
             //
@@ -375,6 +393,19 @@ namespace webapi.Controllers
                     CreatedAt = NormalizeGoalStamp(request.CreatedAt)
                 });
 
+            // The goal itself, not just the XP for setting it. This is the row that survives the goal
+            // being deleted, which is what makes "what did this student set out to do" answerable at all.
+            StudentEventLog.Write(conn, request.StudentId, LogEventType.GoalSet, refId: request.Id,
+                value: request.Category,
+                data: new
+                {
+                    focus = request.Focus ?? "",
+                    metric = string.IsNullOrWhiteSpace(request.Metric) ? "exercises" : request.Metric,
+                    target = request.Target,
+                    quality = request.Quality ?? "",
+                    maxPerExercise = request.MaxPerExercise,
+                });
+
             return Ok(ReadActiveGoals(conn, request.StudentId));
         }
 
@@ -398,10 +429,32 @@ namespace webapi.Controllers
             conn.Open();
             EnsureTables(conn);
 
+            // Read them BEFORE deleting. Until now a removed goal simply vanished, which meant the
+            // research-relevant behaviour - choosing something and then dropping it - left no trace
+            // anywhere. One event per goal, so a goal removed after real work is distinguishable from
+            // one removed a minute after it was set.
+            var removed = conn.Query<ActiveGoalRecord>(
+                $"SELECT * FROM {StudentProgressDBSettings.ActiveGoalsTable} " +
+                "WHERE StudentId = @StudentId AND Id IN @Ids",
+                new { request.StudentId, Ids = request.GoalIds }).ToList();
+
             conn.Execute(
                 $"DELETE FROM {StudentProgressDBSettings.ActiveGoalsTable} " +
                 "WHERE StudentId = @StudentId AND Id IN @Ids",
                 new { request.StudentId, Ids = request.GoalIds });
+
+            foreach (var goal in removed)
+                StudentEventLog.Write(conn, request.StudentId, LogEventType.GoalDeleted, refId: goal.Id,
+                    value: goal.Category,
+                    data: new
+                    {
+                        target = goal.Target,
+                        focus = goal.Focus,
+                        metric = goal.Metric,
+                        quality = goal.Quality,
+                        maxPerExercise = goal.MaxPerExercise,
+                        setAt = goal.CreatedAt,
+                    });
 
             return Ok(ReadActiveGoals(conn, request.StudentId));
         }
@@ -460,6 +513,10 @@ namespace webapi.Controllers
             var newTotal = conn.ExecuteScalar<int>(
                 $"SELECT TotalXP FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId = @StudentId",
                 new { StudentId = request.StudentId });
+
+            StudentEventLog.Write(conn, request.StudentId, LogEventType.GoalCompleted, refId: request.GoalId,
+                value: request.ExerciseType, amount: request.XpEarned,
+                data: new { label = request.GoalLabel, focus = request.Focus, errors = request.TotalErrors, hints = request.TotalHints, xpEarned = request.XpEarned });
 
             return Ok(newTotal);
         }
@@ -562,24 +619,27 @@ namespace webapi.Controllers
         private static void AwardCommitmentChoice(
             Microsoft.Data.Sqlite.SqliteConnection conn, long studentId, long queueItemId)
         {
-            var source = $"reflection-commit-{queueItemId}";
-
+            // The queue item id is the idempotency key, and it lives in its own column with a unique
+            // index behind it. It used to be pasted onto the end of the source string, which stopped
+            // the double payment correctly but made the source ungroupable - it was 25 of the 45
+            // distinct sources in the log. Moving it here keeps the guard and fixes the category.
             var already = conn.ExecuteScalar<int>(
                 $"SELECT COUNT(*) FROM {StudentProgressDBSettings.AgencyLogTable} " +
-                "WHERE StudentId = @StudentId AND XpType = 'choice' AND Source = @Source",
-                new { StudentId = studentId, Source = source });
+                "WHERE StudentId = @StudentId AND XpType = 'choice' AND RefId = @RefId AND Source = @Source",
+                new { StudentId = studentId, RefId = queueItemId.ToString(), Source = LogAgencySource.ReflectionCommit });
 
             if (already > 0) return;
 
             conn.Execute(
-                $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, Amount, Source, LoggedAt) " +
-                "VALUES (@StudentId, 'choice', @Amount, @Source, @Now)",
+                $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, Amount, Source, RefId, LoggedAt) " +
+                "VALUES (@StudentId, 'choice', @Amount, @Source, @RefId, @Now)",
                 new
                 {
                     StudentId = studentId,
                     Amount = CommitmentChoiceXp,
-                    Source = source,
-                    Now = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
+                    Source = LogAgencySource.ReflectionCommit,
+                    RefId = queueItemId.ToString(),
+                    Now = LogStamp.Now()
                 });
 
             conn.Execute(
@@ -587,6 +647,10 @@ namespace webapi.Controllers
                 "SET ChoiceXP = ChoiceXP + @Amount, LifetimeAgencyXP = LifetimeAgencyXP + @Amount " +
                 "WHERE StudentId = @StudentId",
                 new { StudentId = studentId, Amount = CommitmentChoiceXp });
+
+            StudentEventLog.Write(conn, studentId, LogEventType.XpAwarded, refId: queueItemId.ToString(),
+                value: "choice", amount: CommitmentChoiceXp,
+                data: new { source = LogAgencySource.ReflectionCommit });
 
             Console.WriteLine($"[Reflection] Commitment Choice +{CommitmentChoiceXp} for queue item {queueItemId}");
         }
@@ -858,7 +922,70 @@ namespace webapi.Controllers
                 $"SELECT {column} FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId = @StudentId",
                 new { request.StudentId });
 
+            StudentEventLog.Write(conn, request.StudentId, LogEventType.XpAwarded,
+                value: request.XpType, amount: request.Amount,
+                data: new { source = request.Source ?? "" });
+
             return Ok(newValue);
+        }
+
+        // ── Sessions ─────────────────────────────────────────────────────────
+        //
+        // A sitting starts when the student opens the dashboard and ends when they press End Session.
+        // The client asks once per browser sitting and the server resumes rather than replacing, so
+        // coming back from an exercise - which remounts the dashboard - does not split the sitting.
+
+        /// <summary>Opens the sitting, or returns the one already open.</summary>
+        [HttpPost("session/start")]
+        public ActionResult<StartSessionResponse> StartSession([FromBody] StartSessionRequest request)
+        {
+            if (request.StudentId <= 0) return BadRequest("Invalid student.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            return Ok(StudentEventLog.StartSession(conn, request.StudentId, request.Language));
+        }
+
+        /// <summary>
+        /// Closes the sitting and records what it was made of, including the exercises opened in it that
+        /// were never finished.
+        /// </summary>
+        [HttpPost("session/end")]
+        public ActionResult<EndSessionResponse> EndSession([FromBody] StartSessionRequest request)
+        {
+            if (request.StudentId <= 0) return BadRequest("Invalid student.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            return Ok(StudentEventLog.EndSession(conn, request.StudentId, string.IsNullOrWhiteSpace(request.Reason) ? "end-session-button" : request.Reason));
+        }
+
+        /// <summary>
+        /// Records the plan the student chose for today.
+        ///
+        /// The check-in only ever lived in the browser, so the decision - which is the point of asking -
+        /// was invisible to any analysis. We could see that a plan had been made (an XP row) but never
+        /// what it was.
+        /// </summary>
+        [HttpPost("session/intention")]
+        public ActionResult SetIntention([FromBody] SetIntentionRequest request)
+        {
+            if (request.StudentId <= 0) return BadRequest("Invalid student.");
+            if (request.Plan != "practice" && request.Plan != "goal" && request.Plan != "review")
+                return BadRequest("Plan must be 'practice', 'goal' or 'review'.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            StudentEventLog.Write(conn, request.StudentId, LogEventType.IntentionSet, value: request.Plan,
+                data: new { followUp = request.FollowUp }, language: request.Language);
+
+            return Ok();
         }
 
         private const string InsightGapAwardTable = AnchorStoreSettings.InsightAwardTable;
@@ -2558,6 +2685,14 @@ RULES:
                 new { Id = request.QueueItemId, StudentId = request.StudentId });
 
             if (item == null)
+            {
+                // The queue item was deleted between the question being asked and the answer arriving
+                // (the goal was removed, or the session ended). Nothing could be judged, but the
+                // student did answer, so the attempt is still worth a line in the timeline rather than
+                // vanishing silently.
+                StudentEventLog.Write(conn, request.StudentId, LogEventType.ReflectionVerdict,
+                    refId: request.QuestionId, value: "item-unavailable",
+                    data: new { writer = "none", queueItemId = request.QueueItemId });
                 return Ok(new ReflectionEvaluateResponse
                 {
                     Feedback = "That reflection item is no longer available.",
@@ -2565,6 +2700,7 @@ RULES:
                     InsightXp = 0,
                     NextStep = ""
                 });
+            }
 
             Console.WriteLine($"[Reflection] Evaluate — student={request.StudentId}, itemId={request.QueueItemId}, label=\"{item.ItemLabel}\", type={item.ItemType}, method={item.Method}, errors={item.Errors}, hints={item.Hints}, pippin={item.PippinMessages}, Q={request.QuestionNumber}, mode={request.Mode}, answer=\"{request.Answer}\"");
 
@@ -2584,6 +2720,13 @@ RULES:
                 && OffTopicDetector.IsOffTopic(request.Answer, answerFeatures))
             {
                 Console.WriteLine($"[Reflection] Off-topic gate — rejected answer=\"{request.Answer}\"");
+                // Recorded even though the answer was refused: "the student wrote something unrelated"
+                // is a real event, and leaving a hole here would make the timeline look as though the
+                // question was never asked. The question id comes from the request because this runs
+                // before the question bank is rebuilt.
+                StudentEventLog.Write(conn, request.StudentId, LogEventType.ReflectionVerdict,
+                    refId: request.QuestionId, value: "off-topic",
+                    data: new { writer = "none", stage = "deterministic-gate" });
                 return Ok(new ReflectionEvaluateResponse
                 {
                     Feedback = OffTopicDetector.RetryMessage(request.Language),
@@ -2611,6 +2754,25 @@ RULES:
                         ?? questions[Math.Clamp(request.QuestionNumber - 1, 0, questions.Count - 1)];
             var verdict = ReflectionQuestionBank.Grade(asked, request.Choice ?? "");
             var questionLine = ReflectionQuestionBank.DescribeForPrompt(asked, request.SubjectTerms);
+
+            // What the student actually answered: the chip they tapped, or that they wrote something.
+            //
+            // The free text itself is NOT copied here. It belongs on the reflection row this event
+            // points at, and duplicating student writing into a second table is how two copies of the
+            // same answer end up disagreeing. Only the fact that they wrote, and how much, is recorded.
+            StudentEventLog.Write(conn, request.StudentId, LogEventType.ReflectionAnswered, attemptId: item.AttemptId,
+                refId: asked.Id,
+                value: string.IsNullOrWhiteSpace(request.Choice) ? "text" : request.Choice,
+                amount: (request.Answer ?? "").Length,
+                data: new
+                {
+                    mode = request.Mode,
+                    questionNumber = request.QuestionNumber,
+                    itemType = item.ItemType,
+                    itemId = item.ItemId,
+                    wrote = !string.IsNullOrWhiteSpace(request.Answer),
+                },
+                language: request.Language);
 
             // What the record says they actually did, in plain words, for the prompt.
             //
@@ -2697,9 +2859,27 @@ RULES:
 
             Console.WriteLine($"[Reflection] Fallback ready — errors={item.Errors}, hints={item.Hints} (fallback: aligned={fallback.Aligned}, insight={fallback.InsightXp})");
 
+            // EVERY WAY OUT OF THIS METHOD RECORDS A VERDICT.
+            //
+            // There are nine exits - the provider unreachable, the reply guard rejecting twice, the
+            // record settling it, the answer judged off-topic - and the first version of this wrote the
+            // verdict on only two of them. The result was a timeline where some answers had no
+            // judgement recorded at all, which is worse than no column, because it reads as "this
+            // answer was never judged" rather than "we failed to note it". Writer is which text the
+            // student actually read: their own record's wording, the model's, or the offline reply.
+            ReflectionEvaluateResponse Finish(
+                ReflectionEvaluateResponse response, string writer, int guardRejections = 0, string outcome = "")
+            {
+                StudentEventLog.Write(conn, request.StudentId, LogEventType.ReflectionVerdict, refId: asked.Id,
+                    value: outcome.Length > 0 ? outcome : response.Aligned ? "aligned" : verdict.Status,
+                    amount: response.InsightXp,
+                    data: new { writer, questionId = asked.Id, guardRejections, fromRecord = verdict.FromRecord });
+                return response;
+            }
+
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
-                return Ok(fallback);
+                return Ok(Finish(fallback, "fallback", outcome: "no-provider-configured"));
 
             try
             {
@@ -2732,6 +2912,11 @@ RULES:
                     && item.ItemType != "session"
                     && asked.Kind is ReflectionQuestionBank.Observation or ReflectionQuestionBank.Judgement;
 
+                // How many times the reply guard sent the model back. Recorded on the verdict event,
+                // because "a third of replies needed a second attempt" is a fact about reply quality
+                // and it used to live only in stdout.
+                var guardRejections = 0;
+
                 var writtenMatch = "";
                 if (judgesWriting)
                 {
@@ -2739,9 +2924,20 @@ RULES:
                         apiKey, asked, ReflectionQuestionBank.JudgeFacts(evidence, asked, studentLine), request.Answer ?? "");
 
                     // No judgement, no award: the offline reply is built from the record and pays nothing.
-                    if (writtenMatch.Length == 0) return Ok(fallback);
+                    if (writtenMatch.Length == 0) return Ok(Finish(fallback, "fallback", outcome: "judge-unavailable"));
 
                     Console.WriteLine($"[Reflection] Written answer judged: {writtenMatch}");
+
+                    // The judgement, not the offline reply's keyword guess, decides the badge from here on.
+                    //
+                    // The reply can still be replaced by the offline one — the guard rejecting twice, the
+                    // provider dropping out on a later call — and that offline object was built before the
+                    // judgement existed, so it carried a guess that reads nothing. A claim the judge
+                    // CONFIRMED then went out with an empty badge next to text that itself reads as a
+                    // confirmation, which is exactly the disagreement between badge and sentence this
+                    // module exists to prevent. Every exit past this point now carries the judge's verdict.
+                    fallback.Aligned = writtenMatch == "yes";
+                    fallback.InsightXp = fallback.Aligned ? 3 : 0;
 
                     verdictLine = writtenMatch == "yes"
                         ? "Their written answer is CONFIRMED by the facts above: aligned=true, and the award number to return is 3. The reply must read as a clear confirmation: one short clause saying it is what happened, then the sentence on why it matters. Do not hedge, and never sound doubtful about it."
@@ -2763,11 +2959,11 @@ RULES:
                         ? prompt
                         : prompt + $"\n\nYOUR PREVIOUS REPLY WAS REJECTED because {rejected}. Write the whole JSON again and fix exactly that.");
 
-                if (raw == null) return Ok(fallback);
+                if (raw == null) return Ok(Finish(fallback, "fallback", outcome: "model-unreachable"));
 
                 var jsonStart = raw.IndexOf('{');
                 var jsonEnd = raw.LastIndexOf('}');
-                if (jsonStart < 0 || jsonEnd <= jsonStart) return Ok(fallback);
+                if (jsonStart < 0 || jsonEnd <= jsonStart) return Ok(Finish(fallback, "fallback", outcome: "model-unreadable"));
 
                 using var doc = JsonDocument.Parse(raw.Substring(jsonStart, jsonEnd - jsonStart + 1));
                 var root = doc.RootElement;
@@ -2806,16 +3002,15 @@ RULES:
                 if (offTopic && request.Mode != "pippin")
                 {
                     Console.WriteLine($"[Reflection] Off-topic (model) — rejected answer=\"{request.Answer}\"");
-                    return Ok(new ReflectionEvaluateResponse
+                    return Ok(Finish(new ReflectionEvaluateResponse
                     {
                         Feedback = OffTopicDetector.RetryMessage(request.Language),
                         Aligned = false,
                         InsightXp = 0,
                         NextStep = "",
                         NeedsRetry = true
-                    });
+                    }, "fallback", outcome: "off-topic"));
                 }
-
                 // Asking Pippin for a model answer is not the student's own reflection, so it can
                 // never be "aligned" and never earns XP. The prompt already says this, but the model
                 // still congratulated the student and handed out Insight XP — so it is enforced here
@@ -2867,10 +3062,14 @@ RULES:
                 if (rejected is not null)
                 {
                     Console.WriteLine($"[Reflection] AI reply rejected (pass {pass + 1}): {rejected}");
-                    if (pass >= 1) return Ok(fallback);
+                    guardRejections++;
+                    if (pass >= 1) return Ok(Finish(fallback, "fallback", guardRejections, "reply-rejected-twice"));
                     continue;
                 }
-                return Ok(new ReflectionEvaluateResponse
+                // The verdict, who wrote the reply, and whether the guard had to intervene: the three
+                // things an analysis of the reflection needs, previously visible only in a log file that
+                // is overwritten on the next restart.
+                return Ok(Finish(new ReflectionEvaluateResponse
                 {
                     Feedback = AiTextFormatter.StripMathDelimiters(
                         string.IsNullOrWhiteSpace(feedback) ? fallback.Feedback : feedback),
@@ -2882,12 +3081,15 @@ RULES:
                     // show nothing. For Q1 and Q2 the fallback's value is empty, so this is a no-op.
                     NextStep = AiTextFormatter.StripMathDelimiters(
                         string.IsNullOrWhiteSpace(nextStep) ? fallback.NextStep : nextStep)
-                });
+                }, "model", guardRejections));
                 }
             }
             catch
             {
-                return Ok(fallback);
+                // The offline reply is written from the record, not the model, and the verdict it goes
+                // out with is its own. Recording which writer produced the text is the difference
+                // between analysing the model's replies and analysing its absence.
+                return Ok(Finish(fallback, "fallback", outcome: "provider-error"));
             }
         }
 
@@ -2906,6 +3108,12 @@ RULES:
                 $"UPDATE {StudentProgressDBSettings.ReflectionQueueTable} SET Status = @Status " +
                 "WHERE Id = @Id AND StudentId = @StudentId",
                 new { Id = request.QueueItemId, StudentId = request.StudentId, Status = request.Skip ? "skipped" : "done" });
+
+            // The answer to "did they reflect", and the end of this reflection's part of the session.
+            StudentEventLog.Write(conn, request.StudentId, LogEventType.ReflectionCompleted,
+                refId: request.QueueItemId.ToString(),
+                value: request.Skip ? "skipped" : "answered",
+                data: new { turns = request.History.Count });
 
             if (request.Skip)
                 return Ok();
@@ -2926,7 +3134,7 @@ RULES:
                         h.InsightXp,
                         h.QuestionId,
                         h.Choice,
-                        CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
+                        CreatedAt = LogStamp.Now()
                     });
             }
 
