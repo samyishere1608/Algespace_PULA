@@ -4,7 +4,22 @@ import { TranslationNamespaces } from "../../i18n.ts";
 import "@styles/shared/growing-tree.scss";
 
 // ── Level thresholds (per agency wallet) ────────────────────────────────────
-const LEVEL_THRESHOLDS = [0, 50, 150, 400, 800, 1500];
+//
+// Deliberately much softer than they were (0/50/150/400/800/1500). XP arrives a few points at a
+// time — 3 for an answer the record confirms, 5 for finishing a goal — so the old first step of 50
+// was about ten good decisions before the tree did anything at all, and a student who saw nothing
+// move in their first session had no reason to think it ever would. Growth is the feedback for
+// effort here; a signal that arrives after a week of effort is not feedback.
+//
+// The first step is now small enough to reach in one sitting, and each step after it is roughly
+// twice the last rather than the near-doubling of before, so the tree keeps moving without the
+// later levels becoming trivial.
+//
+// NOTE: outfits and buddies unlock on a SEPARATE scale in `wardrobeUtils.ts`, so the tree can grow
+// faster than the collection fills. That is intentional — the tree is the feedback, the unlocks are
+// the reward — but the comment there claiming they share thresholds is wrong and should not be
+// trusted.
+const LEVEL_THRESHOLDS = [0, 20, 60, 140, 280, 500];
 
 function getLevel(xp: number): number {
     let level = 0;

@@ -67,7 +67,7 @@ export interface CharacterDef {
 }
 
 // ── Character + shop catalogue ────────────────────────────────────────────────
-// Outfits unlock at wallet levels 1-5 (same thresholds as the Growth Tree).
+// Outfits unlock at wallet levels 1-5, on their own scale — see `AGENCY_LEVEL_THRESHOLDS`.
 
 export const CHARACTER_CATALOGUE: CharacterDef[] = [
     {
