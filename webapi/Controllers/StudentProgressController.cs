@@ -375,6 +375,12 @@ namespace webapi.Controllers
             if (!(request.Target > 0))
                 return BadRequest("Target must be greater than zero.");
 
+            // Read the weakness profile BEFORE opening the connection below. It opens one of its own,
+            // and a reader and a writer open at the same time is the lock contention this project has
+            // already had to fix once.
+            var aimsAtWeakness = request.Origin == "student"
+                && AimsAtWeakness(request.StudentId, request.Category);
+
             using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
             conn.Open();
             EnsureTables(conn);
@@ -414,7 +420,95 @@ namespace webapi.Controllers
                     maxPerExercise = request.MaxPerExercise,
                 });
 
+            // Insight when a student aims a goal at something they currently avoid.
+            //
+            // The counterpart of the Choice award, in a different currency on purpose: Choice is for
+            // deciding at all, Insight is for deciding to face the thing they have been steering
+            // around. A goal taken from a suggestion pays neither, and for the same reason —
+            // accepting the system's proposal is not the student noticing anything.
+            //
+            // It used to live on the client, where it paid on every save of the plan. Here the goal id
+            // is the idempotency key and the day is the bound.
+            if (aimsAtWeakness)
+                AwardInsightForTargetedWeakness(conn, request.StudentId, request.Category, request.Id);
+
             return Ok(ReadActiveGoals(conn, request.StudentId));
+        }
+
+        /// <summary>Insight for aiming a goal at a weakness the profile still reports.</summary>
+        private const int InsightForTargetedWeaknessXp = 8;
+
+        /// <summary>
+        /// The most goals this can pay for in one day.
+        ///
+        /// A student setting goals for more than one weakness in a sitting is doing the thing being
+        /// rewarded and should be paid for each. Beyond three it stops being that and becomes a
+        /// student adding goals to collect, which is the same ceiling the award had when it lived on
+        /// the client — where a plan save paid 8 per goal, up to 24.
+        /// </summary>
+        private const int MaxTargetedWeaknessGoalsPerDay = 3;
+
+        /// <summary>
+        /// Whether a goal category aims at a weakness this student currently has.
+        ///
+        /// "A weakness" means one of the tracked avoidance dimensions — the same five the nudge and
+        /// the Insight-for-facing-a-gap award read — so those three agree on what a weakness is.
+        /// Hints and errors is deliberately NOT one of them. It is a measurement rather than a
+        /// decision, so a goal about it is not a goal about something the student has been avoiding.
+        /// </summary>
+        private bool AimsAtWeakness(long studentId, string category) =>
+            _anchors.GetProfile(studentId).Gaps
+                .Any(gap => GoalCatalogue.CategoryForElement(gap.Element) == category);
+
+        /// <summary>
+        /// Pays the Insight for a goal that aims at a weakness, and writes the ledger row that makes
+        /// the award auditable and idempotent.
+        ///
+        /// TWO BOUNDS, because the act is a click. The goal id stops the same goal being paid twice
+        /// when a student re-saves it — which the client-side version it replaces did not, so a goal
+        /// could be saved repeatedly for the same eight points. The daily ceiling stops goals being
+        /// added and removed in a loop.
+        /// </summary>
+        private static void AwardInsightForTargetedWeakness(
+            Microsoft.Data.Sqlite.SqliteConnection conn, long studentId, string category, string goalId)
+        {
+            var alreadyForThisGoal = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(1) FROM {StudentProgressDBSettings.AgencyLogTable} " +
+                "WHERE StudentId = @StudentId AND Source = @Source AND RefId = @RefId",
+                new { StudentId = studentId, Source = LogAgencySource.TargetedWeakArea, RefId = goalId });
+
+            if (alreadyForThisGoal > 0) return;
+
+            var alreadyToday = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(1) FROM {StudentProgressDBSettings.AgencyLogTable} " +
+                "WHERE StudentId = @StudentId AND Source = @Source AND date(LoggedAt) = date('now')",
+                new { StudentId = studentId, Source = LogAgencySource.TargetedWeakArea });
+
+            if (alreadyToday >= MaxTargetedWeaknessGoalsPerDay) return;
+
+            conn.Execute(
+                $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, Amount, Source, RefId, LoggedAt) " +
+                "VALUES (@StudentId, 'insight', @Amount, @Source, @RefId, @Now)",
+                new
+                {
+                    StudentId = studentId,
+                    Amount = InsightForTargetedWeaknessXp,
+                    Source = LogAgencySource.TargetedWeakArea,
+                    RefId = goalId,
+                    Now = LogStamp.Now()
+                });
+
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ProgressTable} " +
+                "SET InsightXP = InsightXP + @Amount, LifetimeAgencyXP = LifetimeAgencyXP + @Amount " +
+                "WHERE StudentId = @StudentId",
+                new { StudentId = studentId, Amount = InsightForTargetedWeaknessXp });
+
+            StudentEventLog.Write(conn, studentId, LogEventType.XpAwarded, refId: goalId,
+                value: "insight", amount: InsightForTargetedWeaknessXp,
+                data: new { source = LogAgencySource.TargetedWeakArea, category });
+
+            Console.WriteLine($"[Goals] Insight +{InsightForTargetedWeaknessXp} for aiming a {category} goal at a weakness");
         }
 
         /// <summary>

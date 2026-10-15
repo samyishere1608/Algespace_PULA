@@ -19,6 +19,15 @@ import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
+/**
+ * Who chose a goal: the student, or a suggestion the assistant made.
+ *
+ * It is part of the goal's record rather than a UI detail, because it decides what choosing it is
+ * worth — a goal the student picked earns the awards for deciding, and one taken from a suggestion
+ * earns neither. The student did not decide anything, and the system proposing it did.
+ */
+export type GoalOrigin = "student" | "assistant";
+
 /** The server's row shape. Matches `ActiveGoalRecord` in the webapi. */
 interface ActiveGoalRow {
     id: string;
@@ -150,8 +159,12 @@ function isValidGoal(value: unknown): value is StudyGoal {
  * A goal that fails our own validation is never sent: the server cannot check a category it does
  * not own, so a goal the client cannot measure would be stored and then counted against the wrong
  * events. Refusing it here keeps the table to goals that mean something.
+ *
+ * `origin` travels with the goal because the server pays Insight when one aims at a weakness the
+ * student avoids, and that award is for noticing the weakness — accepting a goal the system
+ * proposed is not noticing anything. The goal's own fields look identical either way.
  */
-export async function addGoal(studentId: number, goal: StudyGoal): Promise<StudyGoal[]> {
+export async function addGoal(studentId: number, goal: StudyGoal, origin: GoalOrigin): Promise<StudyGoal[]> {
     if (!isPersistable(studentId) || !isValidGoal(goal)) return fallback(studentId);
 
     try {
@@ -165,6 +178,7 @@ export async function addGoal(studentId: number, goal: StudyGoal): Promise<Study
             quality: goal.quality ?? "",
             maxPerExercise: goal.maxPerExercise ?? 0,
             createdAt: goal.createdAt,
+            origin,
         });
 
         return toGoals(data, studentId);

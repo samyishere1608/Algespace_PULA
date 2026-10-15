@@ -47,7 +47,7 @@ import "@styles/views/dashboard.scss";
 import ChooseBuddyModal, { BUDDIES } from "./dashboard/ChooseBuddyModal.tsx";
 import DashboardExercises from "./dashboard/DashboardExercises.tsx";
 import SetGoalsModal from "./dashboard/SetGoalsModal.tsx";
-import type { GoalOrigin } from "./dashboard/SetGoalsModal.tsx";
+import type { GoalOrigin } from "@utils/activeGoals.ts";
 import CharacterShopModal, { CHARACTER_CATALOGUE, resolveOutfitSrc, type CharacterDef } from "./dashboard/CharacterShopModal.tsx";
 import CharacterUnlockModal from "./dashboard/CharacterUnlockModal.tsx";
 import { DailyIntentionModal, type DailyIntentionChoice } from "./dashboard/DailyIntentionModal.tsx";
@@ -62,7 +62,7 @@ import { addGoal, getActiveGoals, removeGoal } from "@utils/activeGoals.ts";
 import { GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef } from "@utils/goalCatalog.ts";
 import { claimCompletedGoals, computeProgress, earliestGoalStart, fetchGoalEvents } from "@utils/goalProgress.ts";
 import { awardChoiceForSettingAGoal } from "@utils/choiceAwards.ts";
-import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addInsightXP, addChoiceXP } from "@utils/agencyUtils.ts";
+import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addInsightXP, addChoiceXP, getInsightXP } from "@utils/agencyUtils.ts";
 import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 import { getOnboardingStep } from "@utils/storageUtils.ts";
 import { startSession, endSession, currentSessionId, recordIntention } from "@utils/sessionLog.ts";
@@ -570,15 +570,31 @@ export default function StudentDashboard(): ReactElement {
     async function handleAddGoal(goal: StudyGoal, origin: GoalOrigin): Promise<void> {
         if (!student) return;
 
-        setActiveGoals(await addGoal(student.id, goal));
+        setActiveGoals(await addGoal(student.id, goal, origin));
 
-        // Picking your own direction is a Choice act, and Choice does not require having done
-        // anything yet — deciding is itself the skill. Bounded to once a day because goals can be
-        // added and removed in a loop, which would otherwise pay per click.
-        //
-        // A goal taken from a suggestion earns nothing: the reward is for deciding, and accepting
-        // the system's proposal is not deciding.
-        if (origin === "student") awardChoiceForSettingAGoal(student.id);
+        if (origin === "student") {
+            // The server has already paid any Insight for aiming this goal at a weakness, so the
+            // wallets are RE-READ rather than guessed at here: what the student sees is what was
+            // actually paid, and the rule stays in one place.
+            //
+            // Read before the Choice award below. A local increment followed by a server read would
+            // have the read overwrite the increment it had not been sent yet.
+            const insightBefore = getInsightXP(student.id);
+            const synced = await syncAgencyFromBackend(student.id);
+            setAgency(synced);
+
+            const insightGained = synced.insightXP - insightBefore;
+            if (insightGained > 0) showAgencyToast("insight", insightGained);
+
+            // Picking your own direction is a Choice act, and Choice does not require having done
+            // anything yet — deciding is itself the skill. Bounded to once a day because goals can
+            // be added and removed in a loop, which would otherwise pay per click.
+            //
+            // A goal taken from a suggestion earns nothing: the reward is for deciding, and
+            // accepting the system's proposal is not deciding.
+            awardChoiceForSettingAGoal(student.id);
+            setAgency(getAgencyProgress(student.id));
+        }
 
         // Show the new goal at 0% immediately rather than waiting for the fetch. Nothing in the
         // student's history predates the goal, so the honest starting figure is zero.

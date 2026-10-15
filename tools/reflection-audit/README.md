@@ -382,6 +382,7 @@ It used to just hide the window, leaving the item `pending` and bringing it back
 | `node check-insight-gap.mjs` | Insight for facing a gap, once per episode. |
 | `node check-resolve-followthrough.mjs` | Promises settling. 27 of 27. Writes to the database. |
 | `node check-suggested-goal.mjs` | The goal a Q3 commitment proposes, end to end. 8 of 8. Writes to the database. |
+| `node check-weakness-goal.mjs` | Insight for aiming your own goal at a weakness. 9 of 9. Writes to the database. |
 | `node restore-baseline.mjs` | **Always run this after anything that wrote.** |
 
 ### `check-reply-alignment.mjs` — read this before trusting or changing it
@@ -985,3 +986,35 @@ still renders as a valid goal, so nothing else would catch it.
 `check-suggested-goal.mjs` covers the wiring the harness cannot reach: that the server reads the
 narrowed method off the queue row and hands the catalogue the right form of it. That is the exact path
 fault 1 lived on.
+
+## Insight for aiming a goal at a weakness
+
+The award existed once and was lost. It paid 8 Insight, on the client, per self-picked goal whose
+category matched the weakest dimension, capped at 24 per save of the plan.
+
+Restored server-side, in `SetActiveGoal`, because the goal is stored there and the rule needs the
+goal id to be honest. Four things decide it:
+
+1. **The student picked it.** The goal's `Origin` travels with the request. A goal taken from a
+   suggestion pays nothing — the same reason it earns no Choice. Accepting the system's proposal is
+   not the student noticing anything, and the goal's own fields look identical either way.
+2. **It aims at a weakness.** A weakness is one of the five tracked avoidance dimensions — the same
+   five the nudge and the faced-a-gap award read, so all three agree on what one is.
+   `GoalCatalogue.CategoryForElement` does the mapping. Hints and errors is deliberately not among
+   them: it is a measurement rather than a decision, so a goal about it is not a goal about
+   something the student has been avoiding.
+3. **Once per goal, ever.** The goal id is the ledger's `RefId`. The client-side version it replaces
+   had no such guard and paid on every save of the plan, so the same goal could be collected over
+   and over. This is the fault the restoration had to fix, not merely avoid.
+4. **At most three a day**, which is the ceiling it had when a plan save paid 8 per goal up to 24.
+   Past that it is a student adding goals to collect them.
+
+The profile is read BEFORE the write connection opens. `GetProfile` opens one of its own, and a
+reader and a writer open at once is the lock contention this project has already had to fix once.
+
+The client reads the result rather than deciding it: it re-reads the wallets from the server and
+shows the toast on the difference, so what the student sees is what was actually paid. It does that
+BEFORE the Choice award for setting the goal, because a local increment followed by a server read
+would have the read overwrite the increment it had not been sent yet.
+
+`check-weakness-goal.mjs` walks all four guards against the live endpoint with real profile data.

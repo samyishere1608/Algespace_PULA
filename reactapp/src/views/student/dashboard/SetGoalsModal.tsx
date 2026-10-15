@@ -6,16 +6,9 @@ import { TranslationNamespaces } from "@/i18n.ts";
 import type { GoalCategory, GoalMetric, QualityDimension, StudyGoal } from "@/types/student/goal.ts";
 import { GOAL_CATEGORIES, GOAL_RESOLVE_XP, METHOD_FOCUS_NOTES, asTranslate, describeGoal, getCategoryDef, groupInExercise, newGoalId } from "@utils/goalCatalog.ts";
 import { fetchGoalSuggestions, suggestionToGoal, type GoalPlan } from "@utils/goalSuggestions.ts";
+import type { GoalOrigin } from "@utils/activeGoals.ts";
 import type { TourPickerStep } from "@utils/onboardingTour.ts";
 import "@styles/views/goals.scss";
-
-/**
- * Who chose the goal.
- *
- * "assistant" exists so the caller can decline to award Choice for it. Choice is for deciding, and
- * accepting a suggestion the system made is not deciding — see `choiceAwards.ts`.
- */
-export type GoalOrigin = "student" | "assistant";
 
 interface Props {
     studentId: number | string;

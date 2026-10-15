@@ -136,6 +136,16 @@ namespace webapi.Models.Student
         public string? Quality { get; set; }
         public int MaxPerExercise { get; set; }
         public string CreatedAt { get; set; } = "";
+
+        /// <summary>
+        /// Who chose this goal: "student" or "assistant".
+        ///
+        /// The server pays Insight when a goal aims at a weakness the student avoids, and that award
+        /// is for noticing the weakness. Accepting a goal the system proposed is not noticing
+        /// anything, so the origin has to travel with the goal rather than be inferred here — the
+        /// goal's own fields are identical either way.
+        /// </summary>
+        public string Origin { get; set; } = "";
     }
 
     /// <summary>Request to clear several goals at once — what happens when they complete together.</summary>
