@@ -503,6 +503,12 @@ namespace webapi.Models.Student
     {
         public int TotalXP { get; set; }
         public int ExercisesCompleted { get; set; }
+        /// <summary>
+        /// Exercises finished today, so the stat card can say what the day has added rather than
+        /// leaving its sub-line on a number nobody can act on. Day-scoped because that is the span a
+        /// student can still do something about; "this week" is a report, "today" is a target.
+        /// </summary>
+        public int ExercisesToday { get; set; }
         public int StreakDays { get; set; }
         public int ChoiceXP { get; set; }
         public int InsightXP { get; set; }

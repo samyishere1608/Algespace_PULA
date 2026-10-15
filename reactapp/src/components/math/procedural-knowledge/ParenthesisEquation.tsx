@@ -4,6 +4,7 @@ import { ParenthesisEquation as ParenthesisEquationProps } from "@/types/math/li
 import { ParenthesisTerm as ParenthesisTermProps } from "@/types/math/term.ts";
 import { FlexibilityCoefficient } from "@components/math/procedural-knowledge/FlexibilityCoefficient.tsx";
 import { FlexibilityTerm } from "@components/math/procedural-knowledge/FlexibilityTerm.tsx";
+import { MultiplicationSign } from "@components/math/procedural-knowledge/MultiplicationSign.tsx";
 import { ParenthesisLeft, ParenthesisRight } from "@components/math/procedural-knowledge/SubstitutedEquation.tsx";
 import { parenthesisToFlexibilityTerm } from "@utils/utils.ts";
 
@@ -29,7 +30,7 @@ function ParenthesisTerm({ index, term }: { index: number; term: ParenthesisTerm
     if (term.isMultiplication) {
         return (
             <React.Fragment>
-                <p>&#8901;</p>
+                <MultiplicationSign />
                 <FlexibilityCoefficient coefficient={term.coefficient} displayOne={term.variable === null} colour={"light"} />
             </React.Fragment>
         );

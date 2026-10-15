@@ -4,6 +4,7 @@ import { FlexibilityEquation, FlexibilityEquation as FlexibilityEquationProps } 
 import { FlexibilityTerm as FlexibilityTermProps } from "@/types/math/term.ts";
 import { FlexibilityCoefficient } from "@components/math/procedural-knowledge/FlexibilityCoefficient.tsx";
 import { FlexibilityTerm } from "@components/math/procedural-knowledge/FlexibilityTerm.tsx";
+import { MultiplicationSign } from "@components/math/procedural-knowledge/MultiplicationSign.tsx";
 import { coefficientIsOne } from "@utils/utils.ts";
 import LeftParenthesis from "@images/flexibility/LeftParenthesis.png";
 import LeftParenthesisDark from "@images/flexibility/LeftParenthesisDark.png";
@@ -178,7 +179,7 @@ function SubstitutionItemsLengthOne({ index, initialTerm, substitutionParams, fa
                     <React.Fragment>
                         {operator}
                         <FlexibilityCoefficient coefficient={initialTerm.coefficient} displayOne={true} colour={colour} />
-                        {<p>&#8901;</p>}
+                        <MultiplicationSign />
                         {substitutionTerms}
                     </React.Fragment>
                 );
@@ -217,7 +218,7 @@ function SubstitutionItemsLengthOne({ index, initialTerm, substitutionParams, fa
                 {!isPositive && <ParenthesisLeft containsFraction={containsFraction} colour={colour} />}
                 {substitutionTerms}
                 {!isPositive && <ParenthesisRight containsFraction={containsFraction} colour={colour} />}
-                {showDot && <p>&#8901;</p>}
+                {showDot && <MultiplicationSign />}
                 <p>{initialTerm.variable}</p>
             </React.Fragment>
         );

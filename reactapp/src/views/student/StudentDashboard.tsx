@@ -51,6 +51,7 @@ import type { GoalOrigin } from "./dashboard/SetGoalsModal.tsx";
 import CharacterShopModal, { CHARACTER_CATALOGUE, resolveOutfitSrc, type CharacterDef } from "./dashboard/CharacterShopModal.tsx";
 import CharacterUnlockModal from "./dashboard/CharacterUnlockModal.tsx";
 import { DailyIntentionModal, type DailyIntentionChoice } from "./dashboard/DailyIntentionModal.tsx";
+import XpGuideModal from "./dashboard/XpGuideModal.tsx";
 import { EndSessionModal } from "./dashboard/EndSessionModal.tsx";
 import { ReflectionModal } from "./dashboard/ReflectionModal.tsx";
 import { getEquippedOutfitId, persistEquippedOutfitId, getActiveBuddyId, persistActiveBuddyId, getAgencyLevel, getWalletXp, getAnnouncedUnlocks, markUnlockAnnounced } from "@utils/wardrobeUtils.ts";
@@ -97,7 +98,7 @@ interface LeaderboardEntry {
 
 const PLACEHOLDER_STATS = {
     exercisesCompleted: 0,
-    exercisesDelta: 0,
+    exercisesToday: 0,
     currentXP: 0,
     xpForNextLevel: 500,
     level: 1,
@@ -146,6 +147,7 @@ export default function StudentDashboard(): ReactElement {
     // ── Agency XP (replaces old XP + coins system) ───────────────────────────
     const [agency, setAgency] = useState(() => getAgencyProgress(student?.id ?? "guest"));
     const [exercisesCompleted, setExercisesCompleted] = useState(0);
+    const [exercisesToday, setExercisesToday] = useState(0);
     const [showAllGoals, setShowAllGoals] = useState(false);
     const [streakDays, setStreakDays] = useState(0);
     const [goalsThisWeek, setGoalsThisWeek] = useState<StudentProgressData["goalsThisWeek"]>([]);
@@ -250,6 +252,7 @@ export default function StudentDashboard(): ReactElement {
             fetchStudentProgress(student.id)
                 .then((data) => {
                     setExercisesCompleted(data.exercisesCompleted ?? 0);
+                    setExercisesToday(data.exercisesToday ?? 0);
                     setStreakDays(data.streakDays ?? 0);
                     setGoalsThisWeek(data.goalsThisWeek ?? []);
                     setGoalCountsByCategory(data.goalCountsByCategory ?? []);
@@ -320,7 +323,7 @@ export default function StudentDashboard(): ReactElement {
     // ── Legacy level info (derived from total agency XP for now) ─────────────
     const totalAgency = agency.totalXP;
     const agencyWallets = { choiceXP: agency.choiceXP, insightXP: agency.insightXP, resolveXP: agency.resolveXP };
-    const stats = { ...PLACEHOLDER_STATS, currentXP: totalAgency, exercisesCompleted, streakDays, ...getLevelInfo(totalAgency) };
+    const stats = { ...PLACEHOLDER_STATS, currentXP: totalAgency, exercisesCompleted, exercisesToday, streakDays, ...getLevelInfo(totalAgency) };
     const leaderboard = PLACEHOLDER_LEADERBOARD;
 
     // ── Newly unlocked characters — one-time celebration popup ──────────────
@@ -772,50 +775,11 @@ export default function StudentDashboard(): ReactElement {
                 <div className={"dashboard__nav-xp"} data-tour={"nav-agency"}>
                     <span className={"dashboard__nav-xp-label"}>
                         {t("dashboard-agency-progress")}
-                        <button
-                            className={"xp-info-btn"}
-                            onClick={() => setShowXpInfo((v) => !v)}
-                            title={t("agency-info-title")}
-                            aria-label={t("agency-info-title")}
-                        >
-                            <FontAwesomeIcon icon={faCircleInfo} />
-                        </button>
                     </span>
-                    {showXpInfo && (
-                        <div className={"xp-info-popover"}>
-                            <div className={"xp-info-popover__header"}>
-                                <span>{t("agency-info-title")}</span>
-                                <button onClick={() => setShowXpInfo(false)} aria-label={t("dashboard-modal-close")}>
-                                    <FontAwesomeIcon icon={faTimes} />
-                                </button>
-                            </div>
-                            <div className={"xp-info-popover__item"}>
-                                <span className={"xp-info-popover__dot xp-info-popover__dot--choice"} />
-                                <div className={"xp-info-popover__body"}>
-                                    <strong>{t("agency-choice")}</strong>
-                                    <p>{t("agency-choice-desc")}</p>
-                                </div>
-                            </div>
-                            <div className={"xp-info-popover__item"}>
-                                <span className={"xp-info-popover__dot xp-info-popover__dot--insight"} />
-                                <div className={"xp-info-popover__body"}>
-                                    <strong>{t("agency-insight")}</strong>
-                                    <p>{t("agency-insight-desc")}</p>
-                                </div>
-                            </div>
-                            <div className={"xp-info-popover__item"}>
-                                <span className={"xp-info-popover__dot xp-info-popover__dot--resolve"} />
-                                <div className={"xp-info-popover__body"}>
-                                    <strong>{t("agency-resolve")}</strong>
-                                    <p>{t("agency-resolve-desc")}</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                     <div className={"dashboard__nav-agency-bars"}>
                         <div className={"dashboard__nav-agency-item"}>
                             <span className={"dashboard__nav-agency-label"} style={{ color: "#ffd166" }}>
-                                <FontAwesomeIcon icon={faBullseye} /> {t("agency-choice")}</span>
+                                <FontAwesomeIcon icon={faBullseye} /> {t("agency-choice")} XP</span>
                             <div className={"dashboard__nav-bar-track"}>
                                 <div className={"dashboard__nav-bar-fill dashboard__nav-bar-fill--choice"} style={{ width: `${Math.min((agency.choiceXP / 100) * 100, 100)}%` }} />
                             </div>
@@ -823,7 +787,7 @@ export default function StudentDashboard(): ReactElement {
                         </div>
                         <div className={"dashboard__nav-agency-item"}>
                             <span className={"dashboard__nav-agency-label"} style={{ color: "#06d6a0" }}>
-                                <FontAwesomeIcon icon={faLightbulb} /> {t("agency-insight")}</span>
+                                <FontAwesomeIcon icon={faLightbulb} /> {t("agency-insight")} XP</span>
                             <div className={"dashboard__nav-bar-track"}>
                                 <div className={"dashboard__nav-bar-fill dashboard__nav-bar-fill--insight"} style={{ width: `${Math.min((agency.insightXP / 100) * 100, 100)}%` }} />
                             </div>
@@ -831,7 +795,7 @@ export default function StudentDashboard(): ReactElement {
                         </div>
                         <div className={"dashboard__nav-agency-item"}>
                             <span className={"dashboard__nav-agency-label"} style={{ color: "#ef476f" }}>
-                                <FontAwesomeIcon icon={faShieldHalved} /> {t("agency-resolve")}</span>
+                                <FontAwesomeIcon icon={faShieldHalved} /> {t("agency-resolve")} XP</span>
                             <div className={"dashboard__nav-bar-track"}>
                                 <div className={"dashboard__nav-bar-fill dashboard__nav-bar-fill--resolve"} style={{ width: `${Math.min((agency.resolveXP / 100) * 100, 100)}%` }} />
                             </div>
@@ -954,7 +918,7 @@ export default function StudentDashboard(): ReactElement {
                             <span className={"dash-stat__label"}>{t("dashboard-exercises-completed")}</span>
                             <FontAwesomeIcon icon={faCheck} className={"dash-stat__icon"} />
                             <span className={"dash-stat__value"}>{stats.exercisesCompleted}</span>
-                            <span className={"dash-stat__sub"}>{t("dashboard-exercises-delta", { count: stats.exercisesDelta })}</span>
+                            <span className={"dash-stat__sub"}>{t("dashboard-exercises-today", { count: stats.exercisesToday })}</span>
                         </div>
                         <div className={"dash-stat"}>
                             <span className={"dash-stat__label"}>{t("dashboard-avg-accuracy")}</span>
@@ -1378,6 +1342,15 @@ export default function StudentDashboard(): ReactElement {
                         >
                             {t("dashboard-wardrobe")}
                         </button>
+                        <button
+                            className={"buddy-popup__btn"}
+                            onClick={() => {
+                                setShowBuddyPopup(false);
+                                setShowXpInfo(true);
+                            }}
+                        >
+                            {t("agency-info-title")}
+                        </button>
                         {/* The standing invitation, so saying "not now" to the offer above is never the
                             end of it: the companions tutorial stays here for good. */}
                         <ShowSectionTourButton section={"companions"} onPlay={playSection} />
@@ -1426,6 +1399,7 @@ export default function StudentDashboard(): ReactElement {
                     onClose={() => setShowShop(false)}
                 />
             )}
+            {showXpInfo && <XpGuideModal onClose={() => setShowXpInfo(false)} />}
             {pendingMilestone !== null && (
                 <MilestoneCelebrationOverlay
                     milestone={pendingMilestone}

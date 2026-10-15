@@ -9,6 +9,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faArrowRight } from "@fortawesome/free-solid-svg-icons";
 import { Trans, useTranslation } from "react-i18next";
 import { Step } from "@components/flexibility/workedExamples/Step.tsx";
+import { MultiplicationSign } from "@components/math/procedural-knowledge/MultiplicationSign.tsx";
 import { FlexibilityTranslations } from "@/types/flexibility/flexibilityTranslations.ts";
 import { Method } from "@/types/flexibility/enums.ts";
 
@@ -166,7 +167,7 @@ function FourthStep({ language }: { language: string }): ReactElement {
             <p>y</p>
             <p>&#61;</p>
             <p>2</p>
-            <p>&#8901;</p>
+            <MultiplicationSign />
             <p>2</p>
             <p>&#8722;</p>
             <p>3</p>

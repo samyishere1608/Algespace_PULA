@@ -188,6 +188,8 @@ export async function logExerciseCompletion(
 export interface StudentProgressData {
     totalXP: number;
     exercisesCompleted: number;
+    /** Exercises finished today, for the "what has today added" line on the stat card. */
+    exercisesToday: number;
     streakDays: number;
     methodCounts: { method: string; value: number }[];
     solvingMethodCounts: { method: string; value: number }[];

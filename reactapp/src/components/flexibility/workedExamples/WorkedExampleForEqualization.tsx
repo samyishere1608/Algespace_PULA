@@ -9,6 +9,7 @@ import {
 } from "@utils/workedExamples.ts";
 import { LinearSystem } from "@components/math/procedural-knowledge/LinearSystem.tsx";
 import { FlexibilityEquation } from "@components/math/procedural-knowledge/FlexibilityEquation.tsx";
+import { MultiplicationSign } from "@components/math/procedural-knowledge/MultiplicationSign.tsx";
 import EquivalenceSymbol from "@images/flexibility/equivalenceThin.svg";
 import { GeneralTranslations } from "@/types/shared/generalTranslations.ts";
 import { Language, TranslationNamespaces } from "@/i18n.ts";
@@ -134,7 +135,7 @@ function FourthStep({ language }: { language: string }): ReactElement {
             <p>y</p>
             <p>&#61;</p>
             <p>2</p>
-            <p>&#8901;</p>
+            <MultiplicationSign />
             <p>2</p>
             <p>&#8722;</p>
             <p>3</p>

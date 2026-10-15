@@ -406,7 +406,7 @@
   "milestone-title": "マイルストーン達成！",
   "milestone-subtitle": "<strong>{{milestone}} XP</strong>のマイルストーンを達成しました。その調子で続けましょう — 次の目標は<strong>{{next}} XP</strong>です！",
   "milestone-continue": "この調子で続ける",
-  "dashboard-exercises-delta": "今週 +{{count}}",
+  "dashboard-exercises-today": "今日 +{{count}}",
   "dashboard-sections": "ダッシュボードのセクション",
   "goals-celebration-continue": "続ける",
 

@@ -6,6 +6,7 @@ import { math } from "@/types/math/math.ts";
 import { FlexibilityTerm as FlexibilityTermProps } from "@/types/math/term.ts";
 import { FlexibilityCoefficient } from "@components/math/procedural-knowledge/FlexibilityCoefficient.tsx";
 import { FlexibilityTerm } from "@components/math/procedural-knowledge/FlexibilityTerm.tsx";
+import { MultiplicationSign } from "@components/math/procedural-knowledge/MultiplicationSign.tsx";
 import { ParenthesisLeft, ParenthesisRight } from "@components/math/procedural-knowledge/SubstitutedEquation.tsx";
 import { coefficientIsOne } from "@utils/utils.ts";
 
@@ -86,7 +87,7 @@ function BackSubstitutionTerm({ index, term, variable, variableFactor }: { index
                 <React.Fragment>
                     {operator}
                     <FlexibilityCoefficient coefficient={term.coefficient} displayOne={true} colour={"light"} />
-                    {varIsPositive && <p>&#8901;</p>}
+                    {varIsPositive && <MultiplicationSign />}
                     {!varIsPositive && (
                         <React.Fragment>
                             <ParenthesisLeft containsFraction={variableFactor.d !== 1} />

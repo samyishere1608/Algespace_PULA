@@ -92,67 +92,20 @@
     }
 }
 
-/* ─── XP info icon + popover ─────────────────────────────────── */
-.xp-info-btn {
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.5);
-    cursor: pointer;
-    padding: 0.25rem;
-    font-size: 0.95rem;
-    line-height: 1;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: color 0.15s, background 0.15s;
-
-    &:hover,
-    &:focus-visible {
-        color: #fff;
-        background: rgba(33, 158, 188, 0.25);
-    }
+/* ─── XP info ────────────────────────────────────────────────── */
+/*
+ * The three XP kinds and what each is paid for. This content used to be a small popover anchored
+ * under an info icon beside the XP bars; it is a modal in the companion menu now, so it keeps the
+ * item styling and loses the anchoring.
+ */
+.xp-guide {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-top: 0.4rem;
 }
 
 .xp-info-popover {
-    position: absolute;
-    top: 2.4rem;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 20rem;
-    max-width: 90vw;
-    background: linear-gradient(180deg, #0b3d5c, #06283b);
-    border: 1px solid rgba(33, 158, 188, 0.35);
-    border-radius: 0.9rem;
-    padding: 0.9rem 1rem;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-    z-index: 300;
-
-    &__header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: 0.95rem;
-        font-weight: 800;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        color: #fff;
-        margin-bottom: 0.6rem;
-
-        button {
-            background: none;
-            border: none;
-            color: rgba(255, 255, 255, 0.5);
-            cursor: pointer;
-            font-size: 0.9rem;
-            padding: 0.2rem;
-            border-radius: 0.25rem;
-            transition: color 0.15s;
-
-            &:hover { color: #fff; }
-        }
-    }
-
     &__item {
         display: flex;
         align-items: flex-start;

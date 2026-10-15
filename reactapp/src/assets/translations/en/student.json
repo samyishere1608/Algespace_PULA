@@ -407,7 +407,7 @@
   "milestone-title": "Milestone Reached!",
   "milestone-subtitle": "You've crossed the <strong>{{milestone}} XP</strong> milestone. Keep it up — next stop: <strong>{{next}} XP</strong>!",
   "milestone-continue": "Keep Going",
-  "dashboard-exercises-delta": "+{{count}} this week",
+  "dashboard-exercises-today": "+{{count}} today",
   "dashboard-sections": "Dashboard sections",
   "goals-celebration-continue": "Continue",
 

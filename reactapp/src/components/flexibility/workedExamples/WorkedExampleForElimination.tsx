@@ -2,6 +2,7 @@ import React, { ReactElement, useMemo, useState } from "react";
 import { getFirstEquation, getFirstSolution, getSecondEquation } from "@utils/workedExamples.ts";
 import { LinearSystem } from "@components/math/procedural-knowledge/LinearSystem.tsx";
 import { FlexibilityEquation } from "@components/math/procedural-knowledge/FlexibilityEquation.tsx";
+import { MultiplicationSign } from "@components/math/procedural-knowledge/MultiplicationSign.tsx";
 import EquivalenceSymbol from "@images/flexibility/equivalenceThin.svg";
 import { GeneralTranslations } from "@/types/shared/generalTranslations.ts";
 import { Language, TranslationNamespaces } from "@/i18n.ts";
@@ -151,7 +152,7 @@ function FourthStep({ language }: { language: string }): ReactElement {
         <div className={"worked-examples__equivalent-equations"}>
             <div className={"flexibility-equation flexibility-equation--light"}>
                 <p>2</p>
-                <p>&#8901;</p>
+                <MultiplicationSign />
                 <p>2</p>
                 <p>&#8722;</p>
                 <p>y</p>

@@ -301,10 +301,18 @@ namespace webapi.Controllers
                 "ORDER BY Day ASC",
                 new { StudentId = studentId }).ToList();
 
+            // Exercises finished today, for the stat card's sub-line.
+            var exercisesToday = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(*) FROM {StudentProgressDBSettings.ExerciseCompletionsTable} " +
+                "WHERE StudentId = @StudentId " +
+                "  AND date(CompletedAt) = date('now')",
+                new { StudentId = studentId });
+
             return Ok(new StudentProgressResponse
             {
                 TotalXP = progress?.TotalXP ?? 0,
                 ExercisesCompleted = progress?.ExercisesCompleted ?? 0,
+                ExercisesToday = exercisesToday,
                 StreakDays = progress?.StreakDays ?? 0,
                 ChoiceXP = progress?.ChoiceXP ?? 0,
                 InsightXP = progress?.InsightXP ?? 0,
