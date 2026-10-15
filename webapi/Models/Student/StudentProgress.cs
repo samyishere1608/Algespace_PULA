@@ -409,6 +409,15 @@ namespace webapi.Models.Student
         public string NextStep { get; set; } = "";
 
         /// <summary>
+        /// The same context panel as on the question, with nothing held back.
+        ///
+        /// Sent here rather than with the question so the facts the chips are graded on cannot be read off
+        /// the payload the student is answering from. Once the answer is in they can no longer help, so
+        /// they open — which is what the lock on the panel is promising.
+        /// </summary>
+        public ReflectionPanel Panel { get; set; } = new();
+
+        /// <summary>
         /// The goal that would carry out the commitment they just made, when one exists.
         ///
         /// A structured goal rather than a sentence: the client owns the goal wording and the legal

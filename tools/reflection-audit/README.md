@@ -383,6 +383,9 @@ It used to just hide the window, leaving the item `pending` and bringing it back
 | `node check-resolve-followthrough.mjs` | Promises settling. 27 of 27. Writes to the database. |
 | `node check-suggested-goal.mjs` | The goal a Q3 commitment proposes, end to end. 8 of 8. Writes to the database. |
 | `node check-weakness-goal.mjs` | Insight for aiming your own goal at a weakness. 9 of 9. Writes to the database. |
+| `node check-panel.mjs` | The context panel beside a question, end to end. 29 of 29. |
+| `node check-insight-award.mjs` | Insight is written by the server that decides it. 13 of 13. |
+| `fixture.mjs` | Not a check — the shared scratch-student fixture both of the above build on. |
 | `node restore-baseline.mjs` | **Always run this after anything that wrote.** |
 
 ### `check-reply-alignment.mjs` — read this before trusting or changing it
@@ -1018,3 +1021,64 @@ BEFORE the Choice award for setting the goal, because a local increment followed
 would have the read overwrite the increment it had not been sent yet.
 
 `check-weakness-goal.mjs` walks all four guards against the live endpoint with real profile data.
+
+## Insight is written by the server that decides it
+
+The reflection's Insight used to be paid by the client: the evaluate endpoint answered with the amount, the
+browser added it to its running total, and then posted it back on a best-effort call inside `syncToBackend`
+that swallowed its own failure.
+
+**An audit of the real database found the consequence.** For one real student, on one day: sixteen answers
+judged `aligned` — every one of them recorded in the timeline with `amount: 3` — and only ten award rows
+behind them. Six answers were shown to the student as worth three points and never recorded, not in the
+ledger and not in the wallet, because the same call writes both. The window is precisely the moment the
+server cannot be reached, which during a lesson with a class is not a rare event, so the loss is neither
+small nor random.
+
+**The fix is to write it where it is decided.** `AwardReflectionInsight` runs inside `EvaluateReflection`,
+next to `AwardCommitmentChoice`, which already worked this way. Nothing new is computed — `verdict` is the
+record's own decision and the amount was already being returned to the client — so the change removes the
+failure rather than making it less likely.
+
+**Two bounds.** The ledger's `RefId` is `"{queueItemId}:{questionId}"`: a student answers each question once,
+so a retried request for the same one finds the row and pays nothing, while a reflection's three questions
+remain three separate awards. Keying on the item alone would pay for the first and silently drop the rest,
+which is why `check-insight-award.mjs` asserts both.
+
+**The client stops posting and starts reading.** `creditAwardAlreadyRecorded` moves the browser's own copy
+forward without a second write, because `addInsightXP` posts and would pay twice. It is self-correcting:
+`syncAgencyFromBackend` overwrites these values from the server on the next dashboard load.
+
+**Still paid client-side, and still able to be lost the same way:** Choice for opting into a reflection,
+Choice for the day reflection, Choice for setting a goal, Resolve for completing one, Resolve for the daily
+intention. The reflection's Insight went first because the server was already computing the amount; the rest
+need the decision itself moved, which is a larger change.
+
+**A backfill is possible.** The missing awards are recoverable, because the verdict events recorded
+`aligned, amount: 3` independently of the payment. Matching them needs the queue item on the verdict event,
+which is not there yet — adding it would make the two joinable and is worth doing before any backfill.
+
+## The checks run on a scratch student now, and that was not always true
+
+`check-panel.mjs` and `check-insight-award.mjs` used to run against **student 1 — a real participant** — by
+pointing a fixture queue row at one of that student's own attempts. It worked, which is exactly why it was
+easy to leave: the endpoints do not care whose attempt it is.
+
+But every call wrote into that student's timeline. `reflection.asked`, `reflection.answered`,
+`reflection.verdict` and `xp.awarded` all landed in a real record, and two of the awards moved a real
+wallet by six Insight. A research database is not a place to discover afterwards that a test left marks on a
+participant.
+
+`fixture.mjs` now builds everything the reflection reads — its own attempt, its own phase rows, its own
+queue row — for student **999901**, which exists only for this. Nothing real is read and nothing real is
+written. It also makes the assertions exact rather than "whatever the student happened to do", and it makes
+one previously untestable case reachable: a goal window with no attempt ids, which only exists on real rows.
+
+**The 32 events and 2 ledger rows that the old checks left on student 1 were removed, and the wallet was
+put back.** The events were identifiable because the probe's own label travels in the event data
+(`"label":"panel check"`), and the ledger rows because their queue item no longer existed while a real
+one's does. The wallet now reconciles with the ledger exactly — 385/318/201/904 both ways — and
+`ReflectionHistory`, which the checks never touched, is unchanged at 207 rows.
+
+`restore-baseline.mjs` empties 999901 as well as resetting student 7, and reports it as `fixture` in the
+residue line, so a run that crashes half way through leaves nothing behind either.

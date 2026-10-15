@@ -24,6 +24,44 @@ export interface ReflectionQuestion {
     /** Slot name to literal text, e.g. the student's own numbers. */
     values: Record<string, string>;
     chips: ReflectionChip[];
+    /**
+     * The record's context for this question, with the fact the chips are graded on left out.
+     *
+     * The server decides what belongs here per question — see `HiddenFacts` in the bank — because the
+     * question and the fact it is graded on have to be described in one place. This side only renders it.
+     */
+    panel: ReflectionPanel;
+}
+
+/**
+ * The context beside a question: what the student may see while answering.
+ *
+ * It is the record, not a verdict. Every field is optional and the server leaves out whatever would let
+ * the answer be read off the screen, so an empty panel is a real answer and not a failure. `heldBack`
+ * says something is being kept for after the answer, so the panel can promise it rather than sit there
+ * with a silent hole in it.
+ */
+export interface ReflectionPanel {
+    /** Translation key for the method, or empty when naming it would answer the question. */
+    methodLabelKey: string;
+    /**
+     * Phase times for ONE run, largest first. Time only — the server never sends a phase's mistakes.
+     *
+     * One run and not the window, because phase times sum to the run's total, and on a goal's "what went
+     * well" the trend in those totals is one of the chips.
+     */
+    phases: { labelKey: string; seconds: number }[];
+    /** One entry per exercise, in order. Empty when the mistakes are what the question asks about, and
+     * also when the total is safe but the split is not — the split is what answers "did they go down". */
+    runs: { position: number; mistakes: number }[];
+    /** Mistakes across the item: this exercise's, or the window's summed. The safe half of the pair. */
+    mistakes: number | null;
+    /** How many exercises the item covers, so the wording can say "in this one" or "altogether". */
+    runCount: number;
+    /** Hints taken, or null when the hints are what the question asks about. */
+    hints: number | null;
+    /** Whether something is still held back until an answer is sent. */
+    heldBack: boolean;
 }
 
 export interface ReflectionQueueItem {
@@ -60,6 +98,14 @@ export interface ReflectionEvaluateResult {
     aligned: boolean;
     insightXp: number;
     nextStep: string;
+    /**
+     * The same panel, with nothing held back.
+     *
+     * It arrives here rather than with the question so the facts the chips are graded on cannot be read
+     * off the payload the student is answering from. Once the answer is in they can no longer help, so
+     * they open — which is what the lock on the panel was promising.
+     */
+    panel?: ReflectionPanel | null;
     /**
      * The goal that would carry out the commitment they just made, when the catalogue has one.
      *

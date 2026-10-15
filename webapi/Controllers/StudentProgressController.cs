@@ -712,6 +712,53 @@ namespace webapi.Controllers
         private const int CommitmentChoiceXp = 2;
 
         /// <summary>
+        /// Writes the Insight an answer earned, in the same request that decided it.
+        ///
+        /// IDEMPOTENT ON THE QUESTION, not on the request. The queue item and the question id together name
+        /// one answer, and a student gives each question exactly one — so a retried evaluate call for the
+        /// same question finds the row and pays nothing. The commitment award next door keys on the queue
+        /// item alone, which is right for it because a commitment is one per reflection; this one needs the
+        /// question as well, because a reflection has three of them and each can be worth something.
+        ///
+        /// The ledger row is the award. Nothing else records that this answer was paid, which is what makes
+        /// the log the authority rather than a copy of something.
+        /// </summary>
+        private static void AwardReflectionInsight(
+            Microsoft.Data.Sqlite.SqliteConnection conn, long studentId, long queueItemId, string questionId, int amount)
+        {
+            var refId = $"{queueItemId}:{questionId}";
+
+            var already = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(1) FROM {StudentProgressDBSettings.AgencyLogTable} " +
+                "WHERE StudentId = @StudentId AND Source = @Source AND RefId = @RefId",
+                new { StudentId = studentId, Source = LogAgencySource.ReflectionAligned, RefId = refId });
+
+            if (already > 0) return;
+
+            conn.Execute(
+                $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, Amount, Source, RefId, LoggedAt) " +
+                "VALUES (@StudentId, 'insight', @Amount, @Source, @RefId, @Now)",
+                new
+                {
+                    StudentId = studentId,
+                    Amount = amount,
+                    Source = LogAgencySource.ReflectionAligned,
+                    RefId = refId,
+                    Now = LogStamp.Now()
+                });
+
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ProgressTable} " +
+                "SET InsightXP = InsightXP + @Amount, LifetimeAgencyXP = LifetimeAgencyXP + @Amount " +
+                "WHERE StudentId = @StudentId",
+                new { StudentId = studentId, Amount = amount });
+
+            StudentEventLog.Write(conn, studentId, LogEventType.XpAwarded, refId: questionId,
+                value: "insight", amount: amount,
+                data: new { source = LogAgencySource.ReflectionAligned, queueItemId });
+        }
+
+        /// <summary>
         /// Pays the small Choice award for a next-action commitment, once per reflection item.
         ///
         /// Idempotent through the agency log rather than a column: the source names the queue item, and a
@@ -2523,13 +2570,24 @@ RULES:
             var attemptIds = new List<long>();
             if (!isSession)
             {
+                // A goal's window now carries the runs it was made of, so the steps are read from those.
+                // The previous behaviour — "the newest N completed attempts" — is an assumption that the
+                // window happens to be the most recent work, which is false as soon as the student does
+                // anything else before answering, and plainly wrong for a narrowed goal: that fallback has
+                // no method filter, so a goal about Elimination could be graded on a Substitution run.
+                // Windows stored before the ids were kept have none, and keep the old fallback for now so
+                // their answers are judged exactly as they would have been.
+                var windowAttempts = isGoal ? ParseGoalWindow(item.Evidence)?.AttemptIds ?? [] : [];
+
                 attemptIds = item.AttemptId > 0
                     ? [item.AttemptId]
-                    : conn.Query<long>(
-                        $"SELECT Id FROM {AnchorStoreSettings.Table} " +
-                        "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
-                        "ORDER BY Id DESC LIMIT @Take",
-                        new { StudentId = item.StudentId, Take = set }).ToList();
+                    : windowAttempts.Count > 0
+                        ? windowAttempts
+                        : conn.Query<long>(
+                            $"SELECT Id FROM {AnchorStoreSettings.Table} " +
+                            "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
+                            "ORDER BY Id DESC LIMIT @Take",
+                            new { StudentId = item.StudentId, Take = set }).ToList();
             }
 
             if (attemptIds.Count > 0)
@@ -2604,6 +2662,8 @@ RULES:
 
                 if (attempt is not null)
                 {
+                    evidence.SelectedMethod = attempt.SelectedMethod;
+
                     var type = ExerciseTypeNumber(attempt.ExerciseType);
                     var allowed = AllowedMethodsByExercise([attempt]);
 
@@ -2819,6 +2879,21 @@ RULES:
             if (asked.Kind == ReflectionQuestionBank.NextAction && !string.IsNullOrWhiteSpace(request.Choice))
                 AwardCommitmentChoice(conn, request.StudentId, request.QueueItemId);
 
+            // INSIGHT IS PAID HERE TOO, IN THE SAME REQUEST THAT DECIDES IT.
+            //
+            // It used to be paid by the client: this endpoint answered with the amount, the browser added
+            // it to the student's running total, and then posted it back on a best-effort call that
+            // swallowed its own failure. So an answer judged and worth three points could be shown to the
+            // student and never recorded — and an audit of the real database found precisely that, six of
+            // one student's sixteen aligned answers in a single day with no award behind them. The window
+            // is whenever the server cannot be reached, which in a classroom is not a rare event.
+            //
+            // The award is not a second opinion here. `verdict` is the record's own decision, taken a few
+            // lines above from the chip and the evidence, so writing it down where it is made is what
+            // removes the failure rather than making it less likely.
+            if (verdict.InsightXp > 0)
+                AwardReflectionInsight(conn, request.StudentId, request.QueueItemId, asked.Id, verdict.InsightXp);
+
             // The record's verdict IS the verdict — there is no second opinion to reconcile with.
             //
             // The offline reply was built before the record was read, and its own wording used to be a
@@ -2854,6 +2929,15 @@ RULES:
             ReflectionEvaluateResponse Finish(
                 ReflectionEvaluateResponse response, string writer, int guardRejections = 0, string outcome = "")
             {
+                // THE LOCK OPENS HERE, ON EVERY WAY OUT.
+                //
+                // The facts this question withheld are the facts it was graded on, and the answer is now
+                // in — so the panel travels back with the verdict rather than having been sent with the
+                // question. Putting it on the exit that runs on all six paths, rather than on the happy
+                // one, means a reply the guard rejected still opens the record: the student answered, and
+                // what they answered about is theirs to see regardless of how the writing went.
+                response.Panel = BuildOpenPanel(conn, evidence, item);
+
                 StudentEventLog.Write(conn, request.StudentId, LogEventType.ReflectionVerdict, refId: asked.Id,
                     value: outcome.Length > 0 ? outcome : response.Aligned ? "aligned" : verdict.Status,
                     amount: response.InsightXp,
@@ -3061,6 +3145,14 @@ RULES:
             foreach (var attempt in attempts.OrderBy(a => a.Id))
                 window.Exercises.Add(ToGoalExercise(attempt, records, allowed));
 
+            // Which runs the window is made of, in the same order as the exercises above.
+            //
+            // Kept because nothing else can recover it: the queue row holds the window and no attempt id,
+            // so without this a later reader can only guess "the newest N completed attempts" — which is
+            // wrong for a narrowed goal as soon as the student does anything else afterwards. The ids are
+            // in hand here, so they cost nothing to keep.
+            window.AttemptIds = [.. attempts.OrderBy(a => a.Id).Select(attempt => attempt.Id)];
+
             return System.Text.Json.JsonSerializer.Serialize(window);
         }
 
@@ -3077,9 +3169,170 @@ RULES:
             foreach (var property in typeof(ReflectionQueueRecord).GetProperties())
                 property.SetValue(response, property.GetValue(item));
 
-            response.Questions = ReflectionQuestionBank.Build(BuildEvidence(conn, item));
+            var evidence = BuildEvidence(conn, item);
+            response.Questions = ReflectionQuestionBank.Build(evidence);
+
+            // The context panel, one per question, decided against the question and not against the item:
+            // the same exercise withholds the mistake counts for "what went well" and shows them for the
+            // next question, which is graded on the comparison instead.
+            foreach (var question in response.Questions)
+                question.Panel = BuildPanel(conn, evidence, question, item);
 
             return response;
+        }
+
+        /// <summary>
+        /// The context panel for one question: what the student may see beside it.
+        ///
+        /// See <see cref="ReflectionPanel"/> for why this exists. The rule it enforces is that the panel
+        /// shows a DIFFERENT slice of the record than the chips are about, so there is real evidence to
+        /// reason with and nothing to read the answer off. Which facts that excludes is stated once, in
+        /// <see cref="ReflectionQuestionBank.HiddenFacts"/>, next to the rules that grade the question.
+        ///
+        /// TWO THINGS ARE DECIDED HERE RATHER THAN THERE, because they are about the data rather than
+        /// about the question:
+        ///
+        ///   * Phase bars are shown for ONE run only. Phase times sum to the run's total, and on a goal's
+        ///     "what went well" the trend in those totals is one of the chips — so two runs side by side
+        ///     would draw the answer even though no single number does.
+        ///   * A goal's phases come from the attempt ids stored on its window. A window recorded before
+        ///     those were kept has none, and gets no phase bars rather than the "newest N attempts" guess:
+        ///     a narrowed goal can pick up a run of a different method from it, and the panel states what
+        ///     it shows as fact to an eleven-year-old.
+        /// </summary>
+        private static ReflectionPanel BuildPanel(
+            Microsoft.Data.Sqlite.SqliteConnection conn,
+            ReflectionEvidence evidence,
+            ReflectionQuestion question,
+            ReflectionQueueRecord item) =>
+            AssemblePanel(conn, evidence, item, ReflectionQuestionBank.HiddenFacts(question));
+
+        /// <summary>
+        /// The same panel with nothing held back.
+        ///
+        /// Used once the answer is in: the facts the question was graded on are exactly the facts that may
+        /// now be shown, because they can no longer help the student answer it. This is what the lock opens
+        /// into, and it is why the withheld numbers never travel on the question itself.
+        /// </summary>
+        private static ReflectionPanel BuildOpenPanel(
+            Microsoft.Data.Sqlite.SqliteConnection conn,
+            ReflectionEvidence evidence,
+            ReflectionQueueRecord item) =>
+            AssemblePanel(conn, evidence, item, []);
+
+        /// <summary>
+        /// The panel payload, given what is withheld.
+        ///
+        /// Two things are decided here rather than in the bank's table, because they are about the data
+        /// rather than about the question:
+        ///
+        ///   * Phase bars are shown for ONE run only. Phase times sum to the run's total, and on a goal's
+        ///     "what went well" the trend in those totals is one of the chips — so two runs side by side
+        ///     would draw the answer even though no single number does.
+        ///   * A goal's phases come from the attempt ids stored on its window. A window recorded before
+        ///     those were kept has none, and gets no phase bars rather than the "newest N attempts" guess:
+        ///     a narrowed goal can pick up a run of a different method from it, and the panel states what
+        ///     it shows as fact to an eleven-year-old.
+        /// </summary>
+        private static ReflectionPanel AssemblePanel(
+            Microsoft.Data.Sqlite.SqliteConnection conn,
+            ReflectionEvidence evidence,
+            ReflectionQueueRecord item,
+            HashSet<string> hidden)
+        {
+            var panel = new ReflectionPanel { HeldBack = hidden.Count > 0 };
+
+            if (!hidden.Contains(ReflectionQuestionBank.HideMethod))
+            {
+                // What the item was about, as the app's own translation key so the client renders it in the
+                // student's language.
+                //
+                // A goal narrowed to one METHOD names the method; one narrowed to an exercise TYPE names
+                // the type, which is not a method at all and needs its own wording. The other four goal
+                // categories name neither, because they are about a decision any exercise can be part of.
+                // An exercise names the method its own attempt recorded — not the type it happened to be,
+                // since "Suitability" is an exercise rather than a method and has no method's wording.
+                panel.MethodLabelKey = evidence.IsGoal
+                    ? item.ItemId switch
+                    {
+                        "method" when item.Focus.Length > 0 => MethodLabelKeyFor(item.Focus),
+                        "exerciseType" when item.Focus.Length > 0 => $"exercise-type-{item.Focus.ToLowerInvariant()}",
+                        _ => "",
+                    }
+                    : MethodLabelKeyFor(evidence.SelectedMethod);
+            }
+
+            // The mistakes, in the two halves that can be withheld apart: the total, and the split across
+            // runs. A single exercise has no split worth drawing and is said through the total.
+            if (!hidden.Contains(ReflectionQuestionBank.HideMistakes))
+            {
+                var window = evidence.GoalExercises;
+                var coversWindow = window.Count > 0;
+
+                panel.RunCount = coversWindow ? window.Count : 1;
+                panel.Mistakes = coversWindow ? window.Sum(run => run.Errors) : evidence.Errors;
+
+                if (!hidden.Contains(ReflectionQuestionBank.HideRunSplit) && window.Count > 1)
+                    panel.Runs = [.. window.Select((run, index) =>
+                        new ReflectionPanelRun { Position = index + 1, Mistakes = run.Errors })];
+            }
+
+            if (!hidden.Contains(ReflectionQuestionBank.HideHints))
+                panel.Hints = evidence.IsGoal || evidence.IsSession
+                    ? evidence.GoalExercises.Sum(run => run.Hints)
+                    : evidence.Hints;
+
+            // Time only, and one run only. The step rows carry errors and hints as well; neither is copied.
+            // The panel reads its phase bars from the window's own attempt ids, so a goal's bars are the
+            // same runs its questions are about. A window recorded before those were kept has none, and
+            // gets no bars rather than the guess.
+            if (!hidden.Contains(ReflectionQuestionBank.HideSteps))
+                panel.Phases = PhaseBarsFor(conn, evidence, item);
+
+            return panel;
+        }
+
+        /// <summary>The translation key for a method name as the anchor store spells it, or empty.</summary>
+        private static string MethodLabelKeyFor(string methodName) =>
+            string.IsNullOrWhiteSpace(methodName)
+                ? ""
+                : $"flexibility:{methodName.Trim().ToLowerInvariant()}-method";
+
+        /// <summary>
+        /// The phase bars for one run, or nothing when no run can be vouched for.
+        ///
+        /// For an exercise the run is the item's own attempt, which the queue row carries. For a goal it is
+        /// the last exercise in the window, read from the attempt ids stored with the window — chosen
+        /// because the most recent run is the one the student remembers most clearly, so it is fair context
+        /// rather than a nudge towards the improvement.
+        /// </summary>
+        private static List<ReflectionPanelPhase> PhaseBarsFor(
+            Microsoft.Data.Sqlite.SqliteConnection conn, ReflectionEvidence evidence, ReflectionQueueRecord item)
+        {
+            // The evidence already carries the steps for an exercise, folded from that attempt's own rows.
+            if (!evidence.IsGoal && !evidence.IsSession)
+                return [.. evidence.Steps
+                    .Where(step => step.Time > 0)
+                    .OrderByDescending(step => step.Time)
+                    .Select(step => new ReflectionPanelPhase { LabelKey = step.LabelKey, Seconds = step.Time })];
+
+            var window = ParseGoalWindow(item.Evidence);
+            var lastAttempt = window?.AttemptIds.Count > 0 ? window.AttemptIds[^1] : 0;
+            if (lastAttempt <= 0) return [];
+
+            return [.. conn.Query<StepRow>(
+                    $"SELECT Name, Time, Errors, Hints FROM {AnchorStoreSettings.RecordTable} WHERE AttemptId = @Id",
+                    new { Id = lastAttempt })
+                .Select(row => (Row: row, StepId: ReflectionQuestionBank.StepIdFor(row.Name)))
+                .Where(pair => pair.StepId.Length > 0)
+                .GroupBy(pair => pair.StepId)
+                .Select(group => new ReflectionPanelPhase
+                {
+                    LabelKey = ReflectionQuestionBank.StepLabelKey(group.Key),
+                    Seconds = group.Sum(pair => pair.Row.Time),
+                })
+                .Where(phase => phase.Seconds > 0)
+                .OrderByDescending(phase => phase.Seconds)];
         }
 
         /// <summary>

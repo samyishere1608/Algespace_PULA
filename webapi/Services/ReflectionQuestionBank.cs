@@ -109,6 +109,144 @@ namespace webapi.Services
 
         public static string StepLabelKey(string stepId) => $"reflection-step-{stepId}";
 
+        // ── What the panel may show ───────────────────────────────────────────
+        //
+        // The bank owns this for the same reason it owns the questions: the fact a question is graded on
+        // and the fact the panel withholds have to be the same fact, and they can only be that if one
+        // file states both. Every entry below is read off the rule that builds that question, in
+        // `AlignedChipIds`, and the harness checks the two against each other.
+
+        /// <summary>How many mistakes each run had. Withheld wherever a mistake count is a chip.</summary>
+        public const string HideMistakes = "mistakes";
+
+        /// <summary>
+        /// The breakdown of those mistakes run by run, when the total is safe but the split is not.
+        ///
+        /// A total says how much work was imperfect. The split says WHICH runs were — and on a goal's
+        /// "what went well", "my mistakes went down" and "I had a go with no mistakes" read straight off
+        /// it. Showing the total keeps the panel informative without answering either.
+        /// </summary>
+        public const string HideRunSplit = "runSplit";
+
+        /// <summary>How many hints were taken.</summary>
+        public const string HideHints = "hints";
+
+        /// <summary>
+        /// The per-step breakdown — which parts were clean and which cost the most.
+        ///
+        /// Withheld whenever the chips ARE step names. The panel's phase bars carry times and never
+        /// errors, so the breakdown would not literally name the answer; but the longest phase is not
+        /// the costliest one (a mistake counts for more than a slow minute), so showing it beside a
+        /// question about which part cost the most would mislead more than it helped.
+        /// </summary>
+        public const string HideSteps = "steps";
+
+        /// <summary>Which method, or methods, were used.</summary>
+        public const string HideMethod = "method";
+
+        /// <summary>Whether each run was worked out or the answer was shown.</summary>
+        public const string HideWorkedOut = "workedOut";
+
+        /// <summary>
+        /// The choice the student made when the exercise offered them something — to compare, to explain,
+        /// or to work the solution out. It is a stored decision rather than an impression.
+        ///
+        /// The panel never shows a decision, so this only ever affects <see cref="ReflectionPanel.HeldBack"/>.
+        /// It is listed anyway: "nothing here is hidden" has to mean it.
+        /// </summary>
+        public const string HideDecision = "decision";
+
+        /// <summary>
+        /// The facts a question is graded on, for the question being built.
+        ///
+        /// Takes the whole question rather than just its key because the two identifiers answer different
+        /// questions. `Id` says which QUESTION it is — all eight "what went well across the goal" variants
+        /// share one id, however their wording differs by goal type, and the goal's count questions share
+        /// the exercise's — while <see cref="ReflectionQuestion.TextKey"/> says which WORDING, which is what
+        /// separates the clean count from the no-hints count.
+        ///
+        /// Matching on the wording alone left the goal variants to be caught by a prefix test on their key,
+        /// which breaks the day one is renamed; matching on the id alone cannot tell the two count
+        /// questions apart. Both are needed, and each is used for what it actually identifies.
+        ///
+        /// Anything NOT listed here is safe to show, which is the right default: the panel is meant to be
+        /// generous, and a question added later that forgets to declare itself shows too much rather than
+        /// too little — visible in testing, unlike the reverse.
+        /// </summary>
+        public static HashSet<string> HiddenFacts(ReflectionQuestion question)
+        {
+            var textKey = question.TextKey;
+
+            // The exercise's own menu of things that might have gone well. Graded on the mistake count,
+            // the hint count, and whether they explained or compared.
+            if (question.Id == "q1-exercise-went-well")
+                return [HideMistakes, HideHints];
+
+            // The two step questions, where the options are the parts of the exercise.
+            if (textKey is "reflection-q1-step-sure" or "reflection-q1-step-fight")
+                return [HideSteps];
+
+            // "Did this go better than the last one", decided by comparing two mistake counts.
+            if (question.Id == "q1-progress")
+                return [HideMistakes];
+
+            // The two decision questions, whose answer is the choice they made when it was offered. The
+            // goal's own variants share these ids: it is the same question about a wider set.
+            if (question.Id is "q2-compared" or "q2-explained")
+                return [HideDecision];
+
+            // The count questions, which the exercise and the goal share. Only the window behind them
+            // differs, so it is the wording that says which fact the count is over.
+            if (textKey == "reflection-q2-count-solo") return [HideWorkedOut];
+            if (textKey == "reflection-q2-count-clean") return [HideMistakes];
+            if (textKey == "reflection-q2-count-hintfree") return [HideHints];
+
+            // Every goal "what went well": the menu is the window's own properties.
+            //
+            // THE TOTAL IS SHOWN, THE SPLIT IS NOT. Withholding both left the goal panel with nothing on
+            // it, which is the same as having no panel; showing the split made two of the five options —
+            // "my mistakes went down" and "I had a go with no mistakes" — readable off the circles. The
+            // total keeps what is useful (how much of the work was imperfect) and gives away neither.
+            //
+            // Hints stay withheld entirely, because "I had a go with no hints" is the same kind of claim
+            // and one free answer on this menu is already one too many.
+            if (question.Id == "goal-q1-went-well")
+                return [HideHints, HideWorkedOut, HideRunSplit];
+
+            // Every question whose answer is a NAME. The badge is withheld; the run circles stay, because
+            // working out "which method had the most mistakes" from per-run counts plus your memory of
+            // which run used which method is exactly the reasoning this panel exists to require.
+            if (textKey is "reflection-goal-q2-pick-unsuitable" or "reflection-goal-q2-pick-inefficient"
+                or "reflection-goal-q2-most-errors-type" or "reflection-goal-q2-most-errors"
+                or "reflection-goal-q2-most-hints" or "reflection-goal-q2-explain-method"
+                or "reflection-goal-q2-compare-method" or "reflection-goal-q2-system-method")
+                return [HideMethod];
+
+            // "Compared with your other methods, how were your mistakes?" — the question text already
+            // names the method, so the method is not the answer. The two averages are, and per-run counts
+            // are how a student would work them out.
+            if (textKey == "reflection-goal-q2-method-compare")
+                return [HideMistakes];
+
+            // "Did you make fewer mistakes in the ones you explained?" — the split is the answer.
+            if (textKey == "reflection-goal-q2-group-compare")
+                return [HideMistakes, HideDecision];
+
+            // "What went well today", a menu over the day's own exercises.
+            if (question.Id == "session-q1")
+                return [HideMistakes, HideHints, HideWorkedOut];
+
+            // Every Q3 is a promise about the next exercise and is graded on nothing, so nothing is
+            // withheld — including the trend, which can no longer answer anything. That also makes Q3 the
+            // one moment a student sees their own improvement stated, which is deliberate: it is where
+            // the reflection turns from judging to planning.
+            //
+            // "Did it go as you expected" is the bank's one genuinely unverifiable question — every chip
+            // pays the partial amount because the record cannot check it — so there is nothing to hide
+            // there either.
+            return [];
+        }
+
         /// <summary>
         /// What is true behind each goal "what went well" chip, said to the student. Only the chips the
         /// record backs are ever read from here, so a reply names the option they tapped and says what it

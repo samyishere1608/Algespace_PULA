@@ -107,6 +107,100 @@ namespace webapi.Models.Student
         /// <summary>What is true behind each chip, in the second person, for the chips the record can back. Server only.</summary>
         [JsonIgnore]
         public Dictionary<string, string> ChipFacts { get; set; } = [];
+
+        /// <summary>
+        /// What the student may see beside this question: the record's context for the thing being asked
+        /// about, with the fact the chips are graded on left out.
+        ///
+        /// SENT TO THE CLIENT, and deliberately only this. The withheld facts are not here — a student who
+        /// opened devtools would otherwise read the answer off the same payload they are answering from,
+        /// which is the failure mode <see cref="AlignedChipIds"/> is hidden to avoid. They arrive instead
+        /// on the evaluation response, once the answer is in.
+        /// </summary>
+        public ReflectionPanel Panel { get; set; } = new();
+    }
+
+    /// <summary>
+    /// The context panel shown beside one reflection question.
+    ///
+    /// WHY IT EXISTS. Every question is graded against the record, and every chip is answered from memory
+    /// while the record is off screen. So the app asks the student to recall exactly the thing it has
+    /// already decided not to trust their recall for, and "Pippin, tell me" is a student admitting they
+    /// cannot answer without the data. The panel closes that gap without closing the question: it shows a
+    /// DIFFERENT slice of the record than the chips are about, so there is real evidence to reason with
+    /// and still nothing to read the answer off.
+    ///
+    /// WHAT MAKES A FACT SAFE is therefore not "is it interesting" but "can it be combined into the
+    /// answer". Phase times sum to the run's total, and for a goal Q1 the total's trend IS one of the
+    /// chips, so phase bars are shown for ONE run only — never two, which the eye would add up.
+    /// </summary>
+    public class ReflectionPanel
+    {
+        /// <summary>
+        /// Translation key for the method used, or empty when naming it would answer the question.
+        ///
+        /// Empty for every question whose chips are method names — "which method did you make the most
+        /// mistakes with" is answered by the badge.
+        /// </summary>
+        public string MethodLabelKey { get; set; } = "";
+
+        /// <summary>
+        /// One run's phase times, oldest to newest already applied by the caller. Time only.
+        ///
+        /// The step rows carry Errors and Hints as well, and those are never copied here: on a question
+        /// graded on mistakes, a per-step mistake count is the answer.
+        /// </summary>
+        public List<ReflectionPanelPhase> Phases { get; set; } = [];
+
+        /// <summary>
+        /// One entry per exercise the item covers, in order, each with its mistake count.
+        ///
+        /// Empty when the mistakes are what the question is graded on, AND when the total is safe but the
+        /// split is not — the split is the part that answers "did they go down" and "was any one of them
+        /// clean". A single exercise has no split to speak of and is said through <see cref="Mistakes"/>.
+        /// </summary>
+        public List<ReflectionPanelRun> Runs { get; set; } = [];
+
+        /// <summary>
+        /// Mistakes across the item: the one exercise's, or the whole window's summed.
+        ///
+        /// Null when the mistakes are what the question asks about. This is the safe half of the pair with
+        /// <see cref="Runs"/> — how much of the work was imperfect, without saying which parts were.
+        /// </summary>
+        public int? Mistakes { get; set; }
+
+        /// <summary>How many exercises the item covers, so the wording can say "in this one" or "altogether".</summary>
+        public int RunCount { get; set; }
+
+        /// <summary>Hints taken across the item, or null when the hints are what is being asked about.</summary>
+        public int? Hints { get; set; }
+
+        /// <summary>
+        /// Whether anything about this question is still held back, so the client can say so.
+        ///
+        /// The student is told that something is waiting rather than shown a panel with a silent hole in
+        /// it: a child who cannot see the number will assume it is bad, and the honest message — "I will
+        /// tell you after you answer" — is also the one that makes the answer worth giving.
+        /// </summary>
+        public bool HeldBack { get; set; }
+    }
+
+    /// <summary>One phase of one run, for the panel's time bars.</summary>
+    public class ReflectionPanelPhase
+    {
+        public string LabelKey { get; set; } = "";
+
+        /// <summary>Seconds, sent as a number and rounded by the client, which owns the wording.</summary>
+        public double Seconds { get; set; }
+    }
+
+    /// <summary>One exercise the item covers, for the panel's run circles.</summary>
+    public class ReflectionPanelRun
+    {
+        /// <summary>1-based position, so the client can say "1st", "2nd", "3rd" without counting.</summary>
+        public int Position { get; set; }
+
+        public int Mistakes { get; set; }
     }
 
     /// <summary>One step of an exercise, reduced to what a question can be built from.</summary>
@@ -199,6 +293,22 @@ namespace webapi.Models.Student
 
         /// <summary>Methods in which they had previously asked the system to calculate.</summary>
         public List<int> PriorSystem { get; set; } = [];
+
+        /// <summary>
+        /// The attempt each exercise in <see cref="Exercises"/> came from, in the same order, so a
+        /// later reader can go back to the phase rows for a specific run rather than guessing.
+        ///
+        /// Without this there is no way to know which exercises a goal covered: a goal window is many
+        /// runs and the queue row has no single attempt id, so the only previous option was "the newest
+        /// N completed attempts", which is an assumption. It usually holds — the goal completes over the
+        /// exercises that just happened — but a narrowed goal (practise Elimination three times) can
+        /// pick up a Substitution run done afterwards, because that fallback has no method filter.
+        ///
+        /// Empty on windows stored before this was recorded. Readers must treat empty as "unknown" and
+        /// decline to make a claim rather than fall back to the guess, which is why the reflection panel
+        /// simply omits the phase breakdown for those rows.
+        /// </summary>
+        public List<long> AttemptIds { get; set; } = [];
     }
 
     /// <summary>Everything the bank needs about one reflection item, derived once and shared with grading.</summary>
@@ -313,6 +423,15 @@ namespace webapi.Models.Student
 
         /// <summary>The method they chose was one the exercise allowed. Only meaningful with the flag above.</summary>
         public bool ChoseAllowedMethod { get; set; }
+
+        /// <summary>
+        /// The method this exercise was solved with, as the attempt recorded it ("Substitution").
+        ///
+        /// Read so the context panel can name it. It is NOT `Focus`, which for an exercise is the exercise
+        /// TYPE — the type decides which decision the student saw, and naming it would tell them
+        /// "you solved it with Suitability", which is not a method and has no translation.
+        /// </summary>
+        public string SelectedMethod { get; set; } = "";
     }
 
     /// <summary>The verdict for one answer.</summary>

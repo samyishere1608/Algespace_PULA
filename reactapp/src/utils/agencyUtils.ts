@@ -61,6 +61,42 @@ export function addResolveXP(studentId: number | string, amount: number, source:
     return next;
 }
 
+// ── XP the server has already written down ───────────────────────────────────
+
+const XP_KEYS: Record<string, (studentId: number | string) => string> = {
+    choice: choiceKey,
+    insight: insightKey,
+    resolve: resolveKey,
+};
+
+/**
+ * Moves the browser's own copy forward for an award the SERVER has already recorded.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM addInsightXP. Those functions write to localStorage AND post the award
+ * to the backend, which is right for an award the browser decided. But for an award the server decides —
+ * and now writes, in the same request — posting it back would pay twice: the server has the ledger row
+ * already and would take the second one as a new award.
+ *
+ * The display still has to move, because the dashboard renders from localStorage. So this does the local
+ * half only and leaves the ledger alone. It is also self-correcting: `syncAgencyFromBackend` overwrites
+ * these values from the server on the next dashboard load, so a mistake here cannot outlive a reload.
+ */
+export function creditAwardAlreadyRecorded(
+    studentId: number | string,
+    xpType: "choice" | "insight" | "resolve",
+    amount: number
+): number {
+    const key = XP_KEYS[xpType];
+    const next = (parseInt(localStorage.getItem(key(studentId)) ?? "0", 10) || 0) + amount;
+
+    localStorage.setItem(key(studentId), String(next));
+    addLifetimeAgency(studentId, amount);
+    // Mirrors the write paths it stands in for: choice is not tracked per day, insight and resolve are.
+    if (xpType !== "choice") incrementTodayXp(studentId, xpType, amount);
+
+    return next;
+}
+
 // ── Total agency (used for tree growth) ──────────────────────────────────────
 
 export function getTotalAgencyXP(studentId: number | string): number {

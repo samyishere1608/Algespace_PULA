@@ -7,6 +7,8 @@ import i18n from "@/i18n.ts";
 import { BuddySays } from "@components/shared/BuddySays.tsx";
 import { asTranslate, describeGoal } from "@utils/goalCatalog.ts";
 import { suggestionToGoal } from "@utils/goalSuggestions.ts";
+import ReflectionPanelView, { panelHasContent } from "@views/student/dashboard/ReflectionPanel.tsx";
+import type { ReflectionPanel } from "@utils/reflectionUtils.ts";
 import type { StudyGoal } from "@/types/student/goal.ts";
 import {
     completeReflection,
@@ -99,6 +101,17 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const [suggestedGoal, setSuggestedGoal] = useState<StudyGoal | null>(null);
 
     /**
+     * The panel for the question on screen: the one that came with the question, until an answer is sent,
+     * and then the opened one the server sends back with the verdict.
+     *
+     * Kept as state rather than read from `asked.panel` so that opening it is a single assignment. The
+     * facts the question withheld never travel with the question, so there is nothing to reveal locally —
+     * the open version has to arrive from the server, which is what makes the lock honest rather than
+     * decorative.
+     */
+    const [openPanel, setOpenPanel] = useState<ReflectionPanel | null>(null);
+
+    /**
      * WHICH action is in flight, not merely that one is.
      *
      * A single `loading` flag drove both buttons, so pressing either made BOTH of them spin and the
@@ -133,6 +146,11 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
         () => (suggestedGoal ? describeGoal(suggestedGoal, asTranslate(t)) : ""),
         [suggestedGoal, t]
     );
+
+    // The opened panel once an answer is in, and the question's own panel before that. Recomputed rather
+    // than stored because the question does not change while the modal is open, and the two can never
+    // both be right: after an answer the question's version is the stale one.
+    const panel = openPanel ?? item?.questions?.[question - 1]?.panel ?? null;
     if (!item) {
         return (
             <div className="modal-overlay">
@@ -184,6 +202,9 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setFeedback(result.feedback);
             setNextStep(result.nextStep ?? "");
             setEarnedInsight(result.insightXp ?? 0);
+            // The record opens with the verdict. The server sends this only after an answer, so the facts
+            // this question withheld are not on the payload the student answered from.
+            setOpenPanel(result.panel ?? null);
             // The goal that would carry out what they just committed to, in its own catalogue shape so
             // the same wording can be used as everywhere else a goal is named. Converted by the same
             // function that validates the goal picker's own suggestions, so a suggestion whose fields
@@ -222,6 +243,9 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
+            // The opened panel belongs to the question just answered. Dropping it here is what puts the
+            // lock back for the next one, which withholds something of its own.
+            setOpenPanel(null);
             setPhase("answering");
             return;
         }
@@ -236,6 +260,15 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
+            // AND THE OPENED PANEL GOES WITH IT.
+            //
+            // This is the one reset that is easy to forget, because the panel is not otherwise part of the
+            // per-item state: it reads from the question until an answer opens it, and only the opened
+            // version is held. Leaving it here meant the next item showed the PREVIOUS one's numbers
+            // until its own first answer replaced them — a goal's run circles and hint count sitting
+            // beside an exercise's question, which is worse than showing nothing because it looks
+            // authoritative.
+            setOpenPanel(null);
             setPhase("answering");
         } else {
             onClose();
@@ -259,7 +292,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content reflection-modal buddy-panel" onClick={(e) => e.stopPropagation()}>
+            <div className={`modal-content reflection-modal buddy-panel${panelHasContent(panel) ? " reflection-modal--with-record" : ""}`} onClick={(e) => e.stopPropagation()}>
                 <button className="modal-close" onClick={dismiss} title={t("dashboard-modal-close")}>
                     <FontAwesomeIcon icon={faTimes} />
                 </button>
@@ -294,8 +327,14 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                     </span>
                 </div>
 
-                {/* The question, in the companion's own voice. */}
-                <BuddyBubble text={questionText} buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImgSrc={buddyImgSrc} />
+                {/* The question and the record, side by side.
+                    The bubble, the chips and the reply belong together and stay in one column, so the
+                    companion's question is never separated from the answer being given to it. The panel
+                    is a second column because it is about the question rather than part of it. */}
+                <div className="reflection-modal__body">
+                    <div className="reflection-modal__conversation">
+                        {/* The question, in the companion's own voice. */}
+                        <BuddyBubble text={questionText} buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImgSrc={buddyImgSrc} />
 
                 {/* Answering phase */}
                 {phase === "answering" && (
@@ -389,6 +428,10 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                         </div>
                     </div>
                 )}
+                    </div>
+
+                    <ReflectionPanelView panel={panel} itemType={item.itemType} />
+                </div>
             </div>
         </div>
     );

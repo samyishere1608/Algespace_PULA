@@ -637,6 +637,49 @@ foreach (var scenario in scenarios)
 }
 
 
+// ── What the context panel is allowed to show ────────────────────────────────
+//
+// The panel exists to show a DIFFERENT slice of the record than the chips are about, so there is real
+// evidence to reason with and still nothing to read the answer off. Which facts that excludes is stated
+// once, in `HiddenFacts`, next to the rules that grade the question — and this checks the two stay
+// together, because a question whose options ARE the step breakdown must not also be showing the step
+// breakdown beside it, and nothing about the code would look wrong if it did.
+//
+// The three shapes below are the three ways a chip can name its own answer: the parts of the exercise,
+// a method, or a count.
+
+// Every question built anywhere in this file, so the table printed at the end covers the goal-with-window
+// variants too and not just the exercise ones.
+var panelQuestions = new List<ReflectionQuestion>();
+
+void CheckPanelRules(string where, ReflectionQuestion question)
+{
+    var hidden = ReflectionQuestionBank.HiddenFacts(question);
+
+    if (question.Chips.Any(chip => chip.Id.StartsWith("step-", StringComparison.Ordinal))
+        && !hidden.Contains(ReflectionQuestionBank.HideSteps))
+        Fail(where, $"panel/{question.TextKey}: offers the parts of the exercise as chips but does not withhold the step breakdown");
+
+    if (question.Chips.Any(chip => chip.Id.StartsWith("pick-", StringComparison.Ordinal))
+        && !hidden.Contains(ReflectionQuestionBank.HideMethod))
+        Fail(where, $"panel/{question.TextKey}: asks the student to name a method but does not withhold the method");
+
+    if (question.Chips.Any(chip => chip.Id.StartsWith("band-", StringComparison.Ordinal))
+        && !hidden.Contains(ReflectionQuestionBank.HideMistakes)
+        && !hidden.Contains(ReflectionQuestionBank.HideWorkedOut))
+        Fail(where, $"panel/{question.TextKey}: asks for a count but withholds neither the mistakes nor the worked-out flag");
+}
+
+foreach (var scenario in scenarios)
+{
+    foreach (var question in ReflectionQuestionBank.Build(scenario.Evidence))
+    {
+        panelQuestions.Add(question);
+        CheckPanelRules(scenario.Name, question);
+    }
+}
+
+
 // ── The goal questions, with a real window ───────────────────────────────────
 //
 // The goal scenarios above carry no window, so they exercise the fallback used for a goal completed
@@ -670,6 +713,12 @@ void CheckGoal(string name, ReflectionEvidence evidence, string q1Key, string q2
     }
 
     var (q1, q2, q3) = (questions[0], questions[1], questions[2]);
+
+    foreach (var question in questions)
+    {
+        panelQuestions.Add(question);
+        CheckPanelRules(name, question);
+    }
 
     if (q1.TextKey != q1Key) Fail(name, $"Q1 was {q1.TextKey}, expected {q1Key}");
     if (q2.TextKey != q2Key) Fail(name, $"Q2 was {q2.TextKey}, expected {q2Key}");
@@ -1098,6 +1147,19 @@ if (uncheckable.Count > 0)
 
 Console.WriteLine();
 if (failures.Count == 0)
+// The whole table, so a reviewer can read every question's decision at once rather than reconstructing it
+// from the switch. Printed last because it summarises what every check above was reading.
+Console.WriteLine();
+Console.WriteLine("Panel — what each question holds back:");
+foreach (var question in panelQuestions
+             .GroupBy(q => q.TextKey)
+             .OrderBy(group => group.Key, StringComparer.Ordinal))
+{
+    var hidden = ReflectionQuestionBank.HiddenFacts(question.First());
+    Console.WriteLine($"  {(hidden.Count == 0 ? "nothing" : string.Join(", ", hidden.OrderBy(h => h, StringComparer.Ordinal))),-26} {question.Key}");
+}
+Console.WriteLine();
+
 {
     Console.WriteLine("All checks passed.");
     return 0;

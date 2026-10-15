@@ -62,7 +62,7 @@ import { addGoal, getActiveGoals, removeGoal } from "@utils/activeGoals.ts";
 import { GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef } from "@utils/goalCatalog.ts";
 import { claimCompletedGoals, computeProgress, earliestGoalStart, fetchGoalEvents } from "@utils/goalProgress.ts";
 import { awardChoiceForSettingAGoal } from "@utils/choiceAwards.ts";
-import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addInsightXP, addChoiceXP, getInsightXP } from "@utils/agencyUtils.ts";
+import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addChoiceXP, getInsightXP, creditAwardAlreadyRecorded } from "@utils/agencyUtils.ts";
 import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 import { getOnboardingStep } from "@utils/storageUtils.ts";
 import { startSession, endSession, currentSessionId, recordIntention } from "@utils/sessionLog.ts";
@@ -745,9 +745,17 @@ export default function StudentDashboard(): ReactElement {
         setReflectionQueue([]);
     }
 
+    /**
+     * The Insight the server just paid.
+     *
+     * The award is written server-side now, in the same request that decided it, so this must NOT post it
+     * again — see `creditAwardAlreadyRecorded`. It moves the browser's own copy forward so the running
+     * total the student is watching keeps up, and the next dashboard load reconciles it from the server.
+     */
     function handleReflectionInsight(amount: number): void {
-        if (!student) return;
-        addInsightXP(student.id, amount, "reflection-aligned");
+        if (!student || amount <= 0) return;
+
+        creditAwardAlreadyRecorded(student.id, "insight", amount);
         showAgencyToast("insight", amount);
         setAgency(getAgencyProgress(student.id));
     }
