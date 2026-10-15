@@ -39,7 +39,7 @@
   "dashboard-notifications": "通知",
   "dashboard-home": "ホーム",
   "dashboard-logout": "ログアウト",
-  "dashboard-exercises-completed": "完了問題数",
+  "dashboard-exercises-today": "今日の課題",
   "dashboard-avg-efficiency": "平均効率",
   "dashboard-optimal-path": "最適解法の論理",
   "dashboard-avg-accuracy": "平均精度",
@@ -406,7 +406,6 @@
   "milestone-title": "マイルストーン達成！",
   "milestone-subtitle": "<strong>{{milestone}} XP</strong>のマイルストーンを達成しました。その調子で続けましょう — 次の目標は<strong>{{next}} XP</strong>です！",
   "milestone-continue": "この調子で続ける",
-  "dashboard-exercises-today": "今日 +{{count}}",
   "dashboard-sections": "ダッシュボードのセクション",
   "goals-celebration-continue": "続ける",
 

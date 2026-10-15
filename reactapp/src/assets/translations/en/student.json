@@ -34,7 +34,7 @@
   "dashboard-notifications": "Notifications",
   "dashboard-home": "Home",
   "dashboard-logout": "Logout",
-  "dashboard-exercises-completed": "Exercises Completed",
+  "dashboard-exercises-today": "Exercises today",
   "dashboard-avg-efficiency": "Avg. Efficiency",
   "dashboard-optimal-path": "Optimal path logic",
   "dashboard-avg-accuracy": "Avg. Accuracy",
@@ -407,7 +407,6 @@
   "milestone-title": "Milestone Reached!",
   "milestone-subtitle": "You've crossed the <strong>{{milestone}} XP</strong> milestone. Keep it up — next stop: <strong>{{next}} XP</strong>!",
   "milestone-continue": "Keep Going",
-  "dashboard-exercises-today": "+{{count}} today",
   "dashboard-sections": "Dashboard sections",
   "goals-celebration-continue": "Continue",
 

@@ -915,10 +915,9 @@ export default function StudentDashboard(): ReactElement {
                     {/* Stats row */}
                     <div className={"dashboard__stats-row"} data-tour={"stats"}>
                         <div className={"dash-stat"}>
-                            <span className={"dash-stat__label"}>{t("dashboard-exercises-completed")}</span>
+                            <span className={"dash-stat__label"}>{t("dashboard-exercises-today")}</span>
                             <FontAwesomeIcon icon={faCheck} className={"dash-stat__icon"} />
-                            <span className={"dash-stat__value"}>{stats.exercisesCompleted}</span>
-                            <span className={"dash-stat__sub"}>{t("dashboard-exercises-today", { count: stats.exercisesToday })}</span>
+                            <span className={"dash-stat__value"}>{stats.exercisesToday}</span>
                         </div>
                         <div className={"dash-stat"}>
                             <span className={"dash-stat__label"}>{t("dashboard-avg-accuracy")}</span>

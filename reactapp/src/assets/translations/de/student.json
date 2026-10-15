@@ -39,7 +39,7 @@
   "dashboard-notifications": "Benachrichtigungen",
   "dashboard-home": "Startseite",
   "dashboard-logout": "Abmelden",
-  "dashboard-exercises-completed": "Abgeschlossene Aufgaben",
+  "dashboard-exercises-today": "Aufgaben heute",
   "dashboard-avg-efficiency": "Ø Effizienz",
   "dashboard-optimal-path": "Optimale Lösungslogik",
   "dashboard-avg-accuracy": "Ø Genauigkeit",
@@ -407,7 +407,6 @@
   "milestone-title": "Meilenstein erreicht!",
   "milestone-subtitle": "Du hast den Meilenstein von <strong>{{milestone}} XP</strong> erreicht. Bleib dran — nächster Halt: <strong>{{next}} XP</strong>!",
   "milestone-continue": "Weiter so",
-  "dashboard-exercises-today": "+{{count}} heute",
   "dashboard-sections": "Dashboard-Bereiche",
   "goals-celebration-continue": "Weiter",
 
