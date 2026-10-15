@@ -1,10 +1,11 @@
-import { faArrowRight, faBullseye, faChartBar, faTimes, faTrophy } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faBullseye, faChartBar, faFlagCheckered, faTimes, faTrophy } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
-import { ReactElement, useState } from "react";
+import { ReactElement, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import { BuddySays } from "@components/shared/BuddySays.tsx";
+import { fetchSessionPromise } from "@utils/reflectionUtils.ts";
 
 /**
  * The plans a day can be given, and the only answers this question takes.
@@ -26,6 +27,7 @@ const PLANS: { id: DailyIntentionChoice; icon: IconDefinition; labelKey: string;
 export type DailyIntentionChoice = "practice" | "goal" | "review";
 
 interface Props {
+    studentId: number;
     studentName: string;
     buddyName: string;
     buddyEmoji: string;
@@ -40,11 +42,24 @@ interface Props {
  * Nothing is recorded until an option is pressed, and pressing one closes the modal immediately — the
  * student then lands on the thing they said they would do (the exercises, the goal picker, or the
  * analytics tab). There is no confirmation step and no second question inside this dialog.
+ *
+ * It also shows the promise made at the end of the last session, when there is one. That is the one
+ * thing that makes a session commitment mean something: the student sees what they said they would do
+ * BEFORE they choose today's plan, rather than the app checking it afterwards and paying out in silence.
  */
-export function DailyIntentionModal({ studentName, buddyName, buddyEmoji, buddyImgSrc, onSelectPlan, onSkip }: Props): ReactElement {
+export function DailyIntentionModal({ studentId, studentName, buddyName, buddyEmoji, buddyImgSrc, onSelectPlan, onSkip }: Props): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
     // Locks the modal after a choice, so a double tap cannot record two intentions.
     const [submitted, setSubmitted] = useState(false);
+    const [promiseTextKey, setPromiseTextKey] = useState("");
+
+    useEffect(() => {
+        let cancelled = false;
+        void fetchSessionPromise(studentId).then((promise) => {
+            if (!cancelled && promise) setPromiseTextKey(promise.textKey);
+        });
+        return () => { cancelled = true; };
+    }, [studentId]);
 
     function choose(choice: DailyIntentionChoice): void {
         if (submitted) return;
@@ -66,6 +81,26 @@ export function DailyIntentionModal({ studentName, buddyName, buddyEmoji, buddyI
                     <p>{t("daily-intention-greeting", { name: studentName, buddy: buddyName })}</p>
                     <p className="daily-intention-modal__ask">{t("daily-intention-question")}</p>
                 </BuddySays>
+
+                {/* What they promised last time, before they pick today's plan.
+                    Above the three answers on purpose: it is the one thing here that is not a question,
+                    and reading it first is what makes it something to carry into today rather than a
+                    score the app settles quietly afterwards.
+
+                    The promise is shown as the chip's own words after a label, not slotted into a
+                    sentence. The chip texts are noun phrases — "More practice exercises", "A goal to work
+                    towards" — so "you said you would {{promise}}" would read as "you said you would More
+                    practice exercises" in English and worse in the other two languages. */}
+                {promiseTextKey && (
+                    <p className="daily-intention-modal__promise">
+                        <FontAwesomeIcon icon={faFlagCheckered} className="daily-intention-modal__promise-icon" />
+                        <span>
+                            <span className="daily-intention-modal__promise-label">{t("daily-intention-yesterday-promise")}</span>
+                            {" "}
+                            <strong>{t(promiseTextKey)}</strong>
+                        </span>
+                    </p>
+                )}
 
                 {/* ── The three answers ───────────────────────────────── */}
                 <div className="daily-intention-modal__options">

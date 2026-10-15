@@ -268,23 +268,7 @@ namespace webapi.Models.Student
         public string ExerciseId { get; set; } = "";
     }
 
-    /// <summary>Request for AI to compare student's self-reflection against their data.</summary>
-    public class ReflectOnStatsRequest
-    {
-        public string StudentReflection { get; set; } = "";
-        /// <summary>Language for the feedback, so the reply matches the language the student works in.</summary>
-        public string Language { get; set; } = "en";
-    }
-
-    /// <summary>AI feedback on how well the student's self-assessment matches reality.</summary>
-    public class ReflectOnStatsResponse
-    {
-        public string Feedback { get; set; } = "";
-        /// <summary>"practice" | "goal" | "both" | "unclear" | "no_xp"</summary>
-        public string Category { get; set; } = "unclear";
-    }
-
-    // ── Post-exercise Reflection ─────────────────────────────────────────────
+            // ── Post-exercise Reflection ─────────────────────────────────────────────
 
     /// <summary>One item waiting for the student to reflect on it.</summary>
     public class ReflectionQueueRecord
@@ -413,6 +397,15 @@ namespace webapi.Models.Student
         public int InsightXp { get; set; }
         /// <summary>Concrete next step (filled for the final question).</summary>
         public string NextStep { get; set; } = "";
+
+        /// <summary>
+        /// The goal that would carry out the commitment they just made, when one exists.
+        ///
+        /// A structured goal rather than a sentence: the client owns the goal wording and the legal
+        /// targets, so it renders this through its own catalogue. Absent for every question that is not
+        /// the commitment, and absent when no goal in the catalogue matches what they promised.
+        /// </summary>
+        public SuggestedGoal? SuggestedGoal { get; set; }
     }
 
     /// <summary>Marks a reflection item complete and persists its chat history.</summary>
@@ -453,6 +446,22 @@ namespace webapi.Models.Student
     {
         /// <summary>The Resolve awarded for keeping the promise, which is normally 0.</summary>
         public int ResolveAwarded { get; set; }
+    }
+
+    /// <summary>
+    /// The promise the student made at the end of their last session, as the check-in needs it.
+    ///
+    /// The wording is a translation key the client resolves, not a sentence, because the promise has to
+    /// read exactly as the chip the student chose — and every word the student sees lives in the
+    /// client's own locale files.
+    /// </summary>
+    public class SessionPromiseResponse
+    {
+        /// <summary>The chip that was chosen, e.g. "session-next-goal". Empty when there is no promise.</summary>
+        public string Choice { get; set; } = "";
+
+        /// <summary>The translation key for that chip, empty when there is no promise.</summary>
+        public string TextKey { get; set; } = "";
     }
 
 

@@ -66,6 +66,7 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
     const {
         trackActionInPhase,
         trackChoice,
+        recordSolutionShown,
         reconsiderDecline,
         trackType,
         trackErrorInPhase,
@@ -276,6 +277,7 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
                     reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
                     reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
+                    recordSolutionShown={recordSolutionShown}
                     trackType={(type:number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeFirstSolution)}
                     condition={condition}
                     decideCalculationIntervention = {decideCalculationIntervention}
@@ -334,6 +336,7 @@ export function EfficiencyExercise({ flexibilityExerciseId, exercise, condition,
                     reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionChoice)}
                     reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
+                    recordSolutionShown={recordSolutionShown}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeSecondSolution)}
                     condition={condition}
                     decideCalculationIntervention = {decideCalculationIntervention}

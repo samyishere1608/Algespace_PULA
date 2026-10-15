@@ -1552,162 +1552,6 @@ Respond ONLY in this JSON:
             result.TotalErrorsToday = todayGoals.Sum(g => g.TotalErrors);
         }
 
-        // ── POST /student-progress/reflect-on-stats/{studentId} ──────────────
-        /// <summary>
-        /// Student writes a free-text reflection about their performance.
-        /// The model compares it against their actual data and gives honest feedback.
-        /// NO XP is awarded — this is purely informational feedback.
-        /// For demo user "demo1", synthetic data is generated if no real data exists.
-        /// </summary>
-        [HttpPost("reflect-on-stats/{studentId}")]
-        public async Task<ActionResult<ReflectOnStatsResponse>> ReflectOnStats(
-            long studentId, [FromBody] ReflectOnStatsRequest request)
-        {
-            if (string.IsNullOrWhiteSpace(request.StudentReflection))
-                return BadRequest("Reflection text is required.");
-
-            var lang = GoalSuggestionText.Resolve(request.Language);
-
-            var apiKey = _configuration["OpenAI:ApiKey"];
-            if (string.IsNullOrWhiteSpace(apiKey))
-                return Ok(new ReflectOnStatsResponse
-                {
-                    Feedback = ReflectionText.ReflectionNoApiKey(lang),
-                    Category = "unclear"
-                });
-
-            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
-            conn.Open();
-            EnsureTables(conn);
-
-            var progress = conn.QueryFirstOrDefault<StudentProgressRecord>(
-                $"SELECT * FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId = @StudentId",
-                new { StudentId = studentId });
-
-            var exerciseLog = conn.Query<ExerciseLogRecord>(
-                $"SELECT ExerciseType, CompletedAt FROM {StudentProgressDBSettings.ExerciseLogTable} " +
-                "WHERE StudentId = @StudentId ORDER BY CompletedAt DESC LIMIT 20",
-                new { StudentId = studentId }).ToList();
-
-            // For demo1, use demo data if no real data
-            if (studentId == 1 && (progress == null || exerciseLog.Count == 0))
-            {
-                exerciseLog = GenerateDemoData();
-                progress = new StudentProgressRecord
-                {
-                    StudentId = 1, TotalXP = 120, ExercisesCompleted = 8, StreakDays = 2,
-                    ChoiceXP = 25, InsightXP = 30, ResolveXP = 45, LifetimeAgencyXP = 100
-                };
-            }
-
-            // Build stats summary for the model
-            var stats = new System.Text.StringBuilder();
-            if (progress != null)
-            {
-                stats.AppendLine($"Exercises completed: {progress.ExercisesCompleted}");
-                stats.AppendLine($"Current streak: {progress.StreakDays} days");
-                stats.AppendLine($"Agency XP — Choice: {progress.ChoiceXP}, Insight: {progress.InsightXP}, Resolve: {progress.ResolveXP}, Total: {progress.ChoiceXP + progress.InsightXP + progress.ResolveXP}");
-            }
-            var typeCounts = exerciseLog
-                .GroupBy(e => e.ExerciseType)
-                .ToDictionary(g => g.Key, g => g.Count());
-            stats.AppendLine("Exercise breakdown by type:");
-            foreach (var kv in typeCounts)
-                stats.AppendLine($"  - {kv.Key}: {kv.Value} exercises");
-            if (typeCounts.Count == 0)
-                stats.AppendLine("  (No exercises completed yet)");
-
-            var responseLanguage = lang switch
-            {
-                GoalSuggestionText.Lang.Ja => "Japanese",
-                GoalSuggestionText.Lang.De => "German",
-                _ => "English"
-            };
-
-            var prompt = $@"You are a supportive study coach. A student has written a reflection about what they think their weak area is. Your job:
-
-1. FIRST, AFFIRM the student. Always validate what they say — never bluntly correct or dismiss them. Even if the data doesn't perfectly match, find something to agree with. Start your feedback with acknowledgement.
-
-2. THEN, gently compare their self-assessment to the actual stats below. If the data suggests additional weak areas, frame them as ""You might also want to keep an eye on..."" or ""One area you might not have noticed..."" — NEVER say ""You're wrong"" or ""Actually..."".
-
-3. If the student's text is complete gibberish, off-topic, or totally unrelated to math/learning/this platform, respond warmly: ""Hmm, I didn't quite catch that! 😊 Could you tell me again — what do you think is your weakest area right now?"" and set category to ""no_xp"".
-
-4. Keep feedback to 2-3 friendly sentences. Use emojis sparingly (max 1).
-
-5. Write your whole response in {responseLanguage}.
-
-CATEGORY RULES (pick exactly one):
-- 'goal' — text is about goals, targets or commitments (e.g. ""I want to finish my 5 Elimination exercises"", ""my weak area is completing the goals I set"")
-- 'practice' — text is about doing exercises, practicing methods (e.g. ""I'm bad at elimination"", ""I struggle with matching exercises"", ""I need more practice with substitution"")
-- 'both' — text mentions BOTH goal-related AND practice-related things
-- 'no_xp' — gibberish, off-topic, not related to math/learning/motivation/this platform at all (use rarely)
-- 'unclear' — learning-related but too vague to classify (last resort only)
-
-STUDENT STATS:
-{stats}
-
-STUDENT REFLECTION:
-{request.StudentReflection}
-
-Respond ONLY in this JSON: {{""category"":""goal|practice|both|unclear|no_xp"",""feedback"":""2-3 sentences, affirmation first, gentle suggestion second""}}
-
-IMPORTANT — two different languages in one reply:
-- The ""category"" value MUST stay exactly one of the English codes above.
-- The ""feedback"" value MUST be written entirely in {responseLanguage}, however much English appears elsewhere in these instructions.";
-
-            try
-            {
-                var rawText = await CallOpenAI(apiKey,
-                    $"You are a supportive study coach. Always affirm the student's self-assessment first, then gently suggest additional areas from their stats. Never bluntly correct them. For gibberish/off-topic, warmly ask them to try again. Classify into: goal, practice, both, unclear, or no_xp. Write your whole response in {responseLanguage}. Always output valid JSON.",
-                    prompt);
-
-                if (rawText == null)
-                {
-                    return Ok(new ReflectOnStatsResponse
-                    {
-                        Feedback = ReflectionText.ReflectionUnreachable(lang),
-                        Category = "unclear"
-                    });
-                }
-
-                // Try to parse the JSON response
-                try
-                {
-                    var jsonStart = rawText.IndexOf('{');
-                    var jsonEnd = rawText.LastIndexOf('}');
-                    if (jsonStart >= 0 && jsonEnd > jsonStart)
-                    {
-                        var jsonText = rawText.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                        using var resultDoc = JsonDocument.Parse(jsonText);
-                        var category = resultDoc.RootElement.TryGetProperty("category", out var catProp)
-                            ? catProp.GetString()?.ToLower() ?? "unclear"
-                            : "unclear";
-                        var feedback = resultDoc.RootElement.TryGetProperty("feedback", out var fbProp)
-                            ? fbProp.GetString() ?? ""
-                            : rawText;
-
-                        var validCategories = new HashSet<string> { "goal", "practice", "both", "unclear", "no_xp" };
-                        if (!validCategories.Contains(category))
-                            category = "unclear";
-
-                        return Ok(new ReflectOnStatsResponse { Feedback = AiTextFormatter.StripMathDelimiters(feedback), Category = category });
-                    }
-                }
-                catch { /* fall through to raw text */ }
-
-                return Ok(new ReflectOnStatsResponse { Feedback = AiTextFormatter.StripMathDelimiters(rawText), Category = "unclear" });
-            }
-            catch
-            {
-                return Ok(new ReflectOnStatsResponse
-                {
-                    Feedback = ReflectionText.ReflectionFailed(lang),
-                    Category = CategoryDetector.DetectCategoryFromText(request.StudentReflection)
-                });
-            }
-        }
-
-        // ── POST /student-progress/suggest-goals/{studentId} ─────────────────
         /// <summary>
         /// Uses the model to suggest 3 goals from the predefined catalogue based on
         /// the student's performance data. Each suggestion includes a one-line reason.
@@ -2264,16 +2108,54 @@ RULES:
                 Errors = attempt.TotalErrors,
                 Hints = attempt.TotalHints,
                 Time = attempt.TotalTime,
-                Own = Engaged(attempt.Id, AnchorDimension.SolveOnOwn, records),
+                Own = SolvedOnOwn(attempt.Id, records),
                 Explained = Engaged(attempt.Id, AnchorDimension.SelfExplanation, records),
                 Compared = Engaged(attempt.Id, AnchorDimension.MethodComparison, records),
-                WasShown = Declined(attempt.Id, AnchorDimension.SolveOnOwn, records),
+                // "Shown" covers both ways the answer was handed to them: they turned the offer down, or
+                // they took it and were then shown the solution.
+                WasShown = Declined(attempt.Id, AnchorDimension.SolveOnOwn, records)
+                           || ShownSolution(attempt.Id, records),
                 Correct = allowed.TryGetValue((type, attempt.ExerciseId), out var ok) && ok.Contains(method),
             };
         }
 
         private static bool Engaged(long attemptId, string[] names, List<DecisionRecordRow> records) =>
             AnchorDimension.Engaged(Answers(attemptId, names, records));
+
+        /// <summary>
+        /// The method name a goal is narrowed by, from the reflection's own label key.
+        ///
+        /// The bank holds "flexibility:equalization-method" because that is the client's wording for it,
+        /// while a goal records the method as "Equalization". Both spellings exist for good reasons —
+        /// one is copy, the other is stored data — so the translation between them lives here, in one
+        /// place, rather than at each use.
+        /// </summary>
+        private static string MethodFocusFromLabelKey(string focusLabelKey) =>
+            focusLabelKey.Length == 0
+                ? ""
+                : GoalCatalogue.Methods.FirstOrDefault(
+                    method => focusLabelKey.Contains(method, StringComparison.OrdinalIgnoreCase)) ?? "";
+
+        /// <summary>
+        /// Whether the solution was actually worked out, as opposed to being handed over or shown.
+        ///
+        /// This is the reader to use wherever the question is "did they do the calculation" — the goal,
+        /// the reflection's own fact, and the promise they made at the end of a session. Plain
+        /// engagement is not enough: saying yes and then pressing "Show solution" is a help taken, and
+        /// nothing else on the row records it.
+        /// </summary>
+        private static bool SolvedOnOwn(long attemptId, List<DecisionRecordRow> records) =>
+            AnchorDimension.SolvedOnOwn(
+                records
+                    .Where(record => record.AttemptId == attemptId
+                                     && (AnchorDimension.SolveOnOwn.Contains(record.Name, StringComparer.Ordinal)
+                                         || AnchorDimension.SolutionShown.Contains(record.Name, StringComparer.Ordinal)))
+                    .Select(record => (record.Name, record.Choice)));
+
+        /// <summary>Whether the solution was shown to them at a point they had opted in at.</summary>
+        private static bool ShownSolution(long attemptId, List<DecisionRecordRow> records) =>
+            Answers(attemptId, AnchorDimension.SolutionShown, records)
+                .Any(choice => choice.StartsWith("Yes", StringComparison.OrdinalIgnoreCase));
 
         /// <summary>
         /// Whether they turned the offer down. Distinct from "no record at all", which means they never
@@ -2844,9 +2726,18 @@ RULES:
             // whenever the AI provider is unavailable, which is often, so it is not a rare branch.
             fallback.Aligned = verdict.Status == "aligned";
             fallback.InsightXp = verdict.InsightXp;
-            fallback.Feedback = VerdictFeedback(
-                asked, verdict, request.ChoiceLabel,
-                ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked, request.Choice ?? ""));
+
+            // ...EXCEPT WHEN THE STUDENT ASKED FOR GUIDANCE, WHERE THE SENTENCE IS BUILT DIFFERENTLY.
+            //
+            // The badge still comes from the record either way, but the wording does not: a help reply
+            // is not a verdict on an answer, so it must not be phrased as one. This used to overwrite
+            // the help button's own reply with a verdict sentence, which is why the help path could come
+            // back sounding like a report on a choice the student never made — their help reply was
+            // built, and then thrown away one line later.
+            if (request.Mode != "pippin")
+                fallback.Feedback = VerdictFeedback(
+                    asked, verdict, request.ChoiceLabel,
+                    ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked, request.Choice ?? ""));
 
             Console.WriteLine($"[Reflection] Fallback ready — errors={item.Errors}, hints={item.Hints} (fallback: aligned={fallback.Aligned}, insight={fallback.InsightXp})");
 
@@ -2967,7 +2858,12 @@ RULES:
                     // all. The rule-based plan already computes a concrete one, so use it rather than
                     // show nothing. For Q1 and Q2 the fallback's value is empty, so this is a no-op.
                     NextStep = AiTextFormatter.StripMathDelimiters(
-                        string.IsNullOrWhiteSpace(nextStep) ? fallback.NextStep : nextStep)
+                        string.IsNullOrWhiteSpace(nextStep) ? fallback.NextStep : nextStep),
+                    // The goal that would carry out what they just committed to. Read from the chip
+                    // rather than from the model, so it cannot propose a goal the app cannot offer.
+                    SuggestedGoal = asked.Kind == ReflectionQuestionBank.NextAction
+                        ? GoalCatalogue.ForPromise(asked.TextKey, request.Choice ?? "", MethodFocusFromLabelKey(evidence.FocusLabelKey))
+                        : null
                 }, "model", guardRejections));
                 }
             }
@@ -3134,6 +3030,50 @@ RULES:
             Console.WriteLine($"[Reflection] Session reflection {row.Id} opened — student={studentId}, exercises={exercises.Count}");
 
             return Ok(ToQueueResponse(conn, row));
+        }
+
+        /// <summary>
+        /// The promise the student made at the end of their last session, for showing back to them.
+        ///
+        /// Read at the moment the daily check-in opens, so it can say what they said they would do
+        /// before they choose anything today. A promise already settled is not returned: it has been
+        /// judged against an intention they have already set, and showing it again would ask them to
+        /// answer a question they have answered.
+        ///
+        /// The wording travels as a translation KEY rather than as a sentence, because the client owns
+        /// every word the student reads and this has to be the same wording as the chip they chose.
+        /// </summary>
+        [HttpGet("session-promise/{studentId}")]
+        public ActionResult<SessionPromiseResponse> GetSessionPromise(long studentId)
+        {
+            if (studentId <= 0) return BadRequest("Invalid student.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            // The same selection the settlement uses: the newest unsettled session promise, and never one
+            // made today. The intention is set at the start of a session and the promise at the end of
+            // one, so a promise made this session is for the NEXT one.
+            var promiseItem = conn.ExecuteScalar<string?>(
+                $"SELECT ItemId FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
+                "WHERE StudentId = @StudentId AND ItemType = 'session' AND QuestionId = 'session-q2-next' " +
+                "  AND FollowedUp = 0 AND CreatedAt < @Today " +
+                "GROUP BY ItemId ORDER BY MAX(Id) DESC LIMIT 1",
+                new { StudentId = studentId, Today = DateTime.UtcNow.ToString("yyyy-MM-dd") });
+
+            if (string.IsNullOrEmpty(promiseItem)) return Ok(new SessionPromiseResponse());
+
+            var choice = conn.ExecuteScalar<string?>(
+                $"SELECT Choice FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
+                "WHERE StudentId = @StudentId AND ItemType = 'session' AND QuestionId = 'session-q2-next' " +
+                "  AND ItemId = @ItemId AND Choice <> '' ORDER BY Id LIMIT 1",
+                new { StudentId = studentId, ItemId = promiseItem }) ?? "";
+
+            var textKey = ReflectionQuestionBank.SessionPromiseTextKey(choice);
+            if (textKey.Length == 0) return Ok(new SessionPromiseResponse());
+
+            return Ok(new SessionPromiseResponse { Choice = choice, TextKey = textKey });
         }
 
         /// <summary>
@@ -3389,6 +3329,28 @@ RULES:
             var mode = request.Mode == "pippin"
                 ? "They did not choose an option, so they are asking you to answer this question for them, from what is below. For Q1 and Q2 that means stating what they actually did on the one thing this question asks about. For Q3 it means naming what to do next. There is no student answer to grade."
                 : "They answered themselves";
+
+            // WHAT THE HELP REPLY SOUNDS LIKE, which is not the same as a reply that grades an answer.
+            //
+            // The model kept opening these with "You chose the equalization method." — a true statement
+            // about the student, handed to someone who had just asked for guidance. They pressed a
+            // button asking for help with a question and got a report about themselves instead of an
+            // answer. So this path is framed as the companion speaking: the observation is still there,
+            // because it IS the answer, but it arrives as something you noticed.
+            var helpVoice = request.Mode == "pippin"
+                ? "\nTHIS IS A REQUEST FOR GUIDANCE, SO ANSWER IT AS THE COMPANION.\n"
+                  + "- Open by speaking as yourself about what you can see, and then say it. "
+                  + "\"Here is what I noticed about this one: ...\" and \"What I can see is ...\" are the "
+                  + "shape. Do NOT open with a statement about them: no \"You chose ...\", no \"You picked "
+                  + "..., no \"You went with ..., no \"Your answer ...\". They did not answer anything, so "
+                  + "there is nothing of theirs to report back and a reply that opens that way reads as a "
+                  + "verdict on a choice they never made.\n"
+                  + "- Answer THIS question and nothing else. The subject of the first sentence is the "
+                  + "thing this question asks about, not their exercise, their mistakes or another step.\n"
+                  + "- Say what you can see, then what it means for the next exercise. Two or three "
+                  + "sentences, warm, and no question at the end."
+                : string.Empty;
+
             var langInstruction = request.Language switch
             {
                 "de" => "You must respond ONLY in German.",
@@ -3419,7 +3381,7 @@ Current question: {questionLabel}
 What they actually did, as far as we know it: {recordLine}{studentLineBlock}{meaningBlock}
 The decision on their answer: {verdictLine}
 The option they chose: {(string.IsNullOrWhiteSpace(request.Choice) ? "(none)" : string.IsNullOrWhiteSpace(request.ChoiceLabel) ? request.Choice : request.ChoiceLabel)}
-Mode: {mode}
+Mode: {mode}{helpVoice}
 Instructions:
 {langInstruction}
 TONE (very important): Be warm, brief and conversational — like a friend, not a report. Write as the companion who was there with them, in the second person (""you compared the two methods""), never as something that looked them up or checked them, and never list their exact error or hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
@@ -3468,6 +3430,18 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
         /// </summary>
         private static readonly System.Text.RegularExpressions.Regex CorrectsTheirAnswer = new(
             @"\bthe (record|data|facts) (shows|says|show|say)|\byou actually\b|\bbut you\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>
+        /// A help reply that opens by reporting a choice the student never made.
+        ///
+        /// Only checked on the help path. Anywhere else these openers are ordinary and wanted — a reply
+        /// grading a chip has to say what they picked — but the student who pressed the help button
+        /// answered nothing, so "You chose the equalization method." is a verdict on a choice that does
+        /// not exist, delivered to someone who asked for help with a question.
+        /// </summary>
+        private static readonly System.Text.RegularExpressions.Regex OpensByReportingTheirChoice = new(
+            @"^\s*(you (chose|picked|selected|went with|marked|opted)|your choice|you tapped)\b",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
         // A reply that only repeats the answer back.
@@ -3537,6 +3511,15 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
 
             if (CorrectsTheirAnswer.IsMatch(reply))
                 return "it turns their answer into a correction — say their answer back and then say what happened, in your own voice: no 'but you', no 'you actually', no 'the record shows'";
+
+            // A help reply that reports their choice back at them instead of answering the question.
+            //
+            // Only on the help path, where there is no answer of theirs to refer to at all: the model
+            // produced "You chose the equalization method." for a student who had chosen nothing, which
+            // reads as a verdict on a choice they never made. Anywhere else these openers are ordinary
+            // and wanted — a reply grading a chip has to say what they picked.
+            if (mode == "pippin" && OpensByReportingTheirChoice.IsMatch(reply))
+                return "it opens by reporting a choice they never made — they asked for guidance, so start from what you can see";
 
             var judged = questionKind is ReflectionQuestionBank.Observation or ReflectionQuestionBank.Judgement;
             if (!judged) return null;
@@ -3692,14 +3675,21 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
                 // the record says they did with the one thing the question asks about. It used to be a
                 // generic "look at the part that felt least certain", which answers no question at all —
                 // and this is the only text the student reads on this path.
+                //
+                // It OPENS IN THE COMPANION'S VOICE, because that is what was asked for. The model
+                // produced "You chose the equalization method." often enough that the reply read as a
+                // report about the student rather than someone helping: they pressed a button asking for
+                // guidance and were handed a statement about themselves. The observation still has to be
+                // in there — it is the answer — but it arrives as something the companion noticed, with
+                // the student as the subject of the second clause rather than the first word.
                 var did = ReflectionQuestionBank.DescribeRecordToStudent(evidence, asked);
                 return new ReflectionEvaluateResponse
                 {
                     Feedback = string.IsNullOrWhiteSpace(did)
-                        ? "Happy to help with this one. Nothing is known about that step here, so the "
+                        ? "Happy to help with this one. I have nothing about that step to go on here, so the "
                           + "best I can say is to take the moment this question is about and give it a go "
                           + "on the next exercise."
-                        : FactAndMeaning(did, asked),
+                        : PippinObservation(did, asked),
                     Aligned = false,
                     InsightXp = 0,
                     NextStep = ""
@@ -3731,6 +3721,19 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
         /// <summary>The offline reply: the fact about this question, then what that thing is for.</summary>
         private static string FactAndMeaning(string fact, ReflectionQuestion question) =>
             $"{char.ToUpperInvariant(fact[0])}{fact[1..]}."
+            + (string.IsNullOrWhiteSpace(question.Meaning) ? "" : $" {question.Meaning}");
+
+        /// <summary>
+        /// The same fact, framed as something the companion noticed rather than a statement about the
+        /// student. Used only for the help button, where the student asked for guidance.
+        ///
+        /// The record's line is written as a bare clause about them ("you worked the solution out
+        /// yourself"), which is right for a reply that answers a claim and wrong for one that answers a
+        /// request: it reads as a report on the student, when what they asked for was help with the
+        /// question. Wrapping it keeps the fact — it IS the answer — and changes who is speaking.
+        /// </summary>
+        private static string PippinObservation(string fact, ReflectionQuestion question) =>
+            $"Here is what I noticed about this one: {char.ToLowerInvariant(fact[0])}{fact[1..]}."
             + (string.IsNullOrWhiteSpace(question.Meaning) ? "" : $" {question.Meaning}");
 
         // ── Demo data generator ────────────────────────────────────────────────
@@ -3885,36 +3888,5 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
             public List<GoalSuggestion> Goals { get; set; } = new();
         }
 
-        /// <summary>Simple keyword-based category detection for when AI is unavailable.</summary>
-        internal static class CategoryDetector
-        {
-            public static string DetectCategoryFromText(string text)
-        {
-            var lower = text.ToLowerInvariant();
-
-            // Check for off-topic / gibberish first
-            var mathWords = new[] { "math", "exercise", "practice", "solve", "equation", "goal", "mission",
-                "learn", "study", "improve", "try", "work", "complete", "finish", "achieve", "streak",
-                "hint", "pippin", "solo", "method", "substitution", "elimination", "equalization",
-                "suitability", "efficiency", "matching", "help", "struggle", "better", "progress", "plan" };
-            bool hasMathContext = mathWords.Any(w => lower.Contains(w));
-            if (!hasMathContext && lower.Length < 5)
-                return "no_xp";  // very short, no math words = likely gibberish
-
-            bool hasGoal = lower.Contains("goal") || lower.Contains("mission") || lower.Contains("achieve")
-                || lower.Contains("finish the") || lower.Contains("complete the goal")
-                || lower.Contains("earn the") || lower.Contains("streak");
-
-            bool hasPractice = lower.Contains("practice") || lower.Contains("exercise") || lower.Contains("try")
-                || lower.Contains("work on") || lower.Contains("do some") || lower.Contains("solve")
-                || lower.Contains("complete the exercise");
-
-            if (hasGoal && hasPractice) return "both";
-            if (hasGoal) return "goal";
-            if (hasPractice) return "practice";
-            if (hasMathContext) return "unclear";
-            return "no_xp";
         }
-    }
-}
 }

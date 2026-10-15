@@ -13,6 +13,7 @@ import { incrementExerciseErrorCount, incrementExerciseHintCount, recordExercise
 import { useNudge } from "@/contexts/nudgeContext.ts";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { decisionOutcome, declinedElement, engagedElement } from "@utils/anchorDecisions.ts";
+import { ANCHOR_ELEMENT } from "@/types/student/goal.ts";
 import { nudgeBenefitKey, nudgeNameFor, type NudgeResponse } from "@utils/nudges.ts";
 import { awardInsightForFacingGap } from "@utils/insightAwards.ts";
 
@@ -246,6 +247,43 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
             }
         }).catch(() => {
             // The student keeps their answer either way; only the research record is lost.
+        });
+    }
+
+    /**
+     * Records that the solution was SHOWN instead of the student working it out.
+     *
+     * The gap this closes: each solution point asks "would you like to try to find the solution on your
+     * own?", and a student who says yes and then, after a wrong answer, presses "Show solution" never
+     * answers again — the button only writes an ACTION, never a choice. Their yes then stood alone, so
+     * a solve-on-own goal counted the exercise and paid the promise as if they had done the work.
+     *
+     * OUR STORE ONLY, and never `sendData`. The study protocol's own question is "did they say yes", and
+     * the answer to that question IS yes; the reveal is the outcome that follows it. Overwriting the
+     * study's row would corrupt the protocol record to fix our scoring, which is the wrong trade.
+     *
+     * The local summary is updated too, because the reflection and the promise follow-through read that
+     * rather than the store: the decision is the same one, answered by what actually happened.
+     */
+    function recordSolutionShown(isSecondSolution: boolean): void {
+        if (!useLogger || ourEntryId === undefined) return;
+
+        recordExerciseDecision(ANCHOR_ELEMENT.SolveOnOwn, "Declined");
+
+        void axiosInstance.post(`${ANCHOR_TRACKING_BASE}/trackRecord`, {
+            userId: user.id,
+            username: user.username,
+            studyId,
+            id: ourEntryId,
+            name: isSecondSolution ? "SecondSolutionShown" : "FirstSolutionShown",
+            choice: "Yes",
+        }, {
+            headers: {
+                Authorization: "Bearer " + user.token
+            }
+        }).catch(() => {
+            // The local summary above already stops the goal and the promise from paying, so a lost
+            // post costs the research record one row rather than a wrong award.
         });
     }
 
@@ -772,6 +810,7 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
         decideResolvingIntervention,
         trackChoice,
         reconsiderDecline,
+        recordSolutionShown,
         trackErrorInPhase,
         trackHintsInPhase,
         setNextTrackingPhase,

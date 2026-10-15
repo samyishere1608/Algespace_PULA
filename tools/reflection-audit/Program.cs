@@ -511,6 +511,132 @@ foreach (var question in scenarios.SelectMany(s => ReflectionQuestionBank.Build(
 }
 
 
+// ── The goal each commitment proposes ────────────────────────────────────────
+//
+// Every Q3 chip the bank can offer is put through the catalogue mapping, and whatever comes back
+// has to be a goal the client's own catalogue would also accept. The client validates the
+// suggestion again and drops it if any field is off, so a mismatch here is a promise the student
+// makes and then sees no goal for — silent, and only visible in the data. This also pins the
+// answers that must stay EMPTY: a commitment the picker cannot express gets no suggestion.
+
+var suggestionCases = new (string Question, string Chip, string Focus, string Expected)[]
+{
+    // Asked which method to compare next: the goal is about comparing, whatever method was named.
+    ("reflection-goal-q3-compare-method", "pick-substitution", "", GoalCatalogue.MethodComparison),
+    ("reflection-goal-q3-solve-method", "pick-elimination", "", GoalCatalogue.SolveOnOwn),
+    ("reflection-goal-q3-explain-type", "pick-suitability", "", GoalCatalogue.SelfExplanation),
+
+    // The method exercise's own menu, where the question supplies the commitment. The focus arrives
+    // as the reflection's label key on one path and as the catalogue value on the other, and both
+    // have to resolve — see GoalCatalogue.MethodFrom.
+    ("reflection-q3-method", "act-method-same", "Substitution", GoalCatalogue.Method),
+    ("reflection-q3-method", "act-method-same", "flexibility:equalization-method", GoalCatalogue.Method),
+    ("reflection-q3-method", "act-method-same", "", null),
+    ("reflection-q3-method", "act-method-fit", "", GoalCatalogue.ExerciseType),
+    ("reflection-q3-method", "act-method-other", "", null),
+
+    // Explaining, comparing and solving alone, on whichever question offered them.
+    ("reflection-q3-explain", "act-explain-myself", "", GoalCatalogue.SelfExplanation),
+    ("reflection-q3-explain-efficiency", "act-explain-shown", "", GoalCatalogue.SelfExplanation),
+    ("reflection-q3-compare", "act-compare-hint", "", GoalCatalogue.MethodComparison),
+    ("reflection-q3-solo", "act-solo-shown", "", GoalCatalogue.SolveOnOwn),
+    ("reflection-goal-q3-method", "act-solve-alone", "", GoalCatalogue.SolveOnOwn),
+    ("reflection-goal-q3-method", "act-explain", "", GoalCatalogue.SelfExplanation),
+    ("reflection-goal-q3-method", "act-compare", "", GoalCatalogue.MethodComparison),
+
+    // Hint and error limits, and only the chips that name one.
+    ("reflection-q3-target", "act-no-hints", "", GoalCatalogue.HintsAndErrors),
+    ("reflection-goal-q3-hints-errors", "act-target-one", "", GoalCatalogue.HintsAndErrors),
+    ("reflection-q3-target", "act-target-none", "", GoalCatalogue.HintsAndErrors),
+    ("reflection-goal-q3-hints-errors", "act-no-errors", "", GoalCatalogue.HintsAndErrors),
+
+    // A method and a type that fit, which the two choice-paying goal questions ask about.
+    ("reflection-goal-q3-suitability", "act-suitable-choice", "", GoalCatalogue.ExerciseType),
+    ("reflection-goal-q3-efficiency", "act-best-choice", "", GoalCatalogue.ExerciseType),
+
+    // Commitments with no honest match, which must stay empty rather than invent one.
+    ("reflection-q3-target", "act-target-same", "", null),
+    ("reflection-goal-q3-method", "act-beat-average", "", null),
+};
+
+foreach (var (question, chip, focus, expected) in suggestionCases)
+{
+    var suggested = GoalCatalogue.ForPromise(question, chip, focus);
+    var scenario = $"suggest/{question}/{chip}";
+
+    if (suggested is null)
+    {
+        if (expected is not null)
+            Fail(scenario, $"no goal proposed, but the catalogue has one ({expected})");
+        continue;
+    }
+
+    if (expected is null)
+    {
+        Fail(scenario, $"proposed {suggested.Category}, but no goal carries this promise");
+        continue;
+    }
+
+    if (suggested.Category != expected)
+        Fail(scenario, $"proposed {suggested.Category}, expected {expected}");
+}
+
+// The focus has to resolve to the SAME method, not merely to some method: a suggestion narrowed to
+// the wrong one sends the student to practise something they never promised, and it still renders
+// as a valid goal, so nothing else here would catch it.
+foreach (var method in GoalCatalogue.Methods)
+{
+    var fromValue = GoalCatalogue.ForPromise("reflection-q3-method", "act-method-same", method)?.Focus;
+    if (fromValue != method)
+        Fail($"suggest/focus/{method}", $"the value form resolved to \"{fromValue}\" instead of \"{method}\"");
+
+    var labelKey = $"flexibility:{method.ToLowerInvariant()}-method";
+    var fromLabelKey = GoalCatalogue.ForPromise("reflection-q3-method", "act-method-same", labelKey)?.Focus;
+    if (fromLabelKey != method)
+        Fail($"suggest/focus/{labelKey}", $"the label key form resolved to \"{fromLabelKey}\" instead of \"{method}\"");
+}
+
+// The same sweep over every chip the bank REALLY offers on a Q3 question, so a chip added later is
+// covered without anyone remembering to add it here. Naming the wrong goal is not the only way this
+// goes wrong: a goal whose fields do not fit the catalogue is dropped by the client and the student
+// is told nothing, which looks like the feature simply not working.
+foreach (var scenario in scenarios)
+{
+    foreach (var question in ReflectionQuestionBank.Build(scenario.Evidence)
+                 .Where(q => q.Kind == ReflectionQuestionBank.NextAction))
+    {
+        foreach (var chip in question.Chips)
+        {
+            var suggested = GoalCatalogue.ForPromise(question.TextKey, chip.Id, scenario.Evidence.FocusLabelKey);
+            if (suggested is null) continue;
+
+            var where = $"suggest/{question.TextKey}/{chip.Id}";
+
+            if (!GoalCatalogue.IsCategory(suggested.Category))
+                Fail(where, $"category \"{suggested.Category}\" is not in the catalogue");
+
+            if (!GoalCatalogue.MetricsFor(suggested.Category).Contains(suggested.Metric))
+                Fail(where, $"metric \"{suggested.Metric}\" is not offered for {suggested.Category}");
+
+            if (!GoalCatalogue.TargetsFor(suggested.Metric).Contains(suggested.Target))
+                Fail(where, $"target {suggested.Target} is not offered for {suggested.Metric}");
+
+            if (suggested.Focus.Length > 0 && !GoalCatalogue.FocusesFor(suggested.Category).Contains(suggested.Focus))
+                Fail(where, $"focus \"{suggested.Focus}\" is not offered for {suggested.Category}");
+
+            if (suggested.Category == GoalCatalogue.HintsAndErrors)
+            {
+                if (suggested.Quality is not ("hints" or "errors"))
+                    Fail(where, $"quality \"{suggested.Quality}\" is neither hints nor errors");
+
+                if (!GoalCatalogue.QualityLimits.Contains(suggested.MaxPerExercise))
+                    Fail(where, $"limit {suggested.MaxPerExercise} is not one the picker offers");
+            }
+        }
+    }
+}
+
+
 // ── The goal questions, with a real window ───────────────────────────────────
 //
 // The goal scenarios above carry no window, so they exercise the fallback used for a goal completed

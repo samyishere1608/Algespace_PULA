@@ -31,6 +31,7 @@ export function FirstSolution(
         trackInterventionChoice,
         reconsiderDecline,
         reconsiderInterventionDecline,
+        recordSolutionShown,
         condition,
         decideCalculationIntervention,
     }: {
@@ -51,6 +52,8 @@ export function FirstSolution(
         /** Offers the one nudge before a decline takes effect. See `VariableComputation`. */
         reconsiderDecline?: () => Promise<boolean>;
         reconsiderInterventionDecline?: () => Promise<boolean>;
+        /** The reveal at THIS solution point. See `VariableComputation`. */
+        recordSolutionShown?: (isSecondSolution: boolean) => void;
         condition: AgentCondition;
         decideCalculationIntervention: () => Promise<{ trigger: boolean; messageType: number }>;
     }
@@ -79,7 +82,7 @@ export function FirstSolution(
                 </div>
             )}
             <VariableComputation variable={variable} loadNextStep={loadNextStep} additionalMessage={additionalMessage} agentType={agentType}
-                                 trackAction={trackAction} trackError={trackError} trackChoice={trackChoice} trackType={trackType} trackInterventionChoice={trackInterventionChoice} reconsiderDecline={reconsiderDecline} reconsiderInterventionDecline={reconsiderInterventionDecline} condition={condition} decideCalculationIntervention={decideCalculationIntervention}/>
+                                 trackAction={trackAction} trackError={trackError} trackChoice={trackChoice} trackType={trackType} trackInterventionChoice={trackInterventionChoice} reconsiderDecline={reconsiderDecline} reconsiderInterventionDecline={reconsiderInterventionDecline} recordSolutionShown={() => recordSolutionShown?.(false)} condition={condition} decideCalculationIntervention={decideCalculationIntervention}/>
         </React.Fragment>
     );
 }

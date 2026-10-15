@@ -378,9 +378,10 @@ It used to just hide the window, leaving the item `pending` and bringing it back
 | `dotnet run` | The bank itself: every category, every type, every awkward case, and the relevance gate. No API needed. |
 | `check-keys.ps1` | Every key the bank can emit resolves in en, de and ja. Currently 590 / 590 / 589. |
 | `node check-reply-alignment.mjs` | The replies. Needs the API. **The main tool.** |
-| `node check-session-reflection.mjs` | The session reflection end to end. 26 of 26. |
+| `node check-session-reflection.mjs` | The reflection's two session questions end to end. 27 of 27. |
 | `node check-insight-gap.mjs` | Insight for facing a gap, once per episode. |
 | `node check-resolve-followthrough.mjs` | Promises settling. 27 of 27. Writes to the database. |
+| `node check-suggested-goal.mjs` | The goal a Q3 commitment proposes, end to end. 8 of 8. Writes to the database. |
 | `node restore-baseline.mjs` | **Always run this after anything that wrote.** |
 
 ### `check-reply-alignment.mjs` — read this before trusting or changing it
@@ -925,3 +926,62 @@ became `.reflection-modal__chips--answer`, sized like something you are meant to
 have the companion show what the record says before choosing.
 
 **Not verified:** the modal in a browser.
+
+## Five small faults, and what each one actually was
+
+**A goal completed when the solution was handed over.** "Solve it on your own" was read off
+`FirstSolutionChoice = Yes`, and pressing **Show solution** writes only an ACTION
+(`trackAction("show SOLUTION")`) — never a choice. So saying yes and then revealing the answer looked
+identical to working it out unaided, and the goal was paid for work the student did not do.
+`AnchorDimension.SolutionShown` now holds the two reveal names, `SolvedOnOwn(records)` reads them
+point-by-point, and `StudentProgressController.ToGoalExercise` uses it for `Own` / `WasShown`.
+Point-by-point matters: being shown the FIRST solution must not erase engagement on the SECOND, so the
+pair is read together rather than as one flag. The reveal also writes a `decision.made` event now, so
+the timeline shows why the goal did not complete.
+
+**The "Skip for today" button had no CSS at all.** `daily-intention-modal__skip-btn` had no rule
+anywhere in the app, so it rendered as a raw browser button next to a styled card. Added, along with
+the block for the promise line below.
+
+**The end-of-session reflection lost its free text.** Same reasoning as the question bank: a chip is
+answerable from the record and a paragraph is not. The `reflect-on-stats` endpoint, `CategoryDetector`
+and the client's `requestReflection` went with it — about 155 lines of server code that no longer had a
+caller. The choice the student makes there is now shown back to them in the next day's daily intention
+(`GET /student-progress/session-promise/{studentId}`), rendered as the chip's own wording rather than
+interpolated into a sentence, because the chip texts are noun phrases and "You said you'd next-practice"
+is not English.
+
+**"Pippin, tell me" opened by reporting a choice.** Two faults, one of them real: a `helpVoice` block
+was added for the companion's voice, and `PippinObservation()` replaced the verdict sentence — but the
+help branch was **dead code**, because `fallback.Feedback = VerdictFeedback(...)` overwrote it on every
+call. Guard `OpensByReportingTheirChoice` was then added to the reply guard, and only then did anything
+change for the student.
+
+**Q3 now proposes a goal.** `GoalCatalogue.ForPromise(questionKey, chipId, currentMethodFocus)` maps a
+commitment onto the catalogue. The QUESTION is part of the key because a chip id alone is ambiguous:
+`pick-substitution` is "the method I will compare next" under one question and "the method I will work
+out myself next" under another. Null is a real answer — "fewer mistakes than my average" is a limit the
+picker cannot express, and proposing a fixed number would be inventing a promise the student did not
+make.
+
+**Two faults found by the new checks, both silent.**
+
+1. **The narrowed method arrived as a label key.** `ForPromise` was handed
+   `"flexibility:elimination-method"` and returned it as the goal's focus. The client checks a focus
+   against its own catalogue, does not find that, and drops it — so the student was shown "3 exercises
+   using any method" instead of "3 Elimination exercises". Nothing failed; the goal was just wrong.
+   `GoalCatalogue.MethodFrom` now accepts either form.
+2. **`t()` was applied to a focus VALUE.** `goalSummaryArgs` returns keys for the summary templates to
+   resolve, but a goal's focus is stored as its value ("Suitability"), so `t("Suitability")` returned
+   "Suitability" — and a German student read "3 Suitability-Aufgaben" where the catalogue has "Eignung".
+   `focusLabelKey` maps value to key first. Visible in English? No. That is why it lasted.
+
+**New checks.** The harness gained a sweep that puts **every chip the bank really offers on a Q3
+question** through `ForPromise` and asserts every field of whatever comes back fits the catalogue, so a
+chip added later is covered without anyone remembering. That sweep is what found fault 1. A second
+block pins the focus itself, per method, in both forms — a suggestion narrowed to the WRONG method
+still renders as a valid goal, so nothing else would catch it.
+
+`check-suggested-goal.mjs` covers the wiring the harness cannot reach: that the server reads the
+narrowed method off the queue row and hands the catalogue the right form of it. That is the exact path
+fault 1 lived on.

@@ -1,10 +1,9 @@
-﻿import { faChartBar, faLightbulb, faMagic, faPen, faRightFromBracket, faRobot, faSpinner, faStar, faTimes } from "@fortawesome/free-solid-svg-icons";
+﻿import { faChartBar, faLightbulb, faMagic, faRightFromBracket, faRobot, faSpinner, faStar, faTimes } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ReactElement, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import i18n from "@/i18n.ts";
-import { requestReflection } from "@utils/progressUtils.ts";
 import { awardChoiceForDayReflection } from "@utils/choiceAwards.ts";
 import axios from "axios";
 
@@ -17,9 +16,9 @@ interface Props {
     /**
      * Hands off to the guided session reflection, which the dashboard owns.
      *
-     * It is a different thing from the two options below: those are a note the student writes or reads,
-     * while this asks them two questions the server has built from the day's own exercises. It renders
-     * in the reflection dialog, so the dashboard is what has to open it.
+     * It is the only way to reflect here now. It asks two questions the server has built from the day's
+     * own exercises, and the second of them is the promise tomorrow's intention is checked against —
+     * neither of which a free-text box could do.
      */
     onStartSessionReflection: () => void;
 }
@@ -34,38 +33,9 @@ interface AnalysisResult {
 export function EndSessionModal({ studentId, onEndSession, onClose, onStartSessionReflection }: Props): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
     const [showReflection, setShowReflection] = useState(false);
-    const [reflectionMode, setReflectionMode] = useState<"free" | "ai" | null>(null);
-    const [customText, setCustomText] = useState("");
-    const [aiFeedback, setAiFeedback] = useState("");
-    const [feedbackCategory, setFeedbackCategory] = useState("");
-    const [freeLoading, setFreeLoading] = useState(false);
-    const [showGibberishRetry, setShowGibberishRetry] = useState(false);
+    const [reflectionMode, setReflectionMode] = useState<"ai" | null>(null);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [aiLoading, setAiLoading] = useState(false);
-
-    async function handleFreeSubmit(): Promise<void> {
-        if (!customText.trim()) return;
-        setFreeLoading(true);
-        setAiFeedback("");
-        setShowGibberishRetry(false);
-        try {
-            const result = await requestReflection(typeof studentId === "number" ? studentId : 1, customText.trim(), i18n.language?.slice(0, 2) ?? "en");
-            setAiFeedback(result.feedback);
-            setFeedbackCategory(result.category ?? "unclear");
-            if (result.category === "no_xp") setShowGibberishRetry(true);
-        } catch {
-            setAiFeedback(t("daily-intention-feedback-fallback"));
-            setFeedbackCategory("unclear");
-        } finally {
-            setFreeLoading(false);
-        }
-    }
-
-    function handleRetryGibberish(): void {
-        setShowGibberishRetry(false);
-        setAiFeedback("");
-        setFeedbackCategory("unclear");
-    }
 
     async function handleAiAnalyze(): Promise<void> {
         setAiLoading(true);
@@ -117,18 +87,18 @@ export function EndSessionModal({ studentId, onEndSession, onClose, onStartSessi
                     <div className="end-session-modal__reflect-options">
                         <h3>{t("end-session-reflect-title")}</h3>
                         <div className="end-session-modal__reflect-cards">
-                            {/* The guided reflection leads: it is the one that looks at the day's own
-                                exercises, and the second of its two questions is the promise that the
-                                next session's intention is checked against. */}
+                            {/* The guided reflection and the summary, and only those two.
+                                A third card used to sit between them where the student typed a note in
+                                their own words and the model replied to it. It is gone: it was the only
+                                free text left in the student area, its reply could disagree with anything
+                                else the app had recorded, and the guided reflection asks the same
+                                question — what stood out today — with answers that are checkable and
+                                that the next session actually uses. The summary stays because it reads
+                                the day's own numbers rather than asking the student to produce anything. */}
                             <button className="ess-reflect-card" onClick={onStartSessionReflection}>
                                 <span className="ess-reflect-card__icon"><FontAwesomeIcon icon={faStar} /></span>
                                 <span className="ess-reflect-card__title">{t("end-session-reflect-guided")}</span>
                                 <span className="ess-reflect-card__desc">{t("end-session-reflect-guided-desc")}</span>
-                            </button>
-                            <button className="ess-reflect-card" onClick={() => setReflectionMode("free")}>
-                                <span className="ess-reflect-card__icon"><FontAwesomeIcon icon={faPen} /></span>
-                                <span className="ess-reflect-card__title">{t("end-session-reflect-free")}</span>
-                                <span className="ess-reflect-card__desc">{t("end-session-reflect-free-desc")}</span>
                             </button>
                             <button className="ess-reflect-card" onClick={() => { setReflectionMode("ai"); handleAiAnalyze(); }}>
                                 <span className="ess-reflect-card__icon"><FontAwesomeIcon icon={faRobot} /></span>
@@ -137,36 +107,6 @@ export function EndSessionModal({ studentId, onEndSession, onClose, onStartSessi
                             </button>
                         </div>
                         <button className="ess-action-btn ess-action-btn--ghost" onClick={() => setShowReflection(false)}>{t("end-session-back")}</button>
-                    </div>
-                ) : reflectionMode === "free" ? (
-                    <div className="end-session-modal__free-reflect">
-                        <textarea className="end-session-modal__free-input" value={customText} onChange={(e) => setCustomText(e.target.value)} placeholder={t("end-session-reflect-placeholder")} rows={4} maxLength={500} autoFocus disabled={freeLoading} />
-                        {showGibberishRetry ? (
-                            <div className="end-session-modal__free-actions">
-                                <button className="button secondary-button" onClick={handleRetryGibberish}>{t("daily-intention-retry")}</button>
-                                <button className="button danger-button" onClick={onEndSession}>{t("daily-intention-skip-anyway")}</button>
-                            </div>
-                        ) : (
-                            <div className="end-session-modal__free-actions">
-                                <button className="button secondary-button" onClick={() => setReflectionMode(null)}>{t("daily-intention-back")}</button>
-                                <button className="button primary-button" onClick={handleFreeSubmit} disabled={!customText.trim() || freeLoading}>
-                                    {freeLoading ? <><FontAwesomeIcon icon={faSpinner} spin /> {t("daily-intention-analyzing")}</> : t("end-session-submit-reflection")}
-                                </button>
-                            </div>
-                        )}
-                        {aiFeedback && !showGibberishRetry && (
-                            <div className="end-session-modal__free-result">
-                                <div className={`end-session-modal__feedback-cat end-session-modal__feedback-cat--${feedbackCategory}`}><span className="end-session-modal__feedback-dot" />{t(`daily-intention-cat-${feedbackCategory}`)}</div>
-                                <p>{aiFeedback}</p>
-                                <button className="button primary-button" onClick={onEndSession}>{t("daily-intention-close")}</button>
-                            </div>
-                        )}
-                        {aiFeedback && showGibberishRetry && (
-                            <div className="end-session-modal__free-result">
-                                <div className="end-session-modal__feedback-cat end-session-modal__feedback-cat--no_xp"><span className="end-session-modal__feedback-dot" />{t("daily-intention-cat-no_xp")}</div>
-                                <p>{aiFeedback}</p>
-                            </div>
-                        )}
                     </div>
                 ) : (
                     <div className="end-session-modal__ai-result">
@@ -188,7 +128,7 @@ export function EndSessionModal({ studentId, onEndSession, onClose, onStartSessi
                                 </div>
                                 <div className="end-session-modal__ai-footer">
                                     {!analysis.isAiGenerated && <span className="end-session-modal__ai-fallback-note">{t("end-session-fallback-note")}</span>}
-                                    <button className="button primary-button" onClick={onEndSession}>{t("daily-intention-close")}</button>
+                                    <button className="button primary-button" onClick={onEndSession}>{t("end-session-finish")}</button>
                                 </div>
                             </>
                         )}

@@ -564,7 +564,13 @@ namespace webapi.Services
                     Method = attempt.SelectedMethod,
                     SelfExplanation = Engaged(AnchorDimension.SelfExplanation),
                     MethodComparison = Engaged(AnchorDimension.MethodComparison),
-                    SolveOnOwn = Engaged(AnchorDimension.SolveOnOwn),
+                    // Not plain engagement: saying yes and then having the solution shown is not working
+                    // it out, and a solve-on-own goal used to complete on exactly that.
+                    SolveOnOwn = AnchorDimension.SolvedOnOwn(
+                        records
+                            .Where(r => AnchorDimension.SolveOnOwn.Contains(r.Name, StringComparer.Ordinal)
+                                        || AnchorDimension.SolutionShown.Contains(r.Name, StringComparer.Ordinal))
+                            .Select(r => (r.Name, r.Choice))),
                     Errors = attempt.TotalErrors,
                     Hints = attempt.TotalHints,
                     Seconds = attempt.TotalTime,

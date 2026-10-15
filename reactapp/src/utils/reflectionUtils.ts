@@ -60,6 +60,21 @@ export interface ReflectionEvaluateResult {
     aligned: boolean;
     insightXp: number;
     nextStep: string;
+    /**
+     * The goal that would carry out the commitment they just made, when the catalogue has one.
+     *
+     * The same shape as `StudyGoal` so the client can hand it straight to its own goal wording, which
+     * is why no sentence arrives from the server: every word the student reads about a goal, and every
+     * legal target, belongs to this side.
+     */
+    suggestedGoal?: {
+        category: string;
+        metric: string;
+        target: number;
+        focus: string;
+        quality: string;
+        maxPerExercise: number;
+    } | null;
 }
 
 export async function fetchReflectionQueue(studentId: number): Promise<ReflectionQueueItem[]> {
@@ -89,6 +104,23 @@ export async function startSessionReflection(
             { params: { label } }
         );
         return data ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * The promise the student made at the end of their last session.
+ *
+ * Read when the check-in opens so it can be shown before they choose anything today — a commitment
+ * nobody reads back is not a commitment.
+ */
+export async function fetchSessionPromise(studentId: number): Promise<{ choice: string; textKey: string } | null> {
+    try {
+        const { data } = await axios.get<{ choice: string; textKey: string }>(
+            `${BACKEND}/student-progress/session-promise/${studentId}`
+        );
+        return data?.textKey ? data : null;
     } catch {
         return null;
     }

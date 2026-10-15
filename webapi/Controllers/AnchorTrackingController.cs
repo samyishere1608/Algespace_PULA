@@ -283,6 +283,18 @@ namespace webapi.Controllers
                     return BadRequest("Missing student, attempt or record name.");
 
                 _anchors.TrackChoice(data.UserId, data.Id, data.Name, data.Choice);
+
+                // The solution being shown is a real event in the sitting and belongs on the timeline.
+                // Only for the two reveal names: this endpoint also carries nudge outcomes, and logging
+                // every one of those would fill the spine with rows the profile already holds.
+                if (AnchorDimension.SolutionShown.Contains(data.Name, StringComparer.Ordinal))
+                {
+                    using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+                    conn.Open();
+                    StudentEventLog.Write(conn, data.UserId, LogEventType.DecisionMade, attemptId: data.Id,
+                        refId: data.Name, value: "the solution was shown");
+                }
+
                 return Ok();
             }
             catch (Exception exception)

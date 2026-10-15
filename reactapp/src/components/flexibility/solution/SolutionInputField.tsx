@@ -13,13 +13,21 @@ import { TranslationInterpolation } from "@/types/shared/translationInterpolatio
 import { ClosableFlexibilityPopover, FlexibilityPopover } from "@components/flexibility/interventions/FlexibilityPopover.tsx";
 import { Intervention } from "@components/flexibility/interventions/Intervention.tsx";
 
-export function SolutionInputField({ variable, handleSolution, showSolution, agentType, trackAction, trackError }: {
+export function SolutionInputField({ variable, handleSolution, showSolution, agentType, trackAction, trackError, solutionShown }: {
     variable: Variable;
     handleSolution: () => void;
     showSolution: () => void;
     agentType?: AgentType
     trackAction: (action: string) => void;
     trackError: () => void;
+    /**
+     * Called when the solution is revealed, from either of the two buttons that do it.
+     *
+     * The reveal is a DECISION, not just an action: it is the student taking the help at a point where
+     * they had said they would work it out. Recorded separately so scoring can tell "opted in and did
+     * it" apart from "opted in and was shown it".
+     */
+    solutionShown: () => void;
 }): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Flexibility);
 
@@ -50,6 +58,7 @@ export function SolutionInputField({ variable, handleSolution, showSolution, age
                 <Intervention handleYes={retry} agentType={agentType} agentExpression={AgentExpression.Thinking}
                               handleNo={() => {
                                   trackAction("show SOLUTION");
+                                  solutionShown();
                                   showSolution();
                               }}
                 >
@@ -62,6 +71,7 @@ export function SolutionInputField({ variable, handleSolution, showSolution, age
                         <p>{t(FlexibilityTranslations.FIRST_SOLUTION_SAMPLE_SOLUTION)}</p>
                         <button className={"button primary-button"} onClick={() => {
                             trackAction("SAMPLE solution");
+                            solutionShown();
                             showSolution();
                         }}>
                             <FontAwesomeIcon icon={faMagnifyingGlass} />

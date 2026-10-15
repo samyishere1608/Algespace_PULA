@@ -1515,6 +1515,7 @@ export default function StudentDashboard(): ReactElement {
                 already been cleared while this state update is still in flight. */}
             {showDailyIntention && !showTour && (
                 <DailyIntentionModal
+                    studentId={student?.id ?? 0}
                     studentName={student?.username ?? "Student"}
                     buddyName={activeBuddy.name}
                     buddyEmoji={activeBuddy.emoji}

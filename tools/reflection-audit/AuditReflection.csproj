@@ -13,6 +13,8 @@
     <Compile Include="..\..\webapi\Models\Student\ReflectionQuestions.cs" Link="ReflectionQuestions.cs" />
     <Compile Include="..\..\webapi\Models\Student\StudentProgress.cs" Link="StudentProgress.cs" />
     <Compile Include="..\..\webapi\Services\ReflectionQuestionBank.cs" Link="ReflectionQuestionBank.cs" />
+    <Compile Include="..\..\webapi\Models\Student\GoalCatalogue.cs" Link="GoalCatalogue.cs" />
+    <Compile Include="..\..\webapi\Models\Anchors\AvoidanceProfile.cs" Link="AvoidanceProfile.cs" />
   </ItemGroup>
 
 </Project>

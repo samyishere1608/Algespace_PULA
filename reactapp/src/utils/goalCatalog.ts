@@ -316,12 +316,27 @@ export function goalSummaryKey(goal: StudyGoal): string {
     return `goals-summary-${goal.category}`;
 }
 
-export function goalSummaryArgs(goal: StudyGoal): Record<string, string | number> {
-    const def = getCategoryDef(goal.category);
+/**
+ * The translation key for a goal's focus, from either a catalogue value ("Suitability") or that key
+ * itself, so both conventions resolve. A null focus becomes the category's own "any" key — the same
+ * placeholder the summary templates take for a goal narrowed to nothing.
+ *
+ * The picker stores a focus as its VALUE, which is also what the anchor store records, while the
+ * summary templates take a KEY. Resolving it here rather than passing the value straight to `t` is
+ * what stops a German or Japanese student reading "Suitability" in the middle of their own language.
+ */
+export function focusLabelKey(category: GoalCategory, focus: string | null): string {
+    const def = getCategoryDef(category);
+    if (focus === null) return def.anyFocusKey;
 
+    const option = def.focuses.find((entry) => entry.value === focus || entry.labelKey === focus);
+    return option?.labelKey ?? focus;
+}
+
+export function goalSummaryArgs(goal: StudyGoal): Record<string, string | number> {
     return {
         target: goal.target,
-        focus: goal.focus ?? def.anyFocusKey,
+        focus: focusLabelKey(goal.category, goal.focus),
         max: goal.maxPerExercise ?? 0,
         // "hints" | "errors" — the caller resolves it through `goal-quality-*`.
         quality: goal.quality ?? "hints",

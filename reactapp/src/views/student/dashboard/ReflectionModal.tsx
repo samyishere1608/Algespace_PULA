@@ -1,10 +1,13 @@
-import { faArrowRight, faCheck, faLightbulb, faRobot, faSpinner, faTimes } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faCheck, faLightbulb, faRobot, faSpinner, faTimes, faTrophy } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ReactElement, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import i18n from "@/i18n.ts";
 import { BuddySays } from "@components/shared/BuddySays.tsx";
+import { asTranslate, describeGoal } from "@utils/goalCatalog.ts";
+import { suggestionToGoal } from "@utils/goalSuggestions.ts";
+import type { StudyGoal } from "@/types/student/goal.ts";
 import {
     completeReflection,
     evaluateReflection,
@@ -93,6 +96,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const [loading, setLoading] = useState(false);
     const [history, setHistory] = useState<ReflectionHistoryEntry[]>([]);
     const [earnedInsight, setEarnedInsight] = useState(0);
+    const [suggestedGoal, setSuggestedGoal] = useState<StudyGoal | null>(null);
 
     /**
      * WHICH action is in flight, not merely that one is.
@@ -117,6 +121,17 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const asked = useMemo(
         () => resolveQuestion(item?.questions?.[question - 1], t),
         [item, question, t]
+    );
+
+    // The suggested goal, in the goal system's own wording — the same sentence the goal card and the
+    // picker show for it, so the reflection is proposing a goal the student can recognise rather than
+    // a second way of describing one.
+    //
+    // Up here with the other hooks, above the early return below: a hook after a conditional return
+    // runs on some renders and not others, which React rejects outright.
+    const suggestedGoalText = useMemo(
+        () => (suggestedGoal ? describeGoal(suggestedGoal, asTranslate(t)) : ""),
+        [suggestedGoal, t]
     );
     if (!item) {
         return (
@@ -169,6 +184,11 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setFeedback(result.feedback);
             setNextStep(result.nextStep ?? "");
             setEarnedInsight(result.insightXp ?? 0);
+            // The goal that would carry out what they just committed to, in its own catalogue shape so
+            // the same wording can be used as everywhere else a goal is named. Converted by the same
+            // function that validates the goal picker's own suggestions, so a suggestion whose fields
+            // do not fit the catalogue is dropped rather than rendered as a goal nobody could complete.
+            setSuggestedGoal(result.suggestedGoal ? suggestionToGoal(result.suggestedGoal) : null);
             setPhase("feedback");
 
             // THE CHIP BELONGS ON THE STUDENT'S ROW.
@@ -345,6 +365,16 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                 <div>
                                     <span className="reflection-modal__next-step-label">{t("reflection-next-step-label")}</span>
                                     <p>{nextStep}</p>
+                                    {/* The goal that would carry it out, in the goal system's own words.
+                                        Composed here rather than by the server because the wording and the
+                                        legal targets belong to the catalogue — the server only says WHICH
+                                        goal fits, and says nothing when none does. */}
+                                    {suggestedGoalText && (
+                                        <p className="reflection-modal__suggested-goal">
+                                            <FontAwesomeIcon icon={faTrophy} className="reflection-modal__suggested-goal-icon" />
+                                            {t("reflection-suggested-goal", { goal: suggestedGoalText })}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         )}

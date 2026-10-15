@@ -53,6 +53,36 @@ namespace webapi.Models.Anchors
         /// </summary>
         public static readonly string[] SolveOnOwn = ["FirstSolutionChoice", "SecondSolutionChoice"];
 
+        /// <summary>
+        /// The moment the solution was SHOWN at a solution point, instead of the student working it out.
+        ///
+        /// Opting in is not the same as doing it. The two solution points each ask "would you like to
+        /// try to find the solution on your own?", and a student who says yes and then, after typing a
+        /// wrong answer, presses "Show solution" has taken the help — but no second CHOICE is recorded
+        /// for that, because the button that shows the solution only writes an action. Their yes then
+        /// stands alone and reads as unaided work, which is how a solve-on-own goal could complete on an
+        /// exercise they were walked through.
+        ///
+        /// Recorded per solution point, because the two are independent: being shown the first solution
+        /// says nothing about whether they found the second one themselves. `Yes` here means "the
+        /// solution was shown", which is the opposite of engagement, so read it with
+        /// <see cref="SolvedOnOwn"/> rather than with <see cref="Engaged"/>.
+        /// </summary>
+        public static readonly string[] SolutionShown = ["FirstSolutionShown", "SecondSolutionShown"];
+
+        /// <summary>
+        /// The two solution points, as a pair per point: the answer the student gave and the record that
+        /// the solution was then shown to them.
+        ///
+        /// Kept side by side because a reveal only means anything about the point it belongs to. Read
+        /// them with <see cref="SolvedOnOwn"/> rather than walking the two arrays in parallel.
+        /// </summary>
+        public static readonly (string Choice, string Shown)[] SolutionPoints =
+        [
+            ("FirstSolutionChoice", "FirstSolutionShown"),
+            ("SecondSolutionChoice", "SecondSolutionShown"),
+        ];
+
         public static readonly string[] SelfExplanation = ["SelfExplanationChoice"];
 
         /// <summary>
@@ -79,6 +109,46 @@ namespace webapi.Models.Anchors
 
             return answers.Any(c => c.StartsWith("Yes", StringComparison.OrdinalIgnoreCase))
                    && !answers.Any(c => c.StartsWith("No", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Whether the student actually worked the solution out themselves.
+        ///
+        /// Stricter than <see cref="Engaged"/>, and this is the one every reader of SolveOnOwn has to
+        /// use. Opting in is not doing it: a student who said yes and then had the solution shown to
+        /// them did not work it out, and counting the yes alone is what let a solve-on-own goal complete
+        /// on an exercise they were walked through.
+        ///
+        /// Read POINT BY POINT, because the two solution points are independent. Being shown the first
+        /// solution says nothing about the second, so a student who hands the first one over and then
+        /// finds the second themselves DID work out a solution, and this returns true for them.
+        ///
+        /// "Shown" only counts where the student had opted in. A student who declined outright needs no
+        /// reveal record — their decline already decides it — so demanding one would fail them twice for
+        /// the same act.
+        /// </summary>
+        public static bool SolvedOnOwn(IEnumerable<(string Name, string Choice)> answers)
+        {
+            var byName = answers
+                .GroupBy(answer => answer.Name, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(answer => answer.Choice).ToList(),
+                    StringComparer.Ordinal);
+
+            foreach (var point in SolutionPoints)
+            {
+                // Never reached this point, or turned it down: their answer is already the verdict.
+                if (!byName.TryGetValue(point.Choice, out var choices)) continue;
+                if (!Engaged(choices)) continue;
+
+                var shownAtThisPoint = byName.TryGetValue(point.Shown, out var shown)
+                                       && shown.Any(c => c.StartsWith("Yes", StringComparison.OrdinalIgnoreCase));
+
+                if (!shownAtThisPoint) return true;
+            }
+
+            return false;
         }
     }
 

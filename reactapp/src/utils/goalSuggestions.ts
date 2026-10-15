@@ -55,13 +55,19 @@ export async function fetchGoalSuggestions(studentId: number, language: string):
 }
 
 /**
+ * The fields the converter reads. `fetchGoalSuggestions` adds a human-written `reason`, which the
+ * reflection's own suggestion does not carry, so the converter asks for only what it uses.
+ */
+export type GoalSuggestionShape = Omit<GoalSuggestion, "reason">;
+
+/**
  * Turns one suggestion into a goal the picker could have built itself, or null if it cannot.
  *
  * Every field is checked against the catalogue rather than trusted. The server already normalises,
  * so a rejection here means the two catalogues have drifted — and in that case storing nothing is
  * better than storing a goal nobody can complete.
  */
-export function suggestionToGoal(suggestion: GoalSuggestion): StudyGoal | null {
+export function suggestionToGoal(suggestion: GoalSuggestionShape): StudyGoal | null {
     const category = suggestion.category as GoalCategory;
     const def = getCategoryDefOrNull(category);
     if (!def) return null;

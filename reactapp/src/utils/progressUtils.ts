@@ -216,32 +216,6 @@ export async function fetchStudentProgress(studentId: number): Promise<StudentPr
     return response.data;
 }
 
-// ── AI Reflection ────────────────────────────────────────────────────────────
-
-export interface ReflectionResponse {
-    feedback: string;
-    /** "practice" | "goal" | "both" | "unclear" | "no_xp" */
-    category: string;
-}
-
-/**
- * Asks the AI for feedback on a reflection the student wrote.
- *
- * Falls back to a fixed encouraging line rather than surfacing the failure. Reflection is the point
- * of the interaction; an error message about a model being unreachable would undercut it.
- */
-export async function requestReflection(studentId: number, reflectionText: string, language = "en"): Promise<ReflectionResponse> {
-    try {
-        const response = await axios.post<ReflectionResponse>(
-            `${BACKEND}/student-progress/reflect-on-stats/${studentId}`,
-            { studentReflection: reflectionText, language }
-        );
-        return response.data ?? { feedback: "", category: "unclear" };
-    } catch {
-        return { feedback: "Keep reflecting on your progress — self-awareness is a powerful skill!", category: "unclear" };
-    }
-}
-
 // ── Weak-Area Detection ──────────────────────────────────────────────────────
 
 export interface WeaknessDimension {

@@ -11,7 +11,7 @@ import {SolutionInputField} from "@components/flexibility/solution/SolutionInput
 import {VariableSolution} from "@components/flexibility/solution/VariableSolution.tsx";
 import {StepNextIntervention} from "@components/flexibility/interventions/StepIntervention.tsx";
 
-export function VariableComputation({ variable, loadNextStep, agentType, additionalMessage, trackAction, trackError, trackChoice, trackType, trackInterventionChoice, reconsiderDecline, reconsiderInterventionDecline, isSecondSolution = false, condition, decideCalculationIntervention}: {
+export function VariableComputation({ variable, loadNextStep, agentType, additionalMessage, trackAction, trackError, trackChoice, trackType, trackInterventionChoice, reconsiderDecline, reconsiderInterventionDecline, recordSolutionShown, isSecondSolution = false, condition, decideCalculationIntervention}: {
     variable: Variable;
     loadNextStep: () => void;
     agentType?: AgentType;
@@ -28,6 +28,13 @@ export function VariableComputation({ variable, loadNextStep, agentType, additio
     reconsiderDecline?: () => Promise<boolean>;
     /** The same, for the second prompt the personal agent routes through. */
     reconsiderInterventionDecline?: () => Promise<boolean>;
+    /**
+     * Records that the solution was shown, which is a decision and not merely an action.
+     *
+     * Optional, and a no-op when absent, because a study run has no goal to protect and the study
+     * module has no counterpart record. Bound to `isSecondSolution` by the caller below.
+     */
+    recordSolutionShown?: () => void;
     isSecondSolution?: boolean
     condition: AgentCondition,
     decideCalculationIntervention: () =>Promise<{ trigger: boolean; messageType: number }>;
@@ -157,7 +164,8 @@ export function VariableComputation({ variable, loadNextStep, agentType, additio
 
         case FirstSolutionState.ManualComputation: {
             content = <SolutionInputField variable={variable} handleSolution={() => setExerciseState(FirstSolutionState.ResultManual)}
-                                          showSolution={() => setExerciseState(FirstSolutionState.ResultAuto)} agentType={agentType}
+                                          showSolution={() => setExerciseState(FirstSolutionState.ResultAuto)}
+                                          solutionShown={() => recordSolutionShown?.()} agentType={agentType}
                                           trackAction={trackAction} trackError={trackError}
             />;
             break;

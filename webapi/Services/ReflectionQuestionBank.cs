@@ -374,6 +374,22 @@ namespace webapi.Services
             [BuildSessionObservation(evidence), BuildSessionNextAction(evidence)];
 
         /// <summary>
+        /// The translation key for one of the session promise chips, or empty when the id is not one of
+        /// them.
+        ///
+        /// The client owns every word the student reads, so the promise is handed back as a KEY to
+        /// resolve rather than as a sentence. `GetSessionPromise` uses this to show yesterday's promise
+        /// in tomorrow's check-in, which has to be worded exactly as the chip the student chose.
+        /// </summary>
+        public static string SessionPromiseTextKey(string chipId) => chipId switch
+        {
+            "session-next-practice" => "reflection-session-chip-next-practice",
+            "session-next-goal" => "reflection-session-chip-next-goal",
+            "session-next-review" => "reflection-session-chip-next-review",
+            _ => "",
+        };
+
+        /// <summary>
         /// Q1: which part went well, read from the per-step numbers.
         ///
         /// Which variant appears is not a style choice. If a step came through with no errors and no

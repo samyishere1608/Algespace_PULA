@@ -105,5 +105,140 @@ namespace webapi.Models.Student
             HintsAndErrors => "complete exercises staying under a hint or error limit they choose",
             _ => category
         };
+
+        /// <summary>
+        /// The catalogue value for a method named any of the ways this app names one: the value itself
+        /// ("Elimination") as the anchor store and the goal picker write it, or the reflection's label
+        /// key ("flexibility:elimination-method"). Empty when neither names a method.
+        ///
+        /// The reflection carries the label key because the client needs a word to put on a chip, and
+        /// the two forms arrive at different call sites. Normalising here rather than at each of them
+        /// is what keeps a suggestion narrowed to one method from silently degrading: the client drops
+        /// a focus it cannot find in its own catalogue, so the wrong form does not fail loudly — the
+        /// student is simply shown a goal about methods in general.
+        /// </summary>
+        public static string MethodFrom(string methodOrLabelKey) =>
+            Methods.FirstOrDefault(method => methodOrLabelKey.Contains(method, StringComparison.OrdinalIgnoreCase)) ?? "";
+
+        /// <summary>
+        /// The goal from the catalogue that would carry out one of the commitments a reflection offers,
+        /// or null when there is no honest match.
+        ///
+        /// The point is that a promise becomes something the app can actually help them do: the student
+        /// says "I'll explain my reasoning next time" and the reply names the goal that measures exactly
+        /// that. Null is a real answer — "try a different method" names no method, and "fewer mistakes
+        /// than my average" is a limit the goal picker cannot represent, so there is no goal that would
+        /// carry either of them out and inventing one would be worse than saying nothing.
+        ///
+        /// THE QUESTION IS PART OF THE KEY, because a chip id on its own is ambiguous. `pick-substitution`
+        /// is "the method I will compare next" under one question and "the method I will work out myself
+        /// next" under another, so the same id has to propose a different goal depending on which
+        /// question offered it. Reading the id alone would propose the wrong goal about half the time.
+        ///
+        /// The three-exercise target is the smallest the picker offers and the one that fits a
+        /// commitment made about the next exercise rather than a resolution about the month.
+        /// </summary>
+        public static SuggestedGoal? ForPromise(string questionKey, string chipId, string currentMethodFocus)
+        {
+            // The three goal questions that ask WHICH method or type, where the chip is a name rather
+            // than a commitment. What the student promised is set by the question, not by the chip.
+            if (questionKey == "reflection-goal-q3-compare-method")
+                return chipId.StartsWith("pick-", StringComparison.Ordinal)
+                    ? new SuggestedGoal { Category = MethodComparison }
+                    : null;
+
+            if (questionKey == "reflection-goal-q3-solve-method")
+                return chipId.StartsWith("pick-", StringComparison.Ordinal)
+                    ? new SuggestedGoal { Category = SolveOnOwn }
+                    : null;
+
+            if (questionKey == "reflection-goal-q3-explain-type")
+                return chipId.StartsWith("pick-", StringComparison.Ordinal)
+                    ? new SuggestedGoal { Category = SelfExplanation }
+                    : null;
+
+            // The method exercise's own menu, where the chips are about the method rather than about a
+            // dimension.
+            if (questionKey == "reflection-q3-method")
+            {
+                var method = MethodFrom(currentMethodFocus);
+
+                return chipId switch
+                {
+                    // Staying with it, which is what a narrowed method goal measures.
+                    "act-method-same" when method.Length > 0 =>
+                        new SuggestedGoal { Category = Method, Focus = method },
+                    // "Pick whichever fits the system" is the Suitability exercise's own question, so the
+                    // goal that measures it is the exercise type rather than a method.
+                    "act-method-fit" =>
+                        new SuggestedGoal { Category = ExerciseType, Focus = "Suitability" },
+                    // "Try a different method" names no method, so nothing in the catalogue carries it.
+                    _ => null,
+                };
+            }
+
+            return chipId switch
+            {
+                // Explaining their reasoning, on whichever question offered it.
+                "act-explain-myself" or "act-explain-hint" or "act-explain-shown" or "act-explain" =>
+                    new SuggestedGoal { Category = SelfExplanation },
+
+                // Comparing two methods, which only a Suitability exercise invites.
+                "act-compare-myself" or "act-compare-hint" or "act-compare-shown" or "act-compare" =>
+                    new SuggestedGoal { Category = MethodComparison },
+
+                // Working the solution out before being shown it, which every exercise type offers.
+                "act-solo-myself" or "act-solo-hint" or "act-solo-shown" or "act-solve-alone" =>
+                    new SuggestedGoal { Category = SolveOnOwn },
+
+                // A hint limit, where the two chips that name a number map exactly onto a limit the
+                // picker offers. "The same as last time" does not: it depends on a limit from a previous
+                // goal that this call has no way to know.
+                "act-no-hints" or "act-target-none" =>
+                    new SuggestedGoal { Category = HintsAndErrors, Quality = "hints", MaxPerExercise = 0 },
+                "act-target-one" =>
+                    new SuggestedGoal { Category = HintsAndErrors, Quality = "hints", MaxPerExercise = 1 },
+
+                // A mistake limit, and only where the chip names one. "Fewer than my average" is a
+                // relative promise the picker cannot express — its limits are 0, 1 and 2 — so it gets no
+                // suggestion rather than a fixed number that may be harder or easier than they meant.
+                "act-no-errors" =>
+                    new SuggestedGoal { Category = HintsAndErrors, Quality = "errors", MaxPerExercise = 0 },
+
+                // Picking a method that fits, which is what the two choice-paying exercise types are about.
+                "act-suitable-choice" =>
+                    new SuggestedGoal { Category = ExerciseType, Focus = "Suitability" },
+                "act-best-choice" =>
+                    new SuggestedGoal { Category = ExerciseType, Focus = "Efficiency" },
+
+                _ => null,
+            };
+        }
+    }
+
+    /// <summary>
+    /// A goal the student could set, as the reflection proposes it.
+    ///
+    /// Deliberately the same shape as the client's own `StudyGoal`, so the client can hand it straight
+    /// to the catalogue's own wording function instead of the server composing a sentence. The server
+    /// knows which goal fits a promise; every word the student reads, and every legal target, belongs to
+    /// the client.
+    /// </summary>
+    public class SuggestedGoal
+    {
+        /// <summary>One of <see cref="GoalCatalogue.Categories"/>.</summary>
+        public string Category { get; set; } = "";
+
+        public string Metric { get; set; } = GoalCatalogue.ExercisesMetric;
+        public int Target { get; set; } = 3;
+
+        /// <summary>The method or exercise type it is narrowed to, or empty for "any".</summary>
+        public string Focus { get; set; } = "";
+
+        /// <summary>hintsAndErrors only: "hints" | "errors".</summary>
+        public string Quality { get; set; } = "";
+
+        /// <summary>hintsAndErrors only: the per-exercise limit.</summary>
+        public int MaxPerExercise { get; set; }
     }
 }

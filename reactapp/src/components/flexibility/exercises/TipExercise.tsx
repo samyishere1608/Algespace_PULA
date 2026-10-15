@@ -50,6 +50,7 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
         initializeTrackingPhase,
         trackActionInPhase,
         trackChoice,
+        recordSolutionShown,
         reconsiderDecline,
         trackType,
         trackErrorInPhase,
@@ -169,6 +170,7 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
                     reconsiderDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionChoice)}
                     reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.FirstSolutionInterventionChoice)}
+                    recordSolutionShown={recordSolutionShown}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeFirstSolution)}
                     condition={condition}
                     decideCalculationIntervention = {decideCalculationIntervention}
@@ -226,6 +228,7 @@ export function TipExercise({ flexibilityExerciseId, exercise, condition, handle
                     reconsiderInterventionDecline={() => reconsiderDecline(FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
                     trackType={(type: number) => trackType(type, FlexibilityExerciseChoicePhase.StudentTypeFirstSolution)}
                     trackInterventionChoice={(choice: string) => trackChoice(choice, FlexibilityExerciseChoicePhase.SecondSolutionInterventionChoice)}
+                    recordSolutionShown={recordSolutionShown}
                     condition={condition}
                     decideCalculationIntervention = {decideCalculationIntervention}
                 />
