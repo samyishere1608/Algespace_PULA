@@ -48,7 +48,7 @@
   "dashboard-modal-close": "Close",
 
   "dashboard-reflect-title": "How do you think you're doing?",
-  "dashboard-reflect-hint": "Type your thoughts — e.g. \"I think I'm best at substitution and struggle with matching\". AI will compare it with your actual stats.",
+  "dashboard-reflect-hint": "Type your thoughts, for example: \"I think I'm best at substitution and struggle with matching\". AI will compare it with your actual stats.",
   "dashboard-reflect-placeholder": "I think my strongest area is...",
   "dashboard-performance-history": "Performance History (XP / day)",
   "dashboard-tab-main": "Dashboard",
@@ -147,7 +147,7 @@
   "reflection-chip-went-nohints": "No hints",
 
   "reflection-session-item-label": "Today's session",
-  "reflection-session-q1": "Looking back at today — what went well?",
+  "reflection-session-q1": "Looking back at today, what went well?",
   "reflection-session-q2": "And what would you like to work on in your next session?",
 
   "reflection-session-chip-finished": "I finished the exercises I started",
@@ -245,7 +245,7 @@
   "reflection-panel-no-hints": "You took no hints at all.",
   "reflection-panel-hints": "You took {{count}} hints.",
   "reflection-panel-runs-key": "One circle for each exercise, in the order you did them. The number inside is the mistakes you made in it.",
-  "reflection-panel-held-back": "Answer first \u2014 then I'll tell you the rest.",
+  "reflection-panel-held-back": "Answer first, then I'll tell you the rest.",
   "reflection-finished": "Nice reflection. That's real growth!",
   "reflection-prompt-text": "You just finished {{label}}. Want to reflect on it with me?",
   "reflection-prompt-no": "Not now",
@@ -261,10 +261,10 @@
   "analytics-accuracy-hint": "Based on your last 5 exercises.",
   "analytics-category-title": "Goals Completed by Category",
   "analytics-category-empty": "No goals completed yet. Finish one and it will show up here.",
-  "analytics-focus-choice": "Your Choice XP is lowest. Make a decision tomorrow — set a daily intention or pick your own goals.",
+  "analytics-focus-choice": "Your Choice XP is lowest. Make a decision tomorrow: set a daily intention or pick your own goals.",
   "analytics-focus-insight": "Your Insight XP is lowest. Review your focus area and pick a goal that targets your weakness.",
-  "analytics-focus-resolve": "Your Resolve XP is lowest. Follow through on the intention you set — finish what you started.",
-  "analytics-focus-default": "Keep practising all three skills — decide, reflect, and follow through.",
+  "analytics-focus-resolve": "Your Resolve XP is lowest. Follow through on the intention you set: finish what you started.",
+  "analytics-focus-default": "Keep practising all three skills: decide, reflect, and follow through.",
   "dashboard-leaderboard": "Class Leaderboard",
   "dashboard-leaderboard-hint": "Leaderboard unlocks when more students join",
   "dashboard-buddy-menu": "Open buddy menu",
@@ -344,7 +344,7 @@
   "goals-resolve-note": "Finishing a goal earns {{xp}} Resolve XP.",
   "goals-ask-ai": "Suggest goals for me",
   "goals-ask-ai-loading": "Looking at your work...",
-  "goals-ask-ai-failed": "Couldn't get suggestions just now — pick one yourself.",
+  "goals-ask-ai-failed": "Couldn't get suggestions just now. Pick one yourself.",
   "goals-method-ai-desc": "I look at what you have practised and what you tend to avoid, then suggest goals that fit.",
   "goals-method-own": "Set one myself",
   "goals-method-own-desc": "Pick an area yourself and decide how much to take on.",
@@ -372,7 +372,7 @@
   "goals-focus-method-efficiency": "Because you picked {{method}}, this only counts when {{method}} is the method that fits.",
   "goals-focus-method-matching": "Because you picked {{method}}, this only counts when the exercise happens to use {{method}}.",
   "goals-suggestions-heading": "Suggested for you",
-  "goals-suggestions-unavailable": "This suggestion doesn't match the goal menu — pick one yourself.",
+  "goals-suggestions-unavailable": "This suggestion doesn't match the goal menu. Pick one yourself.",
 
   "goals-focus-label": "About",
   "goals-metric-label": "Count by",
@@ -387,9 +387,9 @@
   "goal-quality-errors": "errors",
 
   "goals-cat-method": "Solving Method",
-  "goals-cat-method-desc": "Practise one method — elimination, substitution or equalization.",
+  "goals-cat-method-desc": "Practise one method: elimination, substitution or equalization.",
   "goals-cat-exercise-type": "Exercise Type",
-  "goals-cat-exercise-type-desc": "Focus on one kind of exercise — suitability, efficiency or matching.",
+  "goals-cat-exercise-type-desc": "Focus on one kind of exercise: suitability, efficiency or matching.",
   "goals-cat-self-explanation": "Explain Your Reasoning",
   "goals-cat-self-explanation-desc": "Put your thinking into words instead of jumping straight to the answer.",
   "goals-cat-method-comparison": "Compare Methods",
@@ -417,7 +417,7 @@
   "goals-celebration-count_one": "1 goal achieved 🎉",
   "goals-celebration-count_other": "{{count}} goals achieved 🎉",
   "milestone-title": "Milestone Reached!",
-  "milestone-subtitle": "You've crossed the <strong>{{milestone}} XP</strong> milestone. Keep it up — next stop: <strong>{{next}} XP</strong>!",
+  "milestone-subtitle": "You've crossed the <strong>{{milestone}} XP</strong> milestone. Keep it up. Next stop: <strong>{{next}} XP</strong>!",
   "milestone-continue": "Keep Going",
   "dashboard-sections": "Dashboard sections",
   "goals-celebration-continue": "Continue",
@@ -460,7 +460,7 @@
   "tree-fruits": "Fruits",
   "tree-need-roots": "Grow your Roots (Choice XP) to support more branches.",
   "tree-need-branches": "Grow your Branches (Insight XP) to hang your fruits.",
-  "tree-balanced": "Your tree is thriving — keep growing!",
+  "tree-balanced": "Your tree is thriving. Keep growing!",
   "tree-stage-seed": "Seed",
   "tree-stage-sprout": "Sprout",
   "tree-stage-sapling": "Sapling",
@@ -505,7 +505,7 @@
 
   "onboarding-bartering-message": "Great work! Now let's learn about the Equalization method.",
   "onboarding-bartering-cta": "Continue to Equalization",
-  "onboarding-equalization-message": "Excellent! One more method to go — Elimination!",
+  "onboarding-equalization-message": "Excellent! One more method to go: Elimination!",
   "onboarding-equalization-cta": "Continue to Elimination",
   "onboarding-elimination-message": "You did it! You've completed all three tutorials. Welcome to AlgeSpace!",
   "onboarding-elimination-cta": "Go to Dashboard",
@@ -523,7 +523,7 @@
   "end-session-subtitle": "How would you like to wrap up today's session?",
   "end-session-what-next": "What would you like to do?",
   "end-session-reflect-session": "Reflect on today's session",
-  "end-session-reflect-session-desc": "Talk through how it went — on your own or with Pippin.",
+  "end-session-reflect-session-desc": "Talk through how it went, on your own or with Pippin.",
   "end-session-reflect-guided": "Answer two quick questions",
   "end-session-reflect-guided-desc": "Pippin asks about today, and what to work on next time.",
   "end-session-end-now": "End today's session",
@@ -537,7 +537,7 @@
   "end-session-strengths": "Strengths",
   "end-session-improvement": "Area to Grow",
   "end-session-next-steps": "Try This Next Session",
-  "end-session-fallback-note": "(Generated from your stats — AI analysis unavailable)",
+  "end-session-fallback-note": "(Generated from your stats. AI analysis unavailable)",
 
   "tour-step-count": "Step {{current}} of {{total}}",
   "tour-skip": "Skip tour",
@@ -550,9 +550,9 @@
   "tour-offer-show": "Show me",
   "tour-offer-later": "Not now",
   "tour-offer-companions-title": "Want a quick look at your buddy?",
-  "tour-offer-companions-body": "Two minutes on the buddy corner: how to change who you study with, and what the XP you earn unlocks. You can also just carry on — the tour stays available here afterwards.",
+  "tour-offer-companions-body": "Two minutes on the buddy corner: how to change who you study with, and what the XP you earn unlocks. You can also just carry on. The tour stays available here afterwards.",
   "tour-offer-exercises-title": "Want a quick look at the exercises?",
-  "tour-offer-exercises-body": "Two minutes on the exercises: the three kinds, what each one asks of you, and inside a real one so you know what to expect. You can also just carry on — the tour stays available here afterwards.",
+  "tour-offer-exercises-body": "Two minutes on the exercises: the three kinds, what each one asks of you, and inside a real one so you know what to expect. You can also just carry on. The tour stays available here afterwards.",
 
   "tour-buddy-title": "Hi, I'm {{name}}, your learning buddy!",
   "tour-buddy-body": "If you're stuck, ask me for a hint. When you finish, earn points for telling me how it went. More buddies unlock when you level up!",
@@ -565,7 +565,7 @@
   "tour-xp-note": "You can't lose points. Leveling up unlocks new buddies and outfits!",
 
   "tour-tree-title": "Your growth tree",
-  "tour-tree-body": "It shows how your three skills build on each other. Roots are Choice XP, branches are Insight XP, fruits are Resolve XP. A full tree needs all three: fruit hangs from branches, branches grow from roots.",
+  "tour-tree-body": "It shows how your three skills build on each other:\n- Roots = Choice XP\n- Branches = Insight XP\n- Fruits = Resolve XP\nA full tree needs all three: fruit hangs from branches, branches grow from roots.",
   "tour-tree-note": "This is your tree right now. On your first day it is mostly bare ground, and that is exactly how it should look before you have earned anything.",
 
   "tour-dashboard-intro-title": "Your Dashboard",
@@ -576,7 +576,7 @@
   "tour-progress-note": "Tap the info button to see how to earn them.",
 
   "tour-tabs-title": "Have a look around!",
-  "tour-tabs-body": "You can try an exercise and then check how you're doing on the Analytics board and how your Growth Tree looks. See how others are doing on the Leaderboard.",
+  "tour-tabs-body": "From here you can:\n- try an exercise, then check the Analytics board and your Growth Tree\n- see how others are doing on the Leaderboard",
 
   "tour-buddy-corner-title": "Your companion lives here",
   "tour-buddy-corner-body": "{{name}} sits in the corner of every screen while you work. Tap your companion to choose a different one, or to open the wardrobe.",
@@ -590,14 +590,13 @@
   "tour-outfits-note": "Level 1 starts at 50 points, level 3 at 150 and level 5 at 400.",
 
   "tour-goals-title": "Your goals",
-  "tour-goals-body": "Set a goal — for example, to do 5 exercises — and I'll keep track of when you achieve it. There are two ways of choosing a goal: choosing one I suggest, or setting one for yourself (earns you Choice XP, because deciding is a skill).",
+  "tour-goals-body": "Set a goal, like doing 5 exercises, and I'll keep track of when you achieve it.\nTwo ways to choose one:\n- Choosing a goal I suggest\n- Setting a goal for yourself (earns you Choice XP, because deciding is a skill)",
 
   "tour-picker-categories-title": "Six kinds of goal",
   "tour-picker-categories-body": "Every one of these is something I already keep track of, so any goal you set can be checked. Compare two methods, explain your reasoning, solve it without hints. Whichever you choose, I can tell whether you did it.",
 
   "tour-picker-target-title": "Make it specific",
   "tour-picker-target-body": "Choose how you want to be measured, and how many times. Some goals also let you pick which exercise types should count. The defaults are already filled in, so you can just press Add if you like.",
-  "tour-picker-target-note": "There is no free text here. A goal like “get better at maths” cannot be checked, and a goal that cannot be checked cannot be finished.",
 
   "tour-picker-where-title": "Where you can work on it",
   "tour-picker-where-body": "These are the exercise types that can move your goal, and under each one it says what you actually have to do inside it. Comparing two methods, for example, only turns up in a Suitability exercise.",

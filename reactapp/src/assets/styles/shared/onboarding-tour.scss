@@ -118,6 +118,39 @@
     font-size: 1rem;
     line-height: 1.62;
     color: rgba(255, 255, 255, 0.88);
+
+    // A body that carries a short list renders as several blocks inside this one wrapper, so the
+    // type and colour above are set once and the blocks only provide rhythm.
+    p {
+        margin: 0 0 0.55rem;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    ul {
+        margin: 0 0 0.55rem;
+        padding-left: 1.1rem;
+        list-style: disc;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    li {
+        margin: 0 0 0.2rem;
+        padding-left: 0.15rem;
+
+        &::marker {
+            color: rgba(33, 158, 188, 0.9);
+        }
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
 }
 
 // A screenshot of the real exercise screen, printed under the explanation.

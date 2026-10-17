@@ -209,7 +209,7 @@ export const TOUR_STEPS: TourStep[] = [
     // the move — arriving here already means the student is looking at the panel.
     { id: "goals", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-panel"]', placement: "bottom" },
     { id: "picker-categories", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-categories"]', placement: "top", picker: "own" },
-    { id: "picker-target", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-builder"]', placement: "right", picker: "builder", noteKey: "tour-picker-target-note" },
+    { id: "picker-target", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-builder"]', placement: "right", picker: "builder" },
     { id: "picker-where", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-where"]', placement: "left", picker: "builder" },
     { id: "picker-add", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-confirm"]', placement: "top", picker: "builder" },
     { id: "goal-set", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-panel"]', placement: "bottom", showSampleGoal: true },

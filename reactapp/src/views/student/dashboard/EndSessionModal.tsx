@@ -44,8 +44,8 @@ export function EndSessionModal({ studentId, onEndSession, onClose, onStartSessi
             setAnalysis(data);
         } catch {
             setAnalysis({
-                strengths: "You showed up and put in the work today — that's what matters most!",
-                improvement: "Keep showing up consistently — growth happens one session at a time.",
+                strengths: "You showed up and put in the work today. That's what matters most!",
+                improvement: "Keep showing up consistently. Growth happens one session at a time.",
                 actionSteps: ["Set one small goal before your next session.", "Try an exercise type you haven't done much of.", "Take a moment to reflect after each exercise."],
                 isAiGenerated: false,
             });

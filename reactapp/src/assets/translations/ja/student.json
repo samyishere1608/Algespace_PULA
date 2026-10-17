@@ -34,7 +34,7 @@
   "dashboard-modal-close": "閉じる",
 
   "dashboard-reflect-title": "自分のできはどうだと思う？",
-  "dashboard-reflect-hint": "考えを入力してください — 例：「代入法が一番得意で、マッチングが苦手だと思う」。AIが実際の統計と比較します。",
+  "dashboard-reflect-hint": "考えを入力してください。例：「代入法が一番得意で、マッチングが苦手だと思う」。AIが実際の統計と比較します。",
   "dashboard-reflect-placeholder": "自分の得意分野は...",
   "dashboard-notifications": "通知",
   "dashboard-home": "ホーム",
@@ -245,7 +245,7 @@
   "reflection-panel-no-hints": "ヒントは一度も使わなかったね。",
   "reflection-panel-hints": "ヒントを{{count}}回使ったね。",
   "reflection-panel-runs-key": "やった順に、1問につき1つの丸。中の数字はその問題でのミスの数だよ。",
-  "reflection-panel-held-back": "先に答えてね \u2014 そのあとで残りを教えるよ。",
+  "reflection-panel-held-back": "先に答えてね。そのあとで残りを教えるよ。",
   "reflection-finished": "いい振り返りだね。それが本当の成長だよ！",
   "reflection-prompt-text": "{{label}} をやり終えたね。一緒に振り返ってみない？",
   "reflection-prompt-no": "今はやめとく",
@@ -261,9 +261,9 @@
   "analytics-accuracy-hint": "直近5問の演習に基づきます。",
   "analytics-category-title": "カテゴリー別の達成目標数",
   "analytics-category-empty": "まだ達成した目標はありません。1つ達成するとここに表示されます。",
-  "analytics-focus-choice": "Choice XPが最も低いです。明日は決断しましょう — 今日の意図を設定するか、自分でゴールを選びましょう。",
+  "analytics-focus-choice": "Choice XPが最も低いです。明日は決断しましょう。今日の意図を設定するか、自分でゴールを選びましょう。",
   "analytics-focus-insight": "Insight XPが最も低いです。フォーカス領域を確認し、弱点を狙ったゴールを選びましょう。",
-  "analytics-focus-resolve": "Resolve XPが最も低いです。設定した意図をやり遂げましょう — 始めたことを最後まで。",
+  "analytics-focus-resolve": "Resolve XPが最も低いです。設定した意図をやり遂げましょう。始めたことを最後まで。",
   "analytics-focus-default": "3つのスキル（選択・洞察・継続）をすべて磨き続けましょう。",
   "dashboard-leaderboard": "クラスランキング",
   "dashboard-leaderboard-hint": "さらに生徒が参加するとランキングが解錠されます",
@@ -344,7 +344,7 @@
   "goals-resolve-note": "目標を達成すると Resolve XP を {{xp}} 獲得します。",
   "goals-ask-ai": "目標を提案してもらう",
   "goals-ask-ai-loading": "あなたの記録を見ています...",
-  "goals-ask-ai-failed": "今は提案を取得できませんでした — 自分で選んでください。",
+  "goals-ask-ai-failed": "今は提案を取得できませんでした。自分で選んでください。",
   "goals-method-ai-desc": "これまでの練習と、避けがちなことを見て、合った目標を提案します。",
   "goals-method-own": "自分で目標を決める",
   "goals-method-own-desc": "分野は自分で選び、どれだけ取り組むかも自分で決めます。",
@@ -372,7 +372,7 @@
   "goals-focus-method-efficiency": "{{method}}を選んだので、{{method}}が合う解法のときだけカウントされます。",
   "goals-focus-method-matching": "{{method}}を選んだので、その解法を使う課題のときだけカウントされます。",
   "goals-suggestions-heading": "あなたへの提案",
-  "goals-suggestions-unavailable": "この提案は目標メニューに合いません — 自分で選んでください。",
+  "goals-suggestions-unavailable": "この提案は目標メニューに合いません。自分で選んでください。",
 
   "goals-focus-label": "対象",
   "goals-metric-label": "数え方",
@@ -387,9 +387,9 @@
   "goal-quality-errors": "ミス",
 
   "goals-cat-method": "解法",
-  "goals-cat-method-desc": "特定の解法を練習します — 加減法・代入法・等置法。",
+  "goals-cat-method-desc": "特定の解法を練習します：加減法・代入法・等置法。",
   "goals-cat-exercise-type": "問題タイプ",
-  "goals-cat-exercise-type-desc": "1種類の問題に集中します — 適切さ・効率・マッチング。",
+  "goals-cat-exercise-type-desc": "1種類の問題に集中します：適切さ・効率・マッチング。",
   "goals-cat-self-explanation": "考えを言葉にする",
   "goals-cat-self-explanation-desc": "すぐ答えを出すのではなく、考えた道筋を説明します。",
   "goals-cat-method-comparison": "解法を比べる",
@@ -416,7 +416,7 @@
   "goals-celebration-title": "目標達成！",
   "goals-celebration-count_other": "{{count}}個の目標を達成 🎉",
   "milestone-title": "マイルストーン達成！",
-  "milestone-subtitle": "<strong>{{milestone}} XP</strong>のマイルストーンを達成しました。その調子で続けましょう — 次の目標は<strong>{{next}} XP</strong>です！",
+  "milestone-subtitle": "<strong>{{milestone}} XP</strong>のマイルストーンを達成しました。その調子で続けましょう。次の目標は<strong>{{next}} XP</strong>です！",
   "milestone-continue": "この調子で続ける",
   "dashboard-sections": "ダッシュボードのセクション",
   "goals-celebration-continue": "続ける",
@@ -506,7 +506,7 @@
 
   "onboarding-bartering-message": "よくできました！次は等置法を学びましょう。",
   "onboarding-bartering-cta": "等置法へ進む",
-  "onboarding-equalization-message": "すごい！あと一つ — 加減法です！",
+  "onboarding-equalization-message": "すごい！あと一つ：加減法です！",
   "onboarding-equalization-cta": "加減法へ進む",
   "onboarding-elimination-message": "やりました！3つのチュートリアルをすべて完了しました。AlgeSpaceへようこそ！",
   "onboarding-elimination-cta": "ダッシュボードへ",
@@ -524,7 +524,7 @@
   "end-session-subtitle": "今日のセッションをどう締めくくりますか？",
   "end-session-what-next": "どうしますか？",
   "end-session-reflect-session": "今日のセッションを振り返る",
-  "end-session-reflect-session-desc": "ピピンと一緒に振り返る — 自分で、またはAIと。",
+  "end-session-reflect-session-desc": "ピピンと一緒に振り返る：自分で、またはAIと。",
   "end-session-reflect-guided": "2つのかんたんな質問に答える",
   "end-session-reflect-guided-desc": "ピピンが今日のことと、次に取り組むことをたずねるよ。",
   "end-session-end-now": "今日のセッションを終了",
@@ -538,7 +538,7 @@
   "end-session-strengths": "強み",
   "end-session-improvement": "伸ばしたい分野",
   "end-session-next-steps": "次回のセッションで試そう",
-  "end-session-fallback-note": "（統計から自動生成 — AI分析は利用できません）",
+  "end-session-fallback-note": "（統計から自動生成。AI分析は利用できません）",
 
   "tour-step-count": "ステップ {{current}} / {{total}}",
   "tour-skip": "ツアーをスキップ",
@@ -566,7 +566,7 @@
   "tour-xp-note": "ポイントが減ることはありません。レベルアップすると新しいバディや服がもらえます！",
 
   "tour-tree-title": "あなたの成長ツリー",
-  "tour-tree-body": "3つのスキルがどう積み重なるかを表します。根はChoice XP、枝はInsight XP、実はResolve XPです。実は枝から、枝は根から育つので、3つそろってはじめて大きな木になります。",
+  "tour-tree-body": "3つのスキルがどう積み重なるかを表します：\n- 根 = Choice XP\n- 枝 = Insight XP\n- 実 = Resolve XP\n実は枝から、枝は根から育つので、3つそろってはじめて大きな木になります。",
   "tour-tree-note": "これが今のあなたのツリーです。初日はほとんど土だけです。何も稼いでいない状態なら、それが正しい姿です。",
 
   "tour-dashboard-intro-title": "あなたのDashboard",
@@ -577,7 +577,7 @@
   "tour-progress-note": "情報ボタンを押すと、ため方が確認できます。",
 
   "tour-tabs-title": "いろいろ見てみよう！",
-  "tour-tabs-body": "演習をやってみたら、Analyticsボードで調子を確認したり、成長ツリーがどうなったかを見られます。Leaderboardでは、みんなの様子もわかります。",
+  "tour-tabs-body": "ここからできること：\n- 演習をやって、Analyticsボードや成長ツリーで調子を確認する\n- Leaderboardでみんなの様子を見る",
 
   "tour-buddy-corner-title": "ここにバディがいます",
   "tour-buddy-corner-body": "{{name}}は、勉強中いつも画面のすみにいます。バディをタップすると、別のバディを選んだり、服のクローゼットを開いたりできます。",
@@ -591,14 +591,13 @@
   "tour-outfits-note": "レベル1は50ポイントから、レベル3は150、レベル5は400です。",
 
   "tour-goals-title": "あなたの目標",
-  "tour-goals-body": "目標を立ててみよう（たとえば演習を5回やる）。達成したかどうかは私が記録します。目標の選び方は2つ：私が提案する目標を選ぶか、自分で目標を決めるか（自分で決めるのはスキルなので、Choice XPがもらえます）。",
+  "tour-goals-body": "目標を立ててみよう（たとえば演習を5回やる）。達成したかどうかは私が記録します。\n選び方は2つ：\n- 私が提案する目標を選ぶ\n- 自分で目標を決める（自分で決めるのはスキルなので、Choice XPがもらえます）",
 
   "tour-picker-categories-title": "6種類の目標",
   "tour-picker-categories-body": "どれもすでに記録している項目なので、設定した目標は必ず確認できます。2つの解法を比べる、考え方を説明する、ヒントなしで解く。どれを選んでも、やったかどうかは私が判断できます。",
 
   "tour-picker-target-title": "具体的にする",
   "tour-picker-target-body": "何で測るか、何回かを選びます。目標によっては、どの課題タイプを数えるかも選べます。初期値が入っているので、そのまま「追加」を押してもかまいません。",
-  "tour-picker-target-note": "自由入力はありません。「数学を得意になる」のような目標は確認できないからです。確認できない目標は達成もできません。",
 
   "tour-picker-where-title": "取り組める場所",
   "tour-picker-where-body": "これは目標を進められる課題の種類です。それぞれの下に、その中で実際に何をするのかが書いてあります。たとえば2つの解法を比べるのは適性課題だけです。",

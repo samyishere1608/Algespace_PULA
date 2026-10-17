@@ -20,6 +20,44 @@ import "@styles/shared/onboarding-tour.scss";
 /** Used only when a caller passes no buddy — the tree and the pills then still have something sane. */
 const NO_WALLETS: AgencyWallets = { choiceXP: 0, insightXP: 0, resolveXP: 0 };
 
+/**
+ * A tour body is one translated string, but some of them read as a sentence plus a short list.
+ *
+ * The list lives INSIDE the string as lines starting with "- " rather than in separate keys, so a
+ * translator sees the whole card at once and a language that needs three bullets instead of two does
+ * not leave an orphaned key behind. Blank lines only separate; a run of "- " lines becomes one list.
+ */
+function TourBodyText({ text }: { text: string }): ReactElement {
+    const blocks: ReactElement[] = [];
+    let bullets: string[] = [];
+    let key = 0;
+
+    const flush = () => {
+        if (bullets.length === 0) return;
+        blocks.push(
+            <ul key={`ul-${key++}`}>
+                {bullets.map((bullet, index) => <li key={index}>{bullet}</li>)}
+            </ul>
+        );
+        bullets = [];
+    };
+
+    for (const raw of text.split("\n")) {
+        const line = raw.trim();
+        if (line === "") {
+            flush();
+        } else if (line.startsWith("- ")) {
+            bullets.push(line.slice(2));
+        } else {
+            flush();
+            blocks.push(<p key={`p-${key++}`}>{line}</p>);
+        }
+    }
+    flush();
+
+    return <>{blocks}</>;
+}
+
 interface Props {
     studentId: number | string;
     steps: TourStep[];
@@ -416,9 +454,9 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
                 {/* The same substitution as the title. The buddy steps introduce the student's own
                     character in the body as well, and without this the sentence opened on an empty
                     gap where the name should be, because a missing value interpolates to "". */}
-                <p className={"onboarding-tour__body"}>
-                    {t(step.body?.key ?? `tour-${step.id}-body`, { name: buddyName, ns: step.body?.ns })}
-                </p>
+                <div className={"onboarding-tour__body"}>
+                    <TourBodyText text={t(step.body?.key ?? `tour-${step.id}-body`, { name: buddyName, ns: step.body?.ns })} />
+                </div>
 
                 {/* Under the explanation on purpose. A picture above the words is a thing to look at;
                     the same picture under them is the answer to what was just read. */}
