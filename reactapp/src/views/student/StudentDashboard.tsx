@@ -965,12 +965,10 @@ export default function StudentDashboard(): ReactElement {
                         <div className={"dashboard__section-header dashboard__section-header--active-goals"}>
                             <h2 id={"goals-active-title"}>{t("goals-active-heading")}</h2>
                             <div className={"dashboard__section-header-actions"}>
-                                <ShowSectionTourButton section={"goals"} onPlay={playSection} />
                                 {displayedGoals.length > 0 && (
                                     <button
                                         className={"dashboard__section-header-cta dashboard__section-header-cta--active-goals"}
-                                        data-tour={"goals-cta"}
-                                        onClick={() => openOrOffer("goals", () => setShowGoals(true))}
+                                        onClick={() => setShowGoals(true)}
                                     >
                                         <FontAwesomeIcon icon={faPlus} />
                                         {t("goals-add-cta")}
@@ -985,8 +983,7 @@ export default function StudentDashboard(): ReactElement {
                                 <p className={"goals-empty__text"}>{t("goals-none")}</p>
                                 <button
                                     className={"goals-empty__cta"}
-                                    data-tour={"goals-cta"}
-                                    onClick={() => openOrOffer("goals", () => setShowGoals(true))}
+                                    onClick={() => setShowGoals(true)}
                                 >
                                     <FontAwesomeIcon icon={faPlus} />
                                     {t("goals-set-cta")}

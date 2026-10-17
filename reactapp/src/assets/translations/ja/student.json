@@ -30,7 +30,7 @@
   "student-register-error-generic": "登録に失敗しました。もう一度お試しください。",
 
   "dashboard-xp-progress": "グローバルXP進捗",
-  "dashboard-agency-progress": "エージェンシー進捗",
+  "dashboard-agency-progress": "進捗",
   "dashboard-modal-close": "閉じる",
 
   "dashboard-reflect-title": "自分のできはどうだと思う？",
@@ -253,7 +253,7 @@
   "analytics-xp-total": "合計XP",
   "analytics-method-title": "使用した解法",
   "analytics-no-method-data": "演習を完了すると解法の使用状況が表示されます。",
-  "analytics-xp-title": "エージェンシーXP内訳",
+  "analytics-xp-title": "スキル別XP内訳",
   "analytics-accuracy-title": "精度の内訳",
   "analytics-avg-errors": "平均エラー",
   "analytics-avg-hints": "平均ヒント",
@@ -264,7 +264,7 @@
   "analytics-focus-choice": "Choice XPが最も低いです。明日は決断しましょう — 今日の意図を設定するか、自分でゴールを選びましょう。",
   "analytics-focus-insight": "Insight XPが最も低いです。フォーカス領域を確認し、弱点を狙ったゴールを選びましょう。",
   "analytics-focus-resolve": "Resolve XPが最も低いです。設定した意図をやり遂げましょう — 始めたことを最後まで。",
-  "analytics-focus-default": "3つのエージェンシー・スキル（決断・内省・継続）をすべて磨き続けましょう。",
+  "analytics-focus-default": "3つのスキル（選択・洞察・継続）をすべて磨き続けましょう。",
   "dashboard-leaderboard": "クラスランキング",
   "dashboard-leaderboard-hint": "さらに生徒が参加するとランキングが解錠されます",
   "dashboard-buddy-menu": "バディメニューを開く",
@@ -552,39 +552,32 @@
   "tour-offer-later": "今はしない",
   "tour-offer-companions-title": "バディの場所を少し見てみますか？",
   "tour-offer-companions-body": "バディの場所を2分で：一緒に学ぶ相手の変え方と、獲得したXPで何が解放されるか。そのまま続けても大丈夫です。ツアーは後でもここから見られます。",
-  "tour-offer-goals-title": "目標設定を少し見てみますか？",
-  "tour-offer-goals-body": "目標を2分で：目標を立てる2つの方法、カテゴリと目標値の選び方、そして立てた目標がどこに表示されるか。そのまま続けても大丈夫です。ツアーは後でもここから見られます。",
   "tour-offer-exercises-title": "演習を少し見てみますか？",
   "tour-offer-exercises-body": "演習を2分で：3つの種類、それぞれ何を求めるか、そして実際の演習の中身。そのまま続けても大丈夫です。ツアーは後でもここから見られます。",
 
-  "tour-buddy-title": "こんにちは、{{name}}です",
-  "tour-buddy-body": "あなたの学習パートナーとして、どの課題にも一緒に取り組みます。困ったら、ヒントを聞いてください。終わったら、どうだったか尋ねます。あとで別のパートナーに変えることもできます。",
+  "tour-buddy-title": "こんにちは、{{name}}です！あなたの学習バディです",
+  "tour-buddy-body": "困ったときはヒントを聞いてね。終わったら、どうだったかを教えてくれるとポイントがもらえます。レベルアップすると、新しいバディが増えます！",
 
-  "tour-platform-title": "この場所の目的",
-  "tour-platform-body": "3つの解法のチュートリアルは、ちょうど終わったところです。等置法、代入法、加減法ですね。柔軟性の課題はその続きです。連立方程式を見て、どの解法が合うかを自分で決めます。この課題については、このあと詳しく見ていきます。",
+  "tour-skills-title": "学習スキルを育てよう：",
+  "tour-skills-body": "ポイントは正解ではなく、あなたが選んだ行動でもらえます。間違えてもポイントはもらえます！どんなふうにもらえるか見てみる？",
 
-  "tour-agency-intro-title": "3つの力、3つの点数ではない",
-  "tour-agency-intro-body": "正解したかどうかで評価はしません。学び方を変える3つの習慣を記録します。それぞれ別々に数えます。わざとそうしています。思い切りのよさが、慎重さで消えてしまわないように。",
+  "tour-xp-title": "3つのスキルでポイント（XP）をためよう",
+  "tour-xp-body": "スキルごとにポイントが別々にたまります。",
+  "tour-xp-note": "ポイントが減ることはありません。レベルアップすると新しいバディや服がもらえます！",
 
-  "tour-xp-title": "ポイントの仕組み",
-  "tour-xp-body": "3つの習慣には、それぞれ別のポイントがあります。気にするべき合計点はなく、ポイントが減ることもありません。増えるだけです。それぞれが独立してレベルアップし、レベルに応じて新しい服やパートナーが解放されます。",
-
-  "tour-tree-title": "それが行き着く先",
-  "tour-tree-body": "成長ツリーは、その3つの数を目に見える形にしたものです。3つがそろって伸びたときだけ育ちます。Choiceは根に、Insightは枝に、Resolveは実になります。順番もツリーが教えてくれます。根が枝を支え、枝が実を支えます。",
+  "tour-tree-title": "あなたの成長ツリー",
+  "tour-tree-body": "3つのスキルがどう積み重なるかを表します。根はChoice XP、枝はInsight XP、実はResolve XPです。実は枝から、枝は根から育つので、3つそろってはじめて大きな木になります。",
   "tour-tree-note": "これが今のあなたのツリーです。初日はほとんど土だけです。何も稼いでいない状態なら、それが正しい姿です。",
 
-  "tour-dashboard-intro-title": "では、ダッシュボードへ",
-  "tour-dashboard-intro-body": "これがこの場所の考え方です。ここからは画面を案内します。いいところは、何も覚えなくていいことです。ダッシュボードが代わりに覚えてくれます。",
+  "tour-dashboard-intro-title": "あなたのDashboard",
+  "tour-dashboard-intro-body": "今の状態がひと目でわかる場所です。一緒に見てみましょう。",
 
-  "tour-agency-title": "ここがエージェンシーの進捗",
-  "tour-agency-body": "3つの数はここに並んでいます。何も開かなくても、今の状態がわかります。3つの数字が、それぞれで貯まったポイントです。",
-  "tour-agency-note": "そばの小さな情報ボタンを押すと、貯め方が確認できます。",
+  "tour-progress-title": "あなたの進捗",
+  "tour-progress-body": "スキルごとにためたポイントがここに表示されます。",
+  "tour-progress-note": "情報ボタンを押すと、ため方が確認できます。",
 
-  "tour-stats-title": "学習の状況",
-  "tour-stats-body": "終えた課題の数、平均正答率（誤りとヒントの両方が入ります）、それから連続して練習した日数です。",
-
-  "tour-tabs-title": "5つの画面",
-  "tour-tabs-body": "Dashboardはこの概要です。演習では、取り組む柔軟性の演習を選べます。Analyticsでは、使っている解法と取り組んでいる目標カテゴリーを詳しく見られます。Leaderboardはクラスとの比較、成長ツリーはエージェンシーXPとともに育ちます。",
+  "tour-tabs-title": "いろいろ見てみよう！",
+  "tour-tabs-body": "演習をやってみたら、Analyticsボードで調子を確認したり、成長ツリーがどうなったかを見られます。Leaderboardでは、みんなの様子もわかります。",
 
   "tour-buddy-corner-title": "ここにバディがいます",
   "tour-buddy-corner-body": "{{name}}は、勉強中いつも画面のすみにいます。バディをタップすると、別のバディを選んだり、服のクローゼットを開いたりできます。",
@@ -597,14 +590,8 @@
   "tour-outfits-body": "バディの服は、そのバディを解放したのと同じ財布で解放されます。最初から1着もっていて、レベルが1つ上がるごとに1着ずつ増えていきます。解放された服は、着るのに何もいりません。",
   "tour-outfits-note": "レベル1は50ポイントから、レベル3は150、レベル5は400です。",
 
-  "tour-goals-title": "目標",
-  "tour-goals-body": "目標とは、あなたが立てた、私が本当に確認できる約束です。設定したあとにやったことだけが数えられます。だから新しい目標は、これからやることだけを測ります。",
-
-  "tour-goals-click-title": "設定はかんたん",
-  "tour-goals-click-body": "このボタンを押すと、目標選択画面が開きます。これは本物の画面で、ここではデモとして見せています。今見ている内容は保存されません。",
-
-  "tour-picker-ways-title": "2つの選び方",
-  "tour-picker-ways-body": "自分で目標を選ぶか、これまでの取り組みから私に提案してもらうかです。自分で選ぶとChoice XPがもらえます。決めること自体が身につけたい力だからです。私の提案を選んだ場合はもらえません。それも意図的です。",
+  "tour-goals-title": "あなたの目標",
+  "tour-goals-body": "目標を立ててみよう（たとえば演習を5回やる）。達成したかどうかは私が記録します。目標の選び方は2つ：私が提案する目標を選ぶか、自分で目標を決めるか（自分で決めるのはスキルなので、Choice XPがもらえます）。",
 
   "tour-picker-categories-title": "6種類の目標",
   "tour-picker-categories-body": "どれもすでに記録している項目なので、設定した目標は必ず確認できます。2つの解法を比べる、考え方を説明する、ヒントなしで解く。どれを選んでも、やったかどうかは私が判断できます。",
@@ -654,8 +641,7 @@
 
   "tour-preview-back": "ダッシュボードに戻る",
 
-  "daily-intention-greeting": "{{name}}さん！{{buddy}}です — 今日の予定は何ですか？",
-  "daily-intention-question": "今日は何に集中したいですか？",
+  "daily-intention-greeting": "{{name}}さん、今日は何に集中したい？",
   "daily-intention-yesterday-promise": "昨日はこれをやると言っていましたね：",
   "daily-intention-practice": "練習して上達したい",
   "daily-intention-practice-hint": "問題に取り組む",

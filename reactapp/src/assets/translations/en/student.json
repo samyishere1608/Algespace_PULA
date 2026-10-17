@@ -30,7 +30,7 @@
   "student-register-error-generic": "Registration failed. Please try again.",
 
   "dashboard-xp-progress": "Global XP Progress",
-  "dashboard-agency-progress": "Agency Progress",
+  "dashboard-agency-progress": "Progress",
   "dashboard-notifications": "Notifications",
   "dashboard-home": "Home",
   "dashboard-logout": "Logout",
@@ -253,7 +253,7 @@
   "analytics-xp-total": "Total XP",
   "analytics-method-title": "Methods Used",
   "analytics-no-method-data": "Complete exercises to see your method usage.",
-  "analytics-xp-title": "Agency XP Split",
+  "analytics-xp-title": "XP by Skill",
   "analytics-accuracy-title": "Accuracy Breakdown",
   "analytics-avg-errors": "Avg. Errors",
   "analytics-avg-hints": "Avg. Hints",
@@ -264,7 +264,7 @@
   "analytics-focus-choice": "Your Choice XP is lowest. Make a decision tomorrow — set a daily intention or pick your own goals.",
   "analytics-focus-insight": "Your Insight XP is lowest. Review your focus area and pick a goal that targets your weakness.",
   "analytics-focus-resolve": "Your Resolve XP is lowest. Follow through on the intention you set — finish what you started.",
-  "analytics-focus-default": "Keep practising all three agency skills — decide, reflect, and follow through.",
+  "analytics-focus-default": "Keep practising all three skills — decide, reflect, and follow through.",
   "dashboard-leaderboard": "Class Leaderboard",
   "dashboard-leaderboard-hint": "Leaderboard unlocks when more students join",
   "dashboard-buddy-menu": "Open buddy menu",
@@ -551,39 +551,32 @@
   "tour-offer-later": "Not now",
   "tour-offer-companions-title": "Want a quick look at your buddy?",
   "tour-offer-companions-body": "Two minutes on the buddy corner: how to change who you study with, and what the XP you earn unlocks. You can also just carry on — the tour stays available here afterwards.",
-  "tour-offer-goals-title": "Want a quick look at setting a goal?",
-  "tour-offer-goals-body": "Two minutes on goals: the two ways to set one, the choice of category and target, and where your goal then appears. You can also just carry on — the tour stays available here afterwards.",
   "tour-offer-exercises-title": "Want a quick look at the exercises?",
   "tour-offer-exercises-body": "Two minutes on the exercises: the three kinds, what each one asks of you, and inside a real one so you know what to expect. You can also just carry on — the tour stays available here afterwards.",
 
-  "tour-buddy-title": "Hi, I'm {{name}}",
-  "tour-buddy-body": "I'm your study buddy, and I'll be with you in every exercise. If you get stuck, ask me for a hint. When you finish, I'll ask you how it went. You can pick a different buddy later if you want to.",
+  "tour-buddy-title": "Hi, I'm {{name}}, your learning buddy!",
+  "tour-buddy-body": "If you're stuck, ask me for a hint. When you finish, earn points for telling me how it went. More buddies unlock when you level up!",
 
-  "tour-platform-title": "What this place is for",
-  "tour-platform-body": "You have just finished the tutorial on how the three methods work: equalization, substitution and elimination. The flexibility exercises build on that. You get a system of equations and decide for yourself which method fits it best. We will look at those exercises properly in a few steps.",
+  "tour-skills-title": "Let's build your learning skills:",
+  "tour-skills-body": "You get points for the choices you make, not for correct answers. You can be wrong and still get points! Curious how it works?",
 
-  "tour-agency-intro-title": "Three skills, not three scores",
-  "tour-agency-intro-body": "I won't grade you on being right. I keep track of three habits that change how well you learn, and each one is counted on its own. They are separate on purpose. Being brave shouldn't be cancelled out by being careful.",
+  "tour-xp-title": "Earn points (XP) for three skills",
+  "tour-xp-body": "Each skill has its own points, and each one is counted separately.",
+  "tour-xp-note": "You can't lose points. Leveling up unlocks new buddies and outfits!",
 
-  "tour-xp-title": "How the points work",
-  "tour-xp-body": "Each of those three habits has its own points. There is no single score to worry about, and you can never lose points. They only go up. Each one levels up on its own, and your levels unlock new outfits and new buddies.",
-
-  "tour-tree-title": "Where it all ends up",
-  "tour-tree-body": "Your growth tree turns those three counts into something you can see. It only grows when they grow together. Choice becomes the roots, Insight becomes the branches, and Resolve becomes the fruit. The tree makes the order clear: roots hold up branches, and branches hold up fruit.",
+  "tour-tree-title": "Your growth tree",
+  "tour-tree-body": "It shows how your three skills build on each other. Roots are Choice XP, branches are Insight XP, fruits are Resolve XP. A full tree needs all three: fruit hangs from branches, branches grow from roots.",
   "tour-tree-note": "This is your tree right now. On your first day it is mostly bare ground, and that is exactly how it should look before you have earned anything.",
 
-  "tour-dashboard-intro-title": "Now, your dashboard",
-  "tour-dashboard-intro-body": "That is the idea behind this place. Let me show you where everything lives. The best part is that you don't need to remember any of it, because your dashboard remembers it for you.",
+  "tour-dashboard-intro-title": "Your Dashboard",
+  "tour-dashboard-intro-body": "It gives you an overview of where you stand. Let me walk you through it.",
 
-  "tour-agency-title": "This is your agency progress",
-  "tour-agency-body": "All three counts sit up here, so you can see how you are doing without opening anything. Those three numbers are what you have earned in each one.",
-  "tour-agency-note": "Tap the little info button next to it whenever you want to see how to earn them.",
+  "tour-progress-title": "Your Progress",
+  "tour-progress-body": "Here you see how many points you earned in each skill.",
+  "tour-progress-note": "Tap the info button to see how to earn them.",
 
-  "tour-stats-title": "How you are doing",
-  "tour-stats-body": "Exercises you have finished, your average accuracy, which counts both mistakes and hints, and how many days in a row you have practised.",
-
-  "tour-tabs-title": "Five views",
-  "tour-tabs-body": "Dashboard is this overview. Exercises is where you pick a flexibility exercise to work on. Analytics breaks down which methods you use and which goal categories you work on. Leaderboard compares you with your class. The Growth Tree grows as you earn agency XP.",
+  "tour-tabs-title": "Have a look around!",
+  "tour-tabs-body": "You can try an exercise and then check how you're doing on the Analytics board and how your Growth Tree looks. See how others are doing on the Leaderboard.",
 
   "tour-buddy-corner-title": "Your companion lives here",
   "tour-buddy-corner-body": "{{name}} sits in the corner of every screen while you work. Tap your companion to choose a different one, or to open the wardrobe.",
@@ -597,13 +590,7 @@
   "tour-outfits-note": "Level 1 starts at 50 points, level 3 at 150 and level 5 at 400.",
 
   "tour-goals-title": "Your goals",
-  "tour-goals-body": "A goal is a promise you make that I can actually check. Only work you do after you set it counts, so a new goal always measures what is still ahead of you.",
-
-  "tour-goals-click-title": "Setting one is easy",
-  "tour-goals-click-body": "Press this button and the goal picker opens. This is the real picker, just shown here as a demo, so nothing you see now gets saved.",
-
-  "tour-picker-ways-title": "Two ways to choose",
-  "tour-picker-ways-body": "You can pick a goal yourself, or you can ask me to suggest one from what I have seen you do so far. Picking your own earns Choice XP, because deciding is the skill. Taking my suggestion does not, and that is on purpose.",
+  "tour-goals-body": "Set a goal — for example, to do 5 exercises — and I'll keep track of when you achieve it. There are two ways of choosing a goal: choosing one I suggest, or setting one for yourself (earns you Choice XP, because deciding is a skill).",
 
   "tour-picker-categories-title": "Six kinds of goal",
   "tour-picker-categories-body": "Every one of these is something I already keep track of, so any goal you set can be checked. Compare two methods, explain your reasoning, solve it without hints. Whichever you choose, I can tell whether you did it.",
@@ -653,8 +640,7 @@
 
   "tour-preview-back": "Back to my dashboard",
 
-  "daily-intention-greeting": "Hey {{name}}! {{buddy}} here — what's your plan for today?",
-  "daily-intention-question": "What would you like to focus on today?",
+  "daily-intention-greeting": "Hey {{name}}, what would you like to focus on today?",
   "daily-intention-yesterday-promise": "Yesterday you said you'd do this next:",
   "daily-intention-practice": "I want to practice and improve",
   "daily-intention-practice-hint": "Jump into exercises",

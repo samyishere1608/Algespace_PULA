@@ -76,10 +76,11 @@ export function DailyIntentionModal({ studentId, studentName, buddyName, buddyEm
 
                 {/* One portrait, joined to one bubble, carrying BOTH sentences. It used to be an
                     avatar in a header box with the question stranded underneath it in the smallest
-                    type on screen — the same words, said by nobody in particular. */}
+                    type on screen — the same words, said by nobody in particular. The greeting and the
+                    question are one sentence now: two paragraphs of "hey, here's a question" is a
+                    lot of reading before the three answers an 11-year-old is actually choosing from. */}
                 <BuddySays buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImage={buddyImgSrc}>
                     <p>{t("daily-intention-greeting", { name: studentName, buddy: buddyName })}</p>
-                    <p className="daily-intention-modal__ask">{t("daily-intention-question")}</p>
                 </BuddySays>
 
                 {/* What they promised last time, before they pick today's plan.

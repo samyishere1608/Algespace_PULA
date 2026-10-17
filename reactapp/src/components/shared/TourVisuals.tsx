@@ -48,20 +48,6 @@ export function TourVisualBlock({ visual, buddyName, buddyImage, wallets }: Prop
                 </div>
             );
 
-        /** The three solving methods — what the platform actually teaches. */
-        case "methods":
-            return (
-                <div className={"tour-visual tour-visual__chips"}>
-                    {/* The exercise module's OWN names for the three methods, read from its namespace
-                        rather than re-typed here. Re-typing them is how an app ends up with two
-                        different Japanese words for one method: these are the words the exercise
-                        list itself shows. */}
-                    <span className={"tour-visual__chip"}>{t("equalization-method", { ns: TranslationNamespaces.Flexibility })}</span>
-                    <span className={"tour-visual__chip"}>{t("substitution-method", { ns: TranslationNamespaces.Flexibility })}</span>
-                    <span className={"tour-visual__chip"}>{t("elimination-method", { ns: TranslationNamespaces.Flexibility })}</span>
-                </div>
-            );
-
         /** The three currencies, side by side, so "three separate tracks" is visible and not just said. */
         case "currency":
             return (

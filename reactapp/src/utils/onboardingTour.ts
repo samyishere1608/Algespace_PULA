@@ -41,9 +41,9 @@ const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
  *   goals       — setting a goal, start to finish.
  *   exercises   — where a goal is earned: the list, the three kinds, and inside an exercise.
  */
-export type TourSection = "core" | "companions" | "goals" | "exercises";
+export type TourSection = "core" | "companions" | "exercises";
 
-export const TOUR_SECTIONS: TourSection[] = ["core", "companions", "goals", "exercises"];
+export const TOUR_SECTIONS: TourSection[] = ["core", "companions", "exercises"];
 
 /**
  * The version of the tour a student has already seen.
@@ -85,7 +85,7 @@ export type TourPlacement = "top" | "bottom" | "left" | "right" | "center";
  * built from the app's own parts (the real `GrowingTree`, the real agency colours and icons), so it
  * cannot drift from what the student later sees on the dashboard.
  */
-export type TourVisual = "buddy" | "methods" | "currency" | "xp" | "tree";
+export type TourVisual = "buddy" | "currency" | "xp" | "tree";
 
 /**
  * The read-only goal picker screen a step needs on screen behind it.
@@ -189,38 +189,47 @@ const PREVIEW = Paths.TourFlexibilityPreviewPath;
  */
 export const TOUR_STEPS: TourStep[] = [
     // ── Getting to know the place ────────────────────────────────────────────
-    // These five come FIRST and are the only ones with a graphic instead of a spotlight. The student
+    // These four come FIRST and are the only ones with a graphic instead of a spotlight. The student
     // is being told what the platform is for before being shown around it — a tour that opens by
     // pointing at a progress bar explains the interface and not the point of it.
+    //
+    // The step that used to sit second — a card explaining that the exercises build on the three
+    // methods — has gone. It described exercise TYPES, which the exercise leg covers properly later
+    // with a real screenshot of each one, so it was the same lesson told twice and in less detail.
     { id: "buddy", section: "core", route: DASHBOARD, placement: "center", visual: "buddy" },
-    { id: "platform", section: "core", route: DASHBOARD, placement: "center", visual: "methods" },
-    { id: "agency-intro", section: "core", route: DASHBOARD, placement: "center", visual: "currency" },
-    { id: "xp", section: "core", route: DASHBOARD, placement: "center", visual: "xp" },
+    { id: "skills", section: "core", route: DASHBOARD, placement: "center", visual: "currency" },
+    { id: "xp", section: "core", route: DASHBOARD, placement: "center", visual: "xp", noteKey: "tour-xp-note" },
     { id: "tree", section: "core", route: DASHBOARD, placement: "center", visual: "tree", noteKey: "tour-tree-note" },
+
+    // ── Setting a goal, start to finish ──────────────────────────────────────
+    // These used to be a section of their own, offered the first time the student opened the goal
+    // picker. They are part of the opening walkthrough now: a goal is the one thing a student is
+    // asked to decide on before doing any work, so meeting it after the exercises made the loop
+    // backwards. Two steps that only said "this panel exists" and "this button opens it" went with
+    // the move — arriving here already means the student is looking at the panel.
+    { id: "goals", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-panel"]', placement: "bottom" },
+    { id: "picker-categories", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-categories"]', placement: "top", picker: "own" },
+    { id: "picker-target", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-builder"]', placement: "right", picker: "builder", noteKey: "tour-picker-target-note" },
+    { id: "picker-where", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-where"]', placement: "left", picker: "builder" },
+    { id: "picker-add", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-confirm"]', placement: "top", picker: "builder" },
+    { id: "goal-set", section: "core", route: DASHBOARD, anchor: '[data-tour="goals-panel"]', placement: "bottom", showSampleGoal: true },
 
     // ── The dashboard ────────────────────────────────────────────────────────
     { id: "dashboard-intro", section: "core", route: DASHBOARD, placement: "center" },
-    { id: "agency", section: "core", route: DASHBOARD, anchor: '[data-tour="nav-agency"]', placement: "bottom", noteKey: "tour-agency-note" },
-    { id: "stats", section: "core", route: DASHBOARD, anchor: '[data-tour="stats"]', placement: "top" },
+    { id: "progress", section: "core", route: DASHBOARD, anchor: '[data-tour="nav-agency"]', placement: "bottom", noteKey: "tour-progress-note" },
     { id: "tabs", section: "core", route: DASHBOARD, anchor: '[data-tour="tabs"]', placement: "right" },
+
+    // The step that described the three stat cards has gone: the dashboard tab it pointed at now says
+    // the same three things in the student's own numbers, and a tour step reading them aloud is a
+    // sentence about a screen they can already see.
 
     // ── Companions, and what unlocks them ────────────────────────────────────
     // XP is not only a number that goes up. It is what opens new companions and new looks, and that
-    // is the whole reason the three agency wallets exist — but none of it is visible from the
+    // is the whole reason the three skill counters exist — but none of it is visible from the
     // dashboard, where the locked characters simply look absent.
     { id: "buddy-corner", section: "companions", route: DASHBOARD, anchor: '[data-tour="buddy-widget"]', placement: "left" },
     { id: "characters", section: "companions", route: DASHBOARD, anchor: '[data-tour="characters"]', placement: "left", buddyModal: "chooser", noteKey: "tour-characters-note" },
     { id: "outfits", section: "companions", route: DASHBOARD, anchor: '[data-tour="outfits"]', placement: "left", buddyModal: "shop", noteKey: "tour-outfits-note" },
-
-    // ── Setting a goal, start to finish ──────────────────────────────────────
-    { id: "goals", section: "goals", route: DASHBOARD, anchor: '[data-tour="goals-panel"]', placement: "bottom" },
-    { id: "goals-click", section: "goals", route: DASHBOARD, anchor: '[data-tour="goals-cta"]', placement: "top" },
-    { id: "picker-ways", section: "goals", route: DASHBOARD, anchor: '[data-tour="goals-choose"]', placement: "top", picker: "choose" },
-    { id: "picker-categories", section: "goals", route: DASHBOARD, anchor: '[data-tour="goals-categories"]', placement: "top", picker: "own" },
-    { id: "picker-target", section: "goals", route: DASHBOARD, anchor: '[data-tour="goals-builder"]', placement: "right", picker: "builder", noteKey: "tour-picker-target-note" },
-    { id: "picker-where", section: "goals", route: DASHBOARD, anchor: '[data-tour="goals-where"]', placement: "left", picker: "builder" },
-    { id: "picker-add", section: "goals", route: DASHBOARD, anchor: '[data-tour="goals-confirm"]', placement: "top", picker: "builder" },
-    { id: "goal-set", section: "goals", route: DASHBOARD, anchor: '[data-tour="goals-panel"]', placement: "bottom", showSampleGoal: true },
 
     // ── Where a goal actually gets earned ────────────────────────────────────
     // All of this happens on the DASHBOARD, on its Exercises tab. The walkthrough used to walk the

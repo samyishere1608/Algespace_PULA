@@ -2302,15 +2302,9 @@
     padding: 1.6rem 1.6rem 1.5rem;
     text-align: center;
 
-    // The second sentence INSIDE the bubble, and the actual question. It used to be a faint grey
-    // line floating outside the speech, in the smallest type in the dialog — the ask, set as an
-    // afterthought.
-    &__ask {
-        margin-top: 0.45rem;
-        font-size: 1.05rem;
-        font-weight: 500;
-        color: rgba(255, 255, 255, 0.84);
-    }
+    // The greeting and the question are one sentence in one bubble. There used to be a second
+    // paragraph here for the question alone, in different type from the greeting above it, so the
+    // dialog said the same thing twice before the student reached the three answers.
 
     &__options {
         display: flex;
