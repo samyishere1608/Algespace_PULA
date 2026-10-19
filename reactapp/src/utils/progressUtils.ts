@@ -89,10 +89,14 @@ const ACCURACY_KEY = "accuracy_last5";
  *
  * Hints count against it as well as errors. Both are "I needed help", and a student who finished
  * quickly by taking hints on every step has not done better than one who worked it out.
+ *
+ * With nothing recorded the answer is 0, not 100. A first-time student has not been accurate at
+ * anything yet, and a starry 100% next to "0 exercises today" reads as either a bug or an award for
+ * turning up. It also made the goal count and the analytics page look like they had data.
  */
 export function getAccuracyLast5(studentId: number | string): number {
     const raw = localStorage.getItem(`${ACCURACY_KEY}_${studentId}`);
-    if (!raw) return 100; // no data yet = 100% accuracy
+    if (!raw) return 0;
     const parts = raw.split(",").map(Number);
     let errors = 0, hints = 0, exercises = 0;
     if (parts.length >= 3) {
@@ -100,9 +104,9 @@ export function getAccuracyLast5(studentId: number | string): number {
     } else if (parts.length === 2) {
         [errors, exercises] = parts; // legacy format: no hints tracked
     } else {
-        return 100;
+        return 0;
     }
-    if (exercises <= 0) return 100;
+    if (exercises <= 0) return 0;
     // Combined penalty: each error or hint counts against accuracy (max 5 units/exercise)
     const penalty = (errors + hints) / exercises;
     return Math.max(0, Math.round(100 - penalty * 20));

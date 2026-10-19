@@ -91,7 +91,19 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
     const [hints, setHints] = useState<number>(0);
 
     const [phase, setPhase] = useState<FlexibilityExercisePhase>(initialPhase ?? FlexibilityExercisePhase.Transformation);
-    const [startTimeInPhase, setStartTimeInPhase] = useState<number>(0);
+
+    /**
+     * When the phase on screen started, in performance.now() terms.
+     *
+     * A REF, and started at mount. It used to be state initialised to 0, which handed `getTime` a start
+     * time of zero for any phase that ended before one was set — and `getTime(0)` is not "no time", it is
+     * seconds since the tab was opened. Efficiency never called `initializeTrackingPhase`, so its first
+     * phase was stamped with however long the app had been open: a 17-second attempt was recorded as
+     * 8m 12s on the method-selection step, which then had to be explained to the student in the
+     * reflection. A ref also removes the stale-closure risk, because the value is read at the moment the
+     * phase ends rather than from the render it was started in.
+     */
+    const startTimeInPhase = useRef<number>(performance.now());
     const [errorsInPhase, setErrorsInPhase] = useState<number>(0);
     const [hintsInPhase, setHintsInPhase] = useState<number>(0);
 
@@ -141,7 +153,7 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
     function initializeTrackingPhase(phase: FlexibilityExercisePhase): void {
         if (useLogger) {
             setPhase(phase);
-            setStartTimeInPhase(performance.now());
+            startTimeInPhase.current = performance.now();
             setErrorsInPhase(0);
             setHintsInPhase(0);
         }
@@ -552,7 +564,7 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
         if (useLogger) {
             endTrackingPhase(choice);
             setPhase(newPhase);
-            setStartTimeInPhase(performance.now());
+            startTimeInPhase.current = performance.now();
             setErrorsInPhase(0);
             setHintsInPhase(0);
         }
@@ -560,7 +572,7 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
 
     function endTrackingPhase(choice?: string): void {
         if (useLogger) {
-            const time: number = getTime(startTimeInPhase);
+            const time: number = getTime(startTimeInPhase.current);
 
             let data;
             if (phase === FlexibilityExercisePhase.Comparison || phase === FlexibilityExercisePhase.ResolveConclusion) {

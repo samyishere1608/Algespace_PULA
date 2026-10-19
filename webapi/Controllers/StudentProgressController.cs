@@ -169,10 +169,10 @@ namespace webapi.Controllers
         }
 
         /// <summary>
-        /// Queues a completed goal/exercise for reflection. Keeps only the latest 3
-        /// pending items per student (older pending items are auto-skipped).
+        /// Queues a completed goal/exercise for reflection. Only ever ONE pending item per student: a
+        /// second one would stack, and a reflection the student said no to would come straight back.
         /// </summary>
-        private static void EnqueueReflection(
+        internal static void EnqueueReflection(
             Microsoft.Data.Sqlite.SqliteConnection conn,
             long studentId,
             string itemType,
@@ -187,6 +187,19 @@ namespace webapi.Controllers
             string evidence = "",
             long attemptId = 0)
         {
+            // AN EXERCISE IS ONLY EVER ASKED ABOUT ONCE.
+            //
+            // The completion call can arrive twice (a retry, a double log, the tab reloaded on the results
+            // screen), and each one used to add another row — so the student was asked about the same
+            // attempt again after they had answered it, or after they had declined it. Every status
+            // counts here, which is what makes a "no" final: the row still exists, marked skipped, and no
+            // later call can put that same exercise back in front of them.
+            if (attemptId > 0 && conn.ExecuteScalar<int>(
+                    $"SELECT COUNT(1) FROM {StudentProgressDBSettings.ReflectionQueueTable} " +
+                    "WHERE StudentId = @StudentId AND ItemType = @ItemType AND AttemptId = @AttemptId",
+                    new { StudentId = studentId, ItemType = itemType, AttemptId = attemptId }) > 0)
+                return;
+
             conn.Execute(
                 $"INSERT INTO {StudentProgressDBSettings.ReflectionQueueTable} " +
                 "(StudentId, ItemType, ItemId, ItemLabel, Status, Errors, Hints, PippinMessages, Method, Decisions, Focus, Evidence, AttemptId, CompletedAt) " +
@@ -214,10 +227,15 @@ namespace webapi.Controllers
                 refId: itemId, value: itemType,
                 data: new { label = itemLabel, errors, hints, method, focus });
 
-            // Cap at 3 pending: keep the latest 3, skip the rest.
+            // ONE PENDING, NOT THREE.
             //
-            // Session reflections are left out of both halves of this. They are not queued by the work
-            // the student does, they are opened from the end-of-session dialog, and letting them into the
+            // This kept the latest three and skipped the rest, which meant a student who finished three
+            // exercises before looking could be shown three reflections one after another — each answer
+            // opening the next, which reads as the app refusing to take no for an answer. One is the whole
+            // point: they reflect on the work they just did, once.
+            //
+            // Session reflections are left out of both halves of this. They are not queued by the work the
+            // student does, they are opened from the end-of-session dialog, and letting them into the
             // count would mean that opening one quietly threw away an exercise reflection they had not
             // answered yet. There is at most one of them live at a time, retired by the call that starts
             // the next one.
@@ -230,7 +248,7 @@ namespace webapi.Controllers
                      AND Id NOT IN (
                          SELECT Id FROM {StudentProgressDBSettings.ReflectionQueueTable}
                          WHERE StudentId = @StudentId AND Status = 'pending' AND ItemType <> 'session'
-                         ORDER BY Id DESC LIMIT 3
+                         ORDER BY Id DESC LIMIT 1
                      )",
                 new { StudentId = studentId });
         }
@@ -2117,7 +2135,7 @@ RULES:
 
         // ── Reflection endpoints ──────────────────────────────────────────────
 
-        /// <summary>Returns up to 3 pending reflection items for the student, each with its questions.</summary>
+        /// <summary>Returns the one pending reflection item for the student, with its questions.</summary>
         [HttpGet("reflection-queue/{studentId}")]
         public ActionResult<List<ReflectionQueueItemResponse>> GetReflectionQueue(long studentId)
         {
@@ -2125,15 +2143,19 @@ RULES:
             conn.Open();
             EnsureTables(conn);
 
-            // The session reflection is deliberately absent. This list is what the dashboard badges and
+            // THE session reflection is deliberately absent. This list is what the dashboard badges and
             // what its prompt bubble offers, and that prompt is about work the student has just finished;
             // the session reflection is opened from the end-of-session dialog, on purpose and at the end
             // of the session. Warning about it in the middle of one would be asking them to summarise a
             // day that is not over.
+            //
+            // ONE, not three. EnqueueReflection already retires anything older, so this is a second guard
+            // rather than the rule itself — but it is the guard that decides what the student is shown, and
+            // showing a list is what let one refusal open the next reflection behind it.
             var items = conn.Query<ReflectionQueueRecord>(
                 $"SELECT * FROM {StudentProgressDBSettings.ReflectionQueueTable} " +
                 "WHERE StudentId = @StudentId AND Status = 'pending' AND ItemType <> 'session' " +
-                "ORDER BY Id DESC LIMIT 3",
+                "ORDER BY Id DESC LIMIT 1",
                 new { StudentId = studentId }).ToList();
 
             return Ok(items.Select(item => ToQueueResponse(conn, item)).ToList());
@@ -2143,9 +2165,15 @@ RULES:
         /// The counts a goal's questions are built from, as one compact line.
         ///
         /// Worked out when the goal completes, because the set it describes is "the completed exercises
-        /// since the goal was set" and that window closes the moment the goal is claimed. The cap of
-        /// five is the same window the goal maths itself uses, so a question can never describe a larger
-        /// set than the goal actually counted.
+        /// since the goal was set" and that window closes the moment the goal is claimed.
+        ///
+        /// THE CAP OF FIVE IS NOT THE WINDOW THE GOAL USED. The goal counts every exercise that matched
+        /// it, with no limit at all; the reflection takes the five most recent so it stays readable, since
+        /// the plate draws a row per exercise and the questions compare runs rather than aggregate them.
+        /// On a minutes goal that difference is the rule rather than the exception — a thirty-minute goal
+        /// runs to however many exercises it takes — so the full count travels with the window in
+        /// <see cref="ReflectionGoalWindow.TotalExercises"/> and the panel says "your last 5 of 9"
+        /// instead of leaving the student to notice the missing four.
         ///
         /// Stored as JSON rather than a flat string, because the goal questions ask about the individual
         /// exercises in ORDER — did the errors go down, were the later ones faster, which method had the
@@ -2193,6 +2221,15 @@ RULES:
 
             if (attempts.Count == 0) return "";
 
+            // Everything the goal counted, which the five above may be only the end of. Asked with the
+            // same filters, so the two numbers describe the same set.
+            var counted = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(*) FROM {AnchorStoreSettings.Table} " +
+                "WHERE StudentId = @StudentId AND CompletedAt <> '' " +
+                (string.IsNullOrWhiteSpace(since) ? "" : "AND CompletedAt >= @Since ") +
+                narrowing,
+                windowArgs);
+
             var ids = attempts.Select(attempt => attempt.Id).ToList();
             var records = conn.Query<DecisionRecordRow>(
                 $"SELECT AttemptId, Name, Choice FROM {AnchorStoreSettings.RecordTable} WHERE AttemptId IN @Ids",
@@ -2202,7 +2239,7 @@ RULES:
             // from the exercises database, which is a different file from the attempts.
             var allowed = AllowedMethodsByExercise(attempts);
 
-            var window = new ReflectionGoalWindow { Quality = quality ?? "", Limit = limit };
+            var window = new ReflectionGoalWindow { Quality = quality ?? "", Limit = limit, TotalExercises = counted };
 
             // Oldest first: every option rule is about order — "later" versus "earlier", the first
             // exercise versus the last.
@@ -2514,6 +2551,8 @@ RULES:
 
                     set = window.Exercises.Count;
                     evidence.InSet = set;
+                    // How many the goal counted in all, which the window above may be the tail of.
+                    evidence.CountedExercises = window.TotalExercises;
                     // "Without a single mistake" is what the count question says, so it counts mistakes only:
                     // hints are a different question, answered by HintFreeRuns.
                     evidence.CleanRuns = window.Exercises.Count(e => e.Errors == 0);
@@ -2619,6 +2658,34 @@ RULES:
                 }
 
                 evidence.Steps = [.. byStep.Values];
+
+                // A PART CANNOT TAKE LONGER THAN THE WHOLE ATTEMPT.
+                //
+                // The first phase timer used to be able to read a start time of zero, and getTime(0) is
+                // not "no time" but seconds since the tab was opened — so one part of a run that lasted
+                // 17 seconds is stored as 8 minutes. That is a tracking bug and it is fixed, but the rows
+                // it already wrote are still there, and the reflection is where they surface: the panel
+                // showed "choosing the method 8m 12s" beside "your usual 12s", and the question about
+                // being quicker than usual was answered against the sum.
+                //
+                // The attempt's own total comes from a different clock and is trustworthy, so a part larger
+                // than the whole run gets whatever the plausible parts leave of it. Nothing is invented
+                // and nothing is silently dropped: the parts still add up to the attempt.
+                var singleAttempt = !isGoal && !isSession && attemptIds.Count == 1;
+                if (singleAttempt)
+                {
+                    var attemptTotal = conn.ExecuteScalar<double?>(
+                        $"SELECT TotalTime FROM {AnchorStoreSettings.Table} WHERE Id = @Id",
+                        new { Id = attemptIds[0] }) ?? 0;
+
+                    if (attemptTotal > 0 && evidence.Steps.Sum(step => step.Time) > attemptTotal + 1)
+                    {
+                        var plausible = evidence.Steps.Where(step => step.Time <= attemptTotal).Sum(step => step.Time);
+                        foreach (var step in evidence.Steps.Where(step => step.Time > attemptTotal))
+                            step.Time = Math.Max(0, attemptTotal - plausible);
+                    }
+                }
+
                 evidence.CleanStepIds = [.. evidence.Steps.Where(s => s.Errors == 0 && s.Hints == 0).Select(s => s.Id)];
 
                 // "Cost the most" is errors first, then hints, then time: a step with mistakes in it cost
@@ -2641,6 +2708,65 @@ RULES:
             {
                 evidence.PreviousErrors = previous.Value;
                 evidence.HasHistory = true;
+            }
+
+            // How long this student usually takes on this kind of exercise, for the "I was in a hurry"
+            // chip. On a single exercise that claim has nothing else to stand on: the only times on the
+            // panel are the steps being explained, so without this the chip would be the one thing the
+            // student could not check before choosing it.
+            //
+            // The last few attempts of the SAME exercise type, because a Matching run is not a fair
+            // baseline for a Suitability one. A goal needs none of it - its own exercises sit side by
+            // side on the panel - and a session has no single type to compare with.
+            if (!isGoal && !isSession && item.AttemptId > 0)
+            {
+                var priorIds = conn.Query<long>(
+                    $"SELECT Id FROM {AnchorStoreSettings.Table} " +
+                    "WHERE StudentId = @StudentId AND CompletedAt <> '' AND Id <> @Id " +
+                    $"AND ExerciseType = (SELECT ExerciseType FROM {AnchorStoreSettings.Table} WHERE Id = @Id) " +
+                    "ORDER BY Id DESC LIMIT 5",
+                    new { StudentId = item.StudentId, Id = item.AttemptId }).ToList();
+
+                evidence.UsualSeconds = conn.ExecuteScalar<double?>(
+                    $"SELECT AVG(TotalTime) FROM {AnchorStoreSettings.Table} WHERE Id IN @Ids",
+                    new { Ids = priorIds }) ?? 0;
+
+                // The same comparison, one step at a time. "I made fewer mistakes than usual" is about
+                // the part they picked, not the run, so it needs what that part usually costs them - and
+                // the parts are summed per attempt first, so one attempt with two rows for a step is one
+                // attempt and not two.
+                if (priorIds.Count > 0)
+                {
+                    var priorRows = conn.Query<StepRow>(
+                        $"SELECT AttemptId, Name, Time, Errors, Hints FROM {AnchorStoreSettings.RecordTable} WHERE AttemptId IN @Ids",
+                        new { Ids = priorIds });
+
+                    evidence.UsualSteps =
+                    [
+                        .. priorRows
+                            .Select(row => (row.AttemptId, Step: ReflectionQuestionBank.StepIdFor(row.Name), row))
+                            .Where(pair => pair.Step.Length > 0)
+                            .GroupBy(pair => (pair.AttemptId, pair.Step))
+                            .Select(group => new
+                            {
+                                group.Key.Step,
+                                Errors = group.Sum(pair => pair.row.Errors),
+                                Hints = group.Sum(pair => pair.row.Hints),
+                                Time = group.Sum(pair => pair.row.Time),
+                            })
+                            .GroupBy(step => step.Step)
+                            .Select(group => new ReflectionStepStat
+                            {
+                                Id = group.Key,
+                                LabelKey = ReflectionQuestionBank.StepLabelKey(group.Key),
+                                // Rounded up: a part that usually costs half a mistake still counts as one,
+                                // so "fewer mistakes than usual" means none rather than never being true.
+                                Errors = (int)Math.Ceiling(group.Average(step => step.Errors)),
+                                Hints = (int)Math.Ceiling(group.Average(step => step.Hints)),
+                                Time = group.Average(step => step.Time),
+                            }),
+                    ];
+                }
             }
 
             // Whether the method they chose for THIS exercise was one it allowed. The single exercise's
@@ -2709,6 +2835,8 @@ RULES:
             public double Time { get; set; }
             public int Errors { get; set; }
             public int Hints { get; set; }
+            /// <summary>Set only by the queries that read several attempts at once, for the usual steps.</summary>
+            public long AttemptId { get; set; }
         }
 
         /// <summary>Evaluates one reflection answer against the student's actual performance.</summary>
@@ -2772,6 +2900,17 @@ RULES:
             var asked = questions.FirstOrDefault(candidate => candidate.Id == request.QuestionId)
                         ?? questions[Math.Clamp(request.QuestionNumber - 1, 0, questions.Count - 1)];
             var verdict = ReflectionQuestionBank.Grade(asked, request.Choice ?? "");
+
+            // THE PLAN FOLLOWS THE REASON. "Why did that happen?" decides what "what next?" should say,
+            // and the question list was sent long before this answer existed - so the tailored version
+            // travels back with the verdict and replaces the one the queue carried.
+            var planQuestion = questions.FirstOrDefault(candidate => candidate.Id == ReflectionSimpleQuestions.Next);
+            var tailoredPlan = planQuestion is null
+                ? null
+                : ReflectionSimpleQuestions.RetargetPlan(planQuestion, evidence, request.Choice ?? "");
+            if (tailoredPlan is not null)
+                tailoredPlan.Panel = BuildPanel(conn, evidence, tailoredPlan, item);
+
             var questionLine = ReflectionQuestionBank.DescribeForPrompt(asked, request.SubjectTerms);
 
             // What the student answered, as one event: the chip, and the words they read on it.
@@ -2791,24 +2930,40 @@ RULES:
                     itemType = item.ItemType,
                     itemId = item.ItemId,
                     questionKind = asked.Kind,
+                    // Which queue row this answered. Without it a goal reflection (whose AttemptId is 0) can
+                    // only be matched to its item by session and timestamp, so two reflections on the same
+                    // goal type in one sitting look identical.
+                    queueItemId = item.Id,
                 },
                 language: request.Language);
 
             // What the record says they actually did, in plain words, for the prompt.
             //
-            // The verdict is decided from the chip alone, so this is no longer what the model checks a
-            // claim against — nothing the model says can change the award. It is what the reply has to
-            // STATE, which is why it is scoped to the one thing this question asks about: given the whole
-            // record, a reply would reach for the wrong fact. And given nothing, it used to state the
-            // student's own claim back as fact — congratulating a student for self-reliance on an attempt
-            // where they had watched it be solved, because the prompt said "say what actually happened"
-            // and never told it what that was.
-            var recordLine = ReflectionQuestionBank.DescribeRecord(evidence, asked);
+            // The question's OWN fact when it carries one: the simple questions each describe the one
+            // thing they ask about ("choosing the method took you 3 s with no mistakes and no hints"), and
+            // the wider account of the attempt is what the model used to reach for when the question was
+            // about a part - a reply about choosing the method that talked about being shown the solution
+            // came from exactly this. `DescribeRecord` remains for the questions that have no fact of
+            // their own.
+            var recordLine = string.IsNullOrWhiteSpace(asked.RecordFact)
+                ? ReflectionQuestionBank.DescribeRecord(evidence, asked)
+                : asked.RecordFact;
 
             // Built after the record is read, because the offline reply is not a generic one any more: it
             // says what the record says about the question the student was actually looking at, which is
             // what the help button asks for and what a chip answer needs to be answered with.
             var fallback = BuildReflectionFallback(request, item, evidence, asked);
+
+            // THE RECORD SETTLES THE VERDICT; THE MODEL WRITES THE REPLY.
+            //
+            // These used to return the record's own sentence and never call the model at all, because a
+            // model reply can disagree with the dashboard and that is the one thing a reflection must
+            // never do. But it also made every reply read like a form: the same three sentences, in the
+            // same order, whoever the student was. The verdict stays fixed here — the award is decided
+            // from the chip and nothing the model says can change it — and the prompt carries only this
+            // question's fact, which the reply guard checks against. What comes back is prose with a
+            // voice; if it strays from the fact it is replaced by `fallback`, which is the record's own
+            // sentence and is always safe.
 
             // THE VERDICT THE MODEL IS TOLD TO COPY WAS NEVER ACTUALLY GIVEN TO IT.
             //
@@ -2845,19 +3000,22 @@ RULES:
                     ? $"They chose an option and it is CONFIRMED by the lines above: aligned=true, and the award number to return is {verdict.InsightXp}. Copy this exactly. The reply must read as a clear confirmation: one short clause that says it is what happened (in different words from theirs), then the sentence on why it matters. Do not hedge, do not call it interesting, and NEVER sound doubtful about it — the reply is confirming something that is right, and a reply that hedges while the badge shows a positive number is the one thing they will notice."
                     : "They chose an option and it does NOT match what happened: " +
                       "aligned=false, and the award number to return is 0. Copy this exactly. " +
-                      "THE REPLY HAS THREE BEATS AND THE FIRST TWO ARE BOTH REQUIRED. First, say back what " +
-                      "they picked, in their terms and without judging it, so they can see that the answer " +
-                      "they gave was read. Second, say where that same thing landed for them, as a plain " +
-                      "warm fact about their work. Third, the sentence on why " +
-                      "it matters. Something of this shape: 'You said you compared them yourself - what " +
-                      "happened here is that you went on without comparing, and that is a fair way to save " +
-                      "time on a run like this. Putting the two side by side is how you learn which one " +
-                      "fits.' " +
+                      "THE REPLY HAS THREE BEATS AND THE FIRST TWO ARE BOTH REQUIRED. First, in one short " +
+                      "clause, say back the reason they gave, in their own terms and without judging it, so " +
+                      "they can see the answer they gave was read. Second, state what the facts line says " +
+                      "about this question, in one plain warm sentence about their work, using the figures " +
+                      "it gives and no others. Third, one sentence on why that thing matters. " +
+                      "WRITE THOSE BEATS IN YOUR OWN WORDS, EVERY TIME. This used to be illustrated with a " +
+                      "ready-made sentence, and the model reproduced it almost word for word for every " +
+                      "answer - so a student who said three different things over three questions read the " +
+                      "same reply three times and the reflection felt like a form. Do not reuse any wording " +
+                      "from these instructions, and do not reuse the shape you gave the last reply: two " +
+                      "students who said completely different things must not read the same sentences. " +
                       "THE FIRST BEAT IS NOT OPTIONAL AND ITS ABSENCE IS THE FAULT THIS RULE EXISTS FOR. " +
                       "Without it the reply is a bare fact about something the student never claimed, which " +
                       "reads as a non-sequitur and leaves the difference invisible - a student who says " +
-                      "'I compared them myself' and is told only 'you went straight on without comparing' " +
-                      "has no way to know that sentence was a reply to what they said. " +
+                      "'I compared them myself' and is told only about not comparing has no way to know " +
+                      "that sentence was a reply to what they said. " +
                       "Do not agree with their version and do not invent a reason why it was right. Never " +
                       "frame the difference as a fault: no 'but you', no 'wrong', no 'actually', no 'in " +
                       "reality', no 'to be honest', no 'you didn't', no 'you missed', no 'you forgot' and " +
@@ -2938,6 +3096,25 @@ RULES:
                 // what they answered about is theirs to see regardless of how the writing went.
                 response.Panel = BuildOpenPanel(conn, evidence, item);
 
+                // Same place, same reason: the student's answer decides what the plan question asks, so it
+                // travels on every way out rather than only on the one where the writing went well.
+                response.NextQuestion = tailoredPlan;
+
+                // And the goal that would carry out what they just committed to. Read from the chosen
+                // chip rather than from the model, so it cannot propose a goal the app cannot offer, and
+                // set here rather than on the happy exit: a reply that failed to arrive is no reason for
+                // the student to lose the suggestion their own answer earned.
+                response.SuggestedGoal = asked.Kind == ReflectionQuestionBank.NextAction
+                    ? GoalCatalogue.ForPromise(request.Choice ?? "", MethodFocusFromLabelKey(evidence.FocusLabelKey))
+                    : null;
+
+                // Every reply leaves through here, so a dash the model slipped in becomes the comma or
+                // full stop it was standing in for, on the online and the offline text alike. The next
+                // step is model-written too and was leaving them through: "as if teaching someone else —
+                // it's a powerful way" is the kind of line a student reads out loud.
+                response.Feedback = AiTextFormatter.StripDashes(response.Feedback);
+                response.NextStep = AiTextFormatter.StripDashes(response.NextStep ?? "");
+
                 StudentEventLog.Write(conn, request.StudentId, LogEventType.ReflectionVerdict, refId: asked.Id,
                     value: outcome.Length > 0 ? outcome : response.Aligned ? "aligned" : verdict.Status,
                     amount: response.InsightXp,
@@ -2958,7 +3135,11 @@ RULES:
                 // and it used to live only in stdout.
                 var guardRejections = 0;
 
-                var prompt = BuildReflectionPrompt(request, item, questionLine, recordLine, verdictLine, studentLine, asked.Meaning);
+                // The "why this matters" line used to be handed over as well, and the model copied it
+                // almost verbatim into the reply's last sentence — a reflection that ends by telling a
+                // child why reflection matters. The prompt already asks for one true sentence drawn from
+                // the subject, so the line is dropped rather than repeated.
+                var prompt = BuildReflectionPrompt(request, item, questionLine, recordLine, verdictLine, studentLine);
 
                 string? rejected = null;
 
@@ -3045,11 +3226,6 @@ RULES:
                     // show nothing. For Q1 and Q2 the fallback's value is empty, so this is a no-op.
                     NextStep = AiTextFormatter.StripMathDelimiters(
                         string.IsNullOrWhiteSpace(nextStep) ? fallback.NextStep : nextStep),
-                    // The goal that would carry out what they just committed to. Read from the chip
-                    // rather than from the model, so it cannot propose a goal the app cannot offer.
-                    SuggestedGoal = asked.Kind == ReflectionQuestionBank.NextAction
-                        ? GoalCatalogue.ForPromise(asked.TextKey, request.Choice ?? "", MethodFocusFromLabelKey(evidence.FocusLabelKey))
-                        : null
                 }, "model", guardRejections));
                 }
             }
@@ -3077,6 +3253,19 @@ RULES:
                 $"UPDATE {StudentProgressDBSettings.ReflectionQueueTable} SET Status = @Status " +
                 "WHERE Id = @Id AND StudentId = @StudentId",
                 new { Id = request.QueueItemId, StudentId = request.StudentId, Status = request.Skip ? "skipped" : "done" });
+
+            // A NO IS A NO FOR THE WHOLE QUEUE, not just this row.
+            //
+            // Declining used to close only the item that was on screen, so anything still pending behind it
+            // arrived immediately afterwards — the student said no and the app asked again. There is only
+            // ever one pending now, but rows written before that rule existed are still in the table, and a
+            // refusal has to clear them too or the very next fetch brings one back.
+            if (request.Skip)
+                conn.Execute(
+                    $"UPDATE {StudentProgressDBSettings.ReflectionQueueTable} SET Status = 'skipped' " +
+                    "WHERE StudentId = @StudentId AND Status = 'pending' AND ItemType <> 'session' " +
+                    "AND Id <> @Id",
+                    new { StudentId = request.StudentId, Id = request.QueueItemId });
 
             // The answer to "did they reflect", and the end of this reflection's part of the session.
             StudentEventLog.Write(conn, request.StudentId, LogEventType.ReflectionCompleted,
@@ -3162,7 +3351,7 @@ RULES:
         /// The properties are copied across by reflection rather than by hand so that a column added to
         /// the row does not have to be remembered here as well.
         /// </summary>
-        private static ReflectionQueueItemResponse ToQueueResponse(
+        internal static ReflectionQueueItemResponse ToQueueResponse(
             Microsoft.Data.Sqlite.SqliteConnection conn, ReflectionQueueRecord item)
         {
             var response = new ReflectionQueueItemResponse();
@@ -3205,7 +3394,10 @@ RULES:
             ReflectionEvidence evidence,
             ReflectionQuestion question,
             ReflectionQueueRecord item) =>
-            AssemblePanel(conn, evidence, item, ReflectionQuestionBank.HiddenFacts(question));
+            // NOTHING IS WITHHELD ANY MORE. The questions are about reading this dashboard, and the
+            // dashboard names the thing each question asks about, so there is no answer to hide: what the
+            // bars carry is the subject of the conversation rather than a hint at its answer.
+            AssemblePanel(conn, evidence, item, []);
 
         /// <summary>
         /// The same panel with nothing held back.
@@ -3270,11 +3462,19 @@ RULES:
                 var coversWindow = window.Count > 0;
 
                 panel.RunCount = coversWindow ? window.Count : 1;
+                // Stated only when the goal counted more than the window holds: the panel draws a row per
+                // exercise, so a window of five out of nine has to say so rather than quietly show five.
+                panel.CountedRuns = evidence.CountedExercises > panel.RunCount ? evidence.CountedExercises : 0;
                 panel.Mistakes = coversWindow ? window.Sum(run => run.Errors) : evidence.Errors;
 
-                if (!hidden.Contains(ReflectionQuestionBank.HideRunSplit) && window.Count > 1)
-                    panel.Runs = [.. window.Select((run, index) =>
-                        new ReflectionPanelRun { Position = index + 1, Mistakes = run.Errors })];
+                if (window.Count > 1)
+                    panel.Runs = [.. window.Select((run, index) => new ReflectionPanelRun
+                    {
+                        Position = index + 1,
+                        Mistakes = run.Errors,
+                        Hints = run.Hints,
+                        Seconds = run.Time,
+                    })];
             }
 
             if (!hidden.Contains(ReflectionQuestionBank.HideHints))
@@ -3289,7 +3489,114 @@ RULES:
             if (!hidden.Contains(ReflectionQuestionBank.HideSteps))
                 panel.Phases = PhaseBarsFor(conn, evidence, item);
 
+            // The figure the "I was in a hurry" chip is checked against. Without it the chip is the one
+            // description of their own work the student cannot verify before choosing it.
+            if (evidence.UsualSeconds > 0)
+                panel.UsualSeconds = evidence.UsualSeconds;
+
+            // The decisions, as two rows: who did the calculating, and what they did at the compare or
+            // explain step. They are what half of the "why" options are checked against, so the student
+            // has to be able to see them.
+            //
+            // A goal covers several exercises, and one row for all of them said "I skipped it" whether
+            // that was once or every time — which is exactly the difference its compare question turns
+            // on. So a goal's rows carry how many of its exercises they are true for, and the client says
+            // "skipped in 2 of 3".
+            var goalRuns = evidence.GoalExercises;
+            var goalDimension = evidence.IsGoal && goalRuns.Count > 1
+                ? GoalDecisionDimension(evidence)
+                : "";
+
+            if (goalDimension.Length > 0)
+            {
+                var own = goalRuns.Count(run => run.Own && !run.WasShown);
+                var explained = goalDimension == "explain";
+                var did = goalRuns.Count(run => explained ? run.Explained : run.Compared);
+
+                // The row names whichever the student did MOST often, and its count is the count of that
+                // same thing - so "skipped in 2 of 3" and "compared in 1 of 3" are both true statements
+                // about the same three exercises, rather than one of them counting the other's runs.
+                var ownMost = own * 2 >= goalRuns.Count;
+                var didMost = did * 2 >= goalRuns.Count;
+
+                panel.Decisions.Add(new ReflectionPanelDecision
+                {
+                    LabelKey = "reflection-decision-calculating",
+                    Icon = ownMost ? "own" : "app",
+                    ValueKey = ownMost ? "reflection-decision-did-myself" : "reflection-decision-app-did",
+                    Count = ownMost ? own : goalRuns.Count - own,
+                    Total = goalRuns.Count,
+                });
+
+                panel.Decisions.Add(new ReflectionPanelDecision
+                {
+                    LabelKey = explained ? "reflection-decision-explain" : "reflection-decision-compare",
+                    Icon = didMost ? (explained ? "explained" : "compared") : "skipped",
+                    ValueKey = didMost
+                        ? (explained ? "reflection-decision-explained" : "reflection-decision-compared")
+                        : "reflection-decision-skipped",
+                    Count = didMost ? did : goalRuns.Count - did,
+                    Total = goalRuns.Count,
+                });
+
+                return panel;
+            }
+
+            if (evidence.HasDecisions || evidence.DidSolveOnOwn || evidence.WasShownAnswer)
+            {
+                panel.Decisions.Add(new ReflectionPanelDecision
+                {
+                    LabelKey = "reflection-decision-calculating",
+                    Icon = evidence.DidSolveOnOwn && !evidence.WasShownAnswer ? "own" : "app",
+                    ValueKey = evidence.DidSolveOnOwn && !evidence.WasShownAnswer
+                        ? "reflection-decision-did-myself"
+                        : "reflection-decision-app-did",
+                });
+            }
+
+            if (evidence.DecisionDimension.Length > 0)
+            {
+                var explained = evidence.DecisionDimension == "explain";
+                var did = explained ? evidence.DidExplain : evidence.DidCompare;
+                var shown = explained ? evidence.WasShownExplanation : evidence.WasShownComparison;
+
+                // The app records a decision as Engaged or Declined, nothing finer, so "declined" is said
+                // as "I skipped it" rather than guessed at as "the app did it for me".
+                panel.Decisions.Add(new ReflectionPanelDecision
+                {
+                    LabelKey = explained ? "reflection-decision-explain" : "reflection-decision-compare",
+                    Icon = did ? (explained ? "explained" : "compared") : "skipped",
+                    ValueKey = did
+                        ? (explained ? "reflection-decision-explained" : "reflection-decision-compared")
+                        : "reflection-decision-skipped",
+                });
+            }
+
             return panel;
+        }
+
+        /// <summary>
+        /// Which decision a GOAL's dashboard row should count, or empty when it has none to show.
+        ///
+        /// An exercise knows this from its own type (see <see cref="ReflectionEvidence.DecisionDimension"/>),
+        /// but a goal names a category rather than an exercise, so the category is read instead — and when
+        /// it names neither step, what its runs actually show decides.
+        /// </summary>
+        private static string GoalDecisionDimension(ReflectionEvidence evidence)
+        {
+            switch (evidence.Focus)
+            {
+                case "methodComparison":
+                case "Suitability":
+                    return "compare";
+                case "selfExplanation":
+                case "Efficiency":
+                case "Matching":
+                    return "explain";
+            }
+
+            if (evidence.GoalExercises.Any(run => run.Compared)) return "compare";
+            return evidence.GoalExercises.Any(run => run.Explained) ? "explain" : "";
         }
 
         /// <summary>The translation key for a method name as the anchor store spells it, or empty.</summary>
@@ -3312,9 +3619,24 @@ RULES:
             // The evidence already carries the steps for an exercise, folded from that attempt's own rows.
             if (!evidence.IsGoal && !evidence.IsSession)
                 return [.. evidence.Steps
-                    .Where(step => step.Time > 0)
-                    .OrderByDescending(step => step.Time)
-                    .Select(step => new ReflectionPanelPhase { LabelKey = step.LabelKey, Seconds = step.Time })];
+                    .Where(step => step.Time > 0 || step.Errors > 0 || step.Hints > 0)
+                    // The order the exercise is worked through, not alphabetical: the bars are one run and
+                    // read as a sequence, the same way the chips on the opening question do.
+                    .OrderBy(step => step.Id switch
+                    {
+                        "choose" => 0,
+                        "setup" => 1,
+                        "solve" => 2,
+                        "explain" => 3,
+                        _ => 4,
+                    })
+                    .Select(step => new ReflectionPanelPhase
+                    {
+                        LabelKey = step.LabelKey,
+                        Seconds = step.Time,
+                        Mistakes = step.Errors,
+                        Hints = step.Hints,
+                    })];
 
             var window = ParseGoalWindow(item.Evidence);
             var lastAttempt = window?.AttemptIds.Count > 0 ? window.AttemptIds[^1] : 0;
@@ -3330,6 +3652,8 @@ RULES:
                 {
                     LabelKey = ReflectionQuestionBank.StepLabelKey(group.Key),
                     Seconds = group.Sum(pair => pair.Row.Time),
+                    Mistakes = group.Sum(pair => pair.Row.Errors),
+                    Hints = group.Sum(pair => pair.Row.Hints),
                 })
                 .Where(phase => phase.Seconds > 0)
                 .OrderByDescending(phase => phase.Seconds)];
@@ -3414,11 +3738,22 @@ RULES:
                 $"SELECT ItemId FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
                 "WHERE StudentId = @StudentId AND ItemType = 'session' AND QuestionId = 'session-q2-next' " +
                 "  AND FollowedUp = 0 AND CreatedAt < @Today " +
+                "  AND CreatedAt >= @Since " +
                 "GROUP BY ItemId ORDER BY MAX(Id) DESC LIMIT 1",
-                new { StudentId = studentId, Today = DateTime.UtcNow.ToString("yyyy-MM-dd") });
+                new
+                {
+                    StudentId = studentId,
+                    Today = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    // "Yesterday you said" is about the last session, so a promise left over from a week
+                    // ago is not shown: it is a menu answer with nothing to check it against by then, and
+                    // reading it back would only ask the student to remember a tap.
+                    Since = DateTime.UtcNow.Date.AddDays(-3).ToString("yyyy-MM-dd"),
+                });
 
             if (string.IsNullOrEmpty(promiseItem)) return Ok(new SessionPromiseResponse());
 
+            // The promise is a chip, handed back as a KEY for the client to resolve in the student's own
+            // language: the check-in has to word it exactly as the chip they tapped.
             var choice = conn.ExecuteScalar<string?>(
                 $"SELECT Choice FROM {StudentProgressDBSettings.ReflectionHistoryTable} " +
                 "WHERE StudentId = @StudentId AND ItemType = 'session' AND QuestionId = 'session-q2-next' " +
@@ -3546,6 +3881,12 @@ RULES:
             {
                 case "practice":
                     wanted.Add("session-next-practice");
+                    // The day-specific promises are all practice promises: a student who promised to
+                    // compare two methods next time has promised to practise, and settling that against
+                    // "I did some exercises" is what makes the promise mean something.
+                    wanted.Add("session-next-fewer-hints");
+                    wanted.Add("session-next-compare");
+                    wanted.Add("session-next-explain");
                     break;
                 case "goal":
                     wanted.Add("session-next-goal");
@@ -3744,7 +4085,7 @@ NEVER TALK ABOUT AWARDS OR SCORES (very important): the app's own scoreboard mus
 NEVER DESCRIBE THE CONTROLS OR THEIR GESTURES (very important): the reply is about their work, not about how the app was operated. Never write that they asked, tapped, pressed, clicked or selected anything, never mention a button, and never mention asking for help or for the answer. Say what they DID on the exercise itself. ""You asked to be shown the solution"" is exactly the sentence that is not allowed; ""you went on and let the system show you"" says the same fact about their work and is the shape to use instead.
 ANSWER THE QUESTION WITH SOMETHING REAL ABOUT IT (very important): every reply answers the ONE question above with something real about it — for a question about a decision, what they did at that step; for a counting question, the number; for a question about the next exercise, the one thing to do next. A remark that would fit any question at all (""that's interesting"", ""worth another look"", ""sometimes the tricky spots sneak up on us"") does not answer it, and must never be the whole reply. If their answer was too vague to tell you anything, do not comment on how vague it was: give them what the facts line states about this question, warmly, and stop.
 NEVER JUST HAND THEIR ANSWER BACK (very important): a reply that only repeats what they said or did (""you did exactly that"", ""that is exactly what happened"", ""you got through all three without hints"") tells them nothing new. Every reply for Q1 and Q2 has TWO parts: first, ONE short clause that states the fact, in different words from theirs; second, ONE sentence from the ""Why this matters"" line, put in your own words, saying what that thing is for. Do not stack praise on top (""great job"", ""wonderful"", ""it is great to see"") — the second part IS the substance. If there is no ""Why this matters"" line, add one true sentence about why that thing helps, drawn only from the subject of this question.
-SAY WHICH WAY IT WENT (very important): the student cannot see the verdict, so the reply is the only place they learn whether their answer matched. A reply that only says ""interesting, take a look"" tells them nothing and reads as a brush-off. When it matches, say so plainly and warmly. When it does not, SAY THEIR ANSWER BACK FIRST, then say where that same thing actually landed — both, in that order. The sentence alone tells them what happened but not that what they said was read, and the answer alone leaves the difference invisible.
+SAY WHICH WAY IT WENT (very important): the student cannot see the verdict, so the reply is the only place they learn whether their answer matched. A reply that only says ""interesting, take a look"" tells them nothing and reads as a brush-off. When it matches, say so plainly and warmly. When it does not, SAY THEIR ANSWER BACK FIRST, then say where that same thing actually landed — both, in that order, and with a soft landing: one short human phrase of your own before the fact, never one copied from these instructions. Never the words wrong, incorrect or ""your data shows something different"". A child who read the chart slightly off still looked at their work, so thank them for looking and then tell them the number. The sentence alone tells them what happened but not that what they said was read, and the answer alone leaves the difference invisible.
 STAY INSIDE THE QUESTION (very important): the reply answers the ONE question above and nothing else. Do not bring in errors, hints, other decisions, or any other question from this reflection. If the question asked whether they compared two methods, the whole reply is about comparing two methods — a sentence about the solution, the method choice or their mistake count does not belong in it, however true it is. The facts line above states only what this question is about; treat anything it does not mention as unknown to you and do not guess at it.
 NEVER TELL THEM THEY DID NOT DO SOMETHING (very important): every sentence is about what they DID. Write the fact affirmatively, and never build a sentence on a gap — nothing about what their answer left out, what they missed, what did not happen, or what their choice was not. Put no ""but you"" and no ""instead of"" in front of the fact, and never turn naming their answer into a correction of it. Those sentences read as a telling-off even when they are accurate, and they make a student write what sounds right rather than look at their own work. Where they took the offered help, state what they did plainly and without judgement (""you skipped the comparison here""), then say that asking for help is a real, sensible thing to do — and if there is something genuinely good to name, name it. Use their own words for their choice, never a verdict on it. If the answer was too short or too vague to match against anything, do not point at the gap — state what the facts line says about this question, warmly, and invite them to have a go at the next one. When the answer was vague, or said outright that they ignored the step, this rule matters most of all: state what the facts say as a plain fact, and stop.
 NEVER INVENT WHAT THEY DID (very important): the lines above are the only thing you know about their choices, and they say what they say. Never credit them with something it does not state — do not write that they read, opened, saw, studied or took the time to look at an explanation unless the facts line says they did. If it says only that they did not explain their reasoning, then that is all that happened and the reply says nothing more about it. Where the facts say nothing, you know nothing about that step: never guess, and never fill the gap with something flattering or otherwise.
@@ -3935,7 +4276,7 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
             // A commitment is settled tomorrow by the exercise it is about, so the reply is about the
             // choice just made rather than about how anything went.
             if (promise)
-                return $"Good — {picked} next time. Choosing it now, before the exercise starts, is what makes "
+                return $"Good, {picked} next time. Choosing it now, before the exercise starts, is what makes "
                      + "it happen rather than being one more thing to remember.";
 
             // Fact first, then what the thing is FOR. Neither says the answer was "exactly" anything: the
@@ -3974,12 +4315,179 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
                 : $"{theyChose}What happened here is {char.ToLowerInvariant(fact[0])}{fact[1..]}{why}";
         }
 
+        /// <summary>
+        /// The reply in the companion's own voice, built from the exact option the student chose.
+        ///
+        /// WHY THIS READS LIKE A PERSON. It quotes the words they actually picked, reacts to that exact
+        /// choice, and never says a thing was wrong: when their answer does not match, it lands the fact
+        /// gently ("that is an easy one to mix up") and then shows the number. A reflection is the one
+        /// place in the app where being slightly off should cost nothing but a second look.
+        ///
+        /// It is deterministic on purpose. The verdict is already decided here, so the sentence that has
+        /// to agree with it should be built from the same values rather than written by something that can
+        /// contradict them. Null for the end-of-session item, which keeps its own wording.
+        /// </summary>
+        private static ReflectionEvaluateResponse? WarmReply(ReflectionEvaluateRequest request, ReflectionQuestion asked)
+        {
+            if (asked.Id is "reflection-session-q1" or "reflection-session-q2") return null;
+
+            var verdict = ReflectionQuestionBank.Grade(asked, request.Choice ?? "");
+            var said = string.IsNullOrWhiteSpace(request.ChoiceLabel) ? "" : request.ChoiceLabel.Trim();
+            var fact = Sentence(asked.RecordFact);
+
+            // THREE SENTENCES, AND THE MIDDLE ONE IS ALWAYS THE RECORD.
+            //
+            // Not a stub and not a report. The first sentence answers the exact words the student picked,
+            // the second says what actually happened, the third is the warmth that makes this a person
+            // answering rather than a verdict printing. Anything else - a welcome, a recap of their
+            // numbers, a summary of the exercise - is about the reflection rather than about what they
+            // were asked, and that is what turned the earlier replies into a wall of text.
+            //
+            // The wording varies with a seed built from the question and the choice, so two different
+            // answers never come back in the same words. It stays deterministic: the same answer gets the
+            // same reply, which matters because the verdict and the words have to agree.
+            var seed = asked.Id + "|" + request.Choice + "|" + said;
+
+            if (asked.Kind == ReflectionQuestionBank.NextAction)
+            {
+                // "I'm not sure yet" is a real answer to a plan question and is not a plan, so it gets its
+                // own wording instead of being quoted back as a promise the student never made.
+                if (request.Choice == "not-sure-yet")
+                    return new ReflectionEvaluateResponse
+                    {
+                        Feedback = "\"I'm not sure yet\" is a fair place to be. Something usually comes to you the next time you sit down with an exercise.",
+                        Aligned = false,
+                        InsightXp = 0,
+                        NextStep = "",
+                    };
+
+                var opening = said.Length > 0
+                    ? Pick([
+                        $"\"{said}\" it is.",
+                        $"\"{said}\" - good pick.",
+                        $"\"{said}\". I like that one.",
+                    ], seed)
+                    : Pick(["One small change, then.", "Something different next time, then."], seed);
+
+                var promise = "That is a small change that makes a real difference. "
+                            + "Saying it now is what turns it into something you actually do.";
+
+                return new ReflectionEvaluateResponse
+                {
+                    Feedback = said.Length > 0 ? $"{opening} {promise}" : $"{opening} Say now what it will be - putting it into words is what turns it into something you actually do.",
+                    Aligned = false,
+                    InsightXp = 0,
+                    NextStep = said,
+                };
+            }
+
+            // The help button: nothing was claimed, so there is no verdict to soften - the reply has to BE
+            // the answer, read off the numbers, because that is what the student asked for.
+            if (string.IsNullOrWhiteSpace(request.Choice))
+                return new ReflectionEvaluateResponse
+                {
+                    Feedback = fact.Length > 0
+                        ? $"I will read it off your numbers: {char.ToLowerInvariant(fact[0])}{fact[1..]} That is what I would go with."
+                        : "Nothing in your numbers settles this one, so I would rather hear what you think.",
+                    Aligned = false,
+                    InsightXp = 0,
+                    NextStep = "",
+                };
+
+            if (verdict.Status == "participation" || request.Choice is "not-sure" or "not-sure-yet")
+            {
+                var opening = Pick([
+                    "That is okay - not every answer has a reason you can name.",
+                    "That is okay. Some of these are hard to put into words.",
+                    "Honestly, that is a fair answer.",
+                ], seed);
+
+                return new ReflectionEvaluateResponse
+                {
+                    Feedback = fact.Length > 0
+                        ? $"{opening} {fact} You still stopped to look, which is the part that counts."
+                        : $"{opening} You still stopped to look, which is the part that counts.",
+                    Aligned = false,
+                    InsightXp = verdict.InsightXp,
+                    NextStep = "",
+                };
+            }
+
+            var matched = verdict.InsightXp > 0;
+
+            if (said.Length == 0)
+                return new ReflectionEvaluateResponse
+                {
+                    Feedback = matched
+                        ? $"Yes, that is right. {fact} You are reading your own numbers well."
+                        : $"That is okay. {fact} These are easy to mix up, and you will spot it faster next time.",
+                    Aligned = matched,
+                    InsightXp = verdict.InsightXp,
+                    NextStep = "",
+                };
+
+            // A soft landing instead of a verdict: the child looked at their work, and being slightly off
+            // is the normal case. Nothing here ever says a thing was wrong.
+            var reaction = matched
+                ? Pick([
+                    $"\"{said}\" - yes, that is it.",
+                    $"\"{said}\" - exactly.",
+                    $"\"{said}\" - you read that one right.",
+                ], seed)
+                : Pick([
+                    $"\"{said}\"? I can see why you would say that.",
+                    $"\"{said}\" - a fair guess.",
+                    $"\"{said}\"? That is usually the first thought.",
+                ], seed);
+
+            var landing = matched
+                ? Pick([
+                    "That is a good read of your own work.",
+                    "You know how you work, and that is worth something.",
+                    "Nothing to fix there.",
+                ], seed + "|" + reaction)
+                : Pick([
+                    "That is an easy one to mix up, and nothing is spoiled by it.",
+                    "An easy one to mix up, and it costs you nothing here.",
+                    "No harm done - this is exactly what looking back is for.",
+                ], seed + "|" + reaction);
+
+            return new ReflectionEvaluateResponse
+            {
+                Feedback = fact.Length > 0 ? $"{reaction} {fact} {landing}" : $"{reaction} {landing}",
+                Aligned = matched,
+                InsightXp = verdict.InsightXp,
+                NextStep = "",
+            };
+        }
+
+        /// <summary>
+        /// One of a few ways of saying the same thing, chosen by the answer so the wording moves with it.
+        ///
+        /// Deterministic rather than random: the same answer has to come back in the same words, or a
+        /// student comparing two replies in their history would read one choice answered two ways.
+        /// </summary>
+        private static string Pick(string[] options, string seed)
+        {
+            var hash = 17;
+            foreach (var character in seed) hash = (hash * 31 + character) & 0x7fffffff;
+
+            return options[hash % options.Length];
+        }
+
+        /// <summary>Starts a sentence: the facts are stored lower case so they can follow a colon.</summary>
+        private static string Sentence(string text) =>
+            string.IsNullOrWhiteSpace(text) ? "" : char.ToUpperInvariant(text[0]) + text[1..].TrimEnd('.') + ".";
+
         private static ReflectionEvaluateResponse BuildReflectionFallback(
             ReflectionEvaluateRequest request,
             ReflectionQueueRecord item,
             ReflectionEvidence evidence,
             ReflectionQuestion asked)
         {
+            var warm = WarmReply(request, asked);
+            if (warm is not null) return warm;
+
             // The end-of-session reflection is ungraded, so none of the rules below fit it: the keyword
             // guess reads a claim nothing checked, and the next-step plan belongs to the third question of
             // an item that has only two. This text goes out whenever the provider is unavailable, which is
@@ -4014,8 +4522,8 @@ Respond ONLY in this JSON: {{""feedback"":""..."",""aligned"":true|false,""insig
                 return new ReflectionEvaluateResponse
                 {
                     Feedback = string.IsNullOrWhiteSpace(promise)
-                        ? "Good — you have named something to work on next time."
-                        : $"Good — you have picked \"{promise}\" for next time.",
+                        ? "Good, you have named something to work on next time."
+                        : $"Good, you have picked \"{promise}\" for next time.",
                     Aligned = false,
                     InsightXp = 0,
                     NextStep = string.IsNullOrWhiteSpace(promise)

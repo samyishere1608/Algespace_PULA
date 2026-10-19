@@ -140,9 +140,25 @@ namespace webapi.Services
             using var connection = DBSettings.GetSQLiteConnectionForExercisesDB();
             connection.Open();
             DBUtils.CreateOrClearTable(connection, FlexibilityExerciseDBSettings.TableName, FlexibilityExerciseDBSettings.TableScheme);
+            // This table predates the Method column, and `CreateOrClearTable` empties an existing
+            // table rather than reshaping it, so an exercises database built before the column
+            // existed would reject the rows below. Added rather than recreated: the rows are
+            // re-seeded anyway, but a table drop is not something to do to a live database.
+            var columns = connection.Query<string>($"SELECT name FROM pragma_table_info('{FlexibilityExerciseDBSettings.TableName}')").ToList();
+            if (!columns.Contains("Method"))
+            {
+                connection.Execute($"ALTER TABLE {FlexibilityExerciseDBSettings.TableName} ADD COLUMN Method TEXT");
+            }
             string inserQuery = $"INSERT INTO {FlexibilityExerciseDBSettings.TableName} {FlexibilityExerciseDBSettings.TableColumns} VALUES {FlexibilityExerciseDBSettings.TableValues}";
             foreach (FlexibilityExerciseEntry exercise in exercises)
             {
+                // Opening a matching exercise tells the student which method it is about, so the list
+                // may say it too. See the comment on the property for why Efficiency is left null.
+                // The matching exercises are already seeded by the time this runs (see Program.cs).
+                if (exercise.ExerciseType == FlexibilityExerciseType.Matching)
+                {
+                    exercise.Method = GetMatchingExerciseById(exercise.ExerciseId, Language.en)?.Method.ToString();
+                }
                 connection.Execute(inserQuery, exercise);
             }
         }

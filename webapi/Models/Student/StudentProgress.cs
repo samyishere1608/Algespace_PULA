@@ -405,6 +405,7 @@ namespace webapi.Models.Student
         public string Feedback { get; set; } = "";
         public bool Aligned { get; set; }
         public int InsightXp { get; set; }
+
         /// <summary>Concrete next step (filled for the final question).</summary>
         public string NextStep { get; set; } = "";
 
@@ -425,6 +426,17 @@ namespace webapi.Models.Student
         /// the commitment, and absent when no goal in the catalogue matches what they promised.
         /// </summary>
         public SuggestedGoal? SuggestedGoal { get; set; }
+
+        /// <summary>
+        /// The next question, when the answer to this one changes what it should say.
+        ///
+        /// The plan question names the thing the student just gave as their reason ("what will you do
+        /// about going too fast?"), and the plan that answers it goes first. That can only be written
+        /// once their reason is in, which is after the question list was sent — so the tailored version
+        /// comes back with the verdict and replaces the one the queue carried. Null on every question
+        /// whose successor does not depend on the answer.
+        /// </summary>
+        public ReflectionQuestion? NextQuestion { get; set; }
     }
 
     /// <summary>Marks a reflection item complete and persists its chat history.</summary>

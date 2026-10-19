@@ -1,20 +1,23 @@
-import { ReactElement, useState } from "react";
+import { ReactElement, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import useAxios from "axios-hooks";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronRight, faCircleCheck, faLayerGroup } from "@fortawesome/free-solid-svg-icons";
+import { faBullseye, faChevronRight, faCircleCheck, faLayerGroup } from "@fortawesome/free-solid-svg-icons";
 import { TranslationNamespaces } from "@/i18n.ts";
 import { ErrorTranslations } from "@/types/shared/errorTranslations.ts";
 import { GeneralTranslations } from "@/types/shared/generalTranslations.ts";
 import { FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
 import type { FlexibilityExerciseResponse } from "@/types/flexibility/flexibilityExerciseResponse.ts";
+import type { StudyGoal } from "@/types/student/goal.ts";
 import Loader from "@components/shared/Loader.tsx";
 import { ShowSectionTourButton } from "@components/shared/ShowSectionTourButton.tsx";
 import { getCompletedPKExercises } from "@utils/storageUtils.ts";
 import { getExerciseNumber, isExerciseCompleted } from "@utils/utils.ts";
 import { exerciseNavTarget } from "@utils/flexibilityExercises.ts";
 import { FLEXIBILITY_EXERCISE_TYPES, exerciseTypeMeta } from "@utils/flexibilityExerciseTypes.ts";
+import { goalFitHint, type GoalFit } from "@utils/goalExerciseFit.ts";
+import { asTranslate, describeGoal, getCategoryDef } from "@utils/goalCatalog.ts";
 
 /**
  * The flexibility exercises, inside the dashboard.
@@ -35,8 +38,16 @@ import { FLEXIBILITY_EXERCISE_TYPES, exerciseTypeMeta } from "@utils/flexibility
  *  - The explanation is reachable WITHOUT a pointer: selecting a kind prints its sentence above
  *    the list. The per-row tooltip is a shortcut for people who hover or tab, never the only route
  *    to the meaning — this app is used on tablets, where hover does not exist.
+ *
+ * A student who sets a goal then has to guess where to take it, which is why the rows carry one more
+ * mark: the ones that can move a goal they set. Which rows those are is decided in
+ * `goalExerciseFit.ts`, and the difference between "this counts" and "you decide the method here"
+ * is the whole point of it.
  */
-export default function DashboardExercises({ onShowTutorial }: { onShowTutorial?: () => void } = {}): ReactElement {
+export default function DashboardExercises({
+    onShowTutorial,
+    goals = [],
+}: { onShowTutorial?: () => void; goals?: readonly StudyGoal[] } = {}): ReactElement {
     const { t } = useTranslation([
         TranslationNamespaces.Student,
         TranslationNamespaces.General,
@@ -68,7 +79,42 @@ export default function DashboardExercises({ onShowTutorial }: { onShowTutorial?
     });
 
     const activeMeta = activeType === null ? undefined : exerciseTypeMeta(activeType);
-    const visible = activeType === null ? exercises : exercises.filter((entry) => entry.exerciseType === activeType);
+
+    // ── The goal filter ──────────────────────────────────────────────────────
+    //
+    // A goal is a fifth filter on the same row as the three kinds, not a mark on every row. The first
+    // attempt put a chip on each exercise that suited the goal, plus a banner explaining the chips:
+    // with three goals active the list read "Exercises for:" + three chips + a sentence + a chip on
+    // thirty-three rows, and the answer — "which of these should I open" — was the hardest thing on
+    // the screen to find. Filtering is a pattern a student already uses here for the three kinds, so
+    // it costs no new idea, adds no text of its own, and leaves the plain list alone while it is off.
+    //
+    // ONE goal at a time, never all of them. The union of two goals is usually the whole list: a
+    // method goal fits every Suitability, "explain your reasoning" fits every Efficiency and
+    // Matching. So the filter asks which goal it is filtering for.
+    const [focusGoalId, setFocusGoalId] = useState<string | null>(null);
+    const [goalOnly, setGoalOnly] = useState(false);
+    const selectedGoal: StudyGoal | null = useMemo(
+        // Newest first as the default: the goal a student just set is the one they are wondering
+        // about. `getActiveGoals` returns oldest first.
+        () => goals.find((goal) => goal.id === focusGoalId) ?? goals[goals.length - 1] ?? null,
+        [goals, focusGoalId]
+    );
+
+    const fitHints = useMemo(
+        () => new Map(
+            exercises.map((entry) => [
+                entry.id,
+                selectedGoal === null ? null : goalFitHint([selectedGoal], entry.exerciseType, entry.method)?.fit ?? null,
+            ])
+        ),
+        [exercises, selectedGoal]
+    );
+    const goalCount = exercises.filter((entry) => fitHints.get(entry.id) != null).length;
+
+    const visible = exercises.filter(
+        (entry) => (activeType === null || entry.exerciseType === activeType) && (!goalOnly || fitHints.get(entry.id) != null)
+    );
     const visibleDone = activeType === null
         ? doneCount
         : perType.find((entry) => entry.meta.type === activeType)?.done ?? 0;
@@ -140,7 +186,66 @@ export default function DashboardExercises({ onShowTutorial }: { onShowTutorial?
                         <span className={"dash-exercise-filter__count"}>{done}/{total}</span>
                     </button>
                 ))}
+                {/* The goal filter, last and gold, so it reads as something other than a fourth kind.
+                    Its count is how MANY exercises work on the goal, not how many are left, because
+                    the question it answers is "is there anywhere to go with this". */}
+                {selectedGoal !== null && (
+                    <button
+                        type={"button"}
+                        className={`dash-exercise-filter dash-exercise-filter--goal${goalOnly ? " dash-exercise-filter--active" : ""}`}
+                        data-type={"goal"}
+                        aria-pressed={goalOnly}
+                        onClick={() => setGoalOnly(!goalOnly)}
+                    >
+                        <FontAwesomeIcon icon={faBullseye} className={"dash-exercise-filter__icon"} />
+                        <span className={"dash-exercise-filter__label"}>{t("dashboard-goal-filter")}</span>
+                        <span className={"dash-exercise-filter__count"}>{goalCount}</span>
+                    </button>
+                )}
             </div>
+
+            {/* One line, only in the ordinary view, saying where the goal exercises are. It replaces
+                nothing: the list underneath is untouched, and the line disappears the moment the
+                filter is on because then the answer is on the screen already. */}
+            {!goalOnly && selectedGoal !== null && (
+                <p className={"dash-exercises__goal-hint"}>
+                    <FontAwesomeIcon icon={faBullseye} aria-hidden />
+                    <span>{t("dashboard-goal-hint")}</span>
+                </p>
+            )}
+
+            {/* Which goal the filter is filtering for. Only while it is on: off, the list is simply
+                the list and there is nothing to explain. With one goal it reads as a statement; with
+                several it is the switch between them. */}
+            {goalOnly && selectedGoal !== null && (
+                <div className={"dash-exercises__goal-focus"}>
+                    <span className={"dash-exercises__goal-focus-label"}>{t("dashboard-goal-showing")}</span>
+                    {goals.length === 1 ? (
+                        <span className={"dash-exercises__goal-focus-single"}>
+                            <FontAwesomeIcon icon={getCategoryDef(selectedGoal.category).icon} aria-hidden />
+                            {describeGoal(selectedGoal, asTranslate(t))}
+                        </span>
+                    ) : (
+                        <div className={"dash-exercises__goal-focus-list"} role={"group"} aria-label={t("dashboard-goal-showing")}>
+                            {goals.map((goal) => {
+                                const selected = goal.id === selectedGoal.id;
+                                return (
+                                    <button
+                                        key={goal.id}
+                                        type={"button"}
+                                        className={`dash-goal-chip${selected ? " dash-goal-chip--active" : ""}`}
+                                        aria-pressed={selected}
+                                        onClick={() => setFocusGoalId(goal.id)}
+                                    >
+                                        <FontAwesomeIcon icon={getCategoryDef(goal.category).icon} aria-hidden />
+                                        <span className={"dash-goal-chip__label"}>{describeGoal(goal, asTranslate(t))}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* The always-visible route to what the selected kind means. This is what keeps the
                 tooltips a shortcut rather than the only way to find out. */}
@@ -162,9 +267,15 @@ export default function DashboardExercises({ onShowTutorial }: { onShowTutorial?
             )}
 
             <ul className={"dash-exercises__list"} data-tour={"flex-list"}>
+                {visible.length === 0 && (
+                    <li>
+                        <p className={"dash-exercises__goal-empty"}>{t("dashboard-goal-empty")}</p>
+                    </li>
+                )}
                 {visible.map((entry) => {
                     const done = isDone(entry.id);
                     const meta = exerciseTypeMeta(entry.exerciseType);
+                    const fit: GoalFit | null = fitHints.get(entry.id) ?? null;
                     // Numbered by position in the FULL list, not in the filtered one, so an exercise
                     // keeps the same number it has on the training page and the same number it had
                     // before a filter was applied.
@@ -212,6 +323,18 @@ export default function DashboardExercises({ onShowTutorial }: { onShowTutorial?
                                             : t(meta.nameKey, { ns: TranslationNamespaces.Flexibility })}
                                     </span>
                                 </span>
+                                {/* The exercises that might move the goal, where the student has to
+                                    judge the method themselves. Words, not a bare glyph: a circle with
+                                    a magnifier in it read as "search" and as a question mark, and
+                                    neither is what it means. */}
+                                {fit === "figureOut" && (
+                                    <span
+                                        className={"dash-exercise__depends"}
+                                        title={t("dashboard-goal-figure-out-hint")}
+                                    >
+                                        {t("dashboard-goal-figure-out")}
+                                    </span>
+                                )}
                                 <span className={`dash-exercise__status${done ? " dash-exercise__status--done" : ""}`}>
                                     {done && <FontAwesomeIcon icon={faCircleCheck} />}
                                     {done

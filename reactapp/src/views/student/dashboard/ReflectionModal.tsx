@@ -1,10 +1,11 @@
-import { faArrowRight, faCheck, faLightbulb, faRobot, faSpinner, faTimes, faTrophy } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faCheck, faLightbulb, faPlus, faRobot, faSpinner, faTimes, faTrophy } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { ReactElement, useMemo, useState } from "react";
+import { ReactElement, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import i18n from "@/i18n.ts";
 import { BuddySays } from "@components/shared/BuddySays.tsx";
+import { addGoal, getActiveGoals } from "@utils/activeGoals.ts";
 import { asTranslate, describeGoal } from "@utils/goalCatalog.ts";
 import { suggestionToGoal } from "@utils/goalSuggestions.ts";
 import ReflectionPanelView, { panelHasContent } from "@views/student/dashboard/ReflectionPanel.tsx";
@@ -26,6 +27,8 @@ interface Props {
     buddyImgSrc?: string;
     onAwardInsight: (amount: number) => void;
     onClose: () => void;
+    /** Told when the student accepts a suggested goal, so the dashboard can show it at once. */
+    onGoalAdded?: (goals: StudyGoal[]) => void;
 }
 
 type Phase = "answering" | "feedback";
@@ -51,14 +54,64 @@ function resolveQuestion(
         Object.entries(question.slots ?? {}).map(([name, key]) => [name, t(key)])
     );
 
+    // The server sends every value as a string, and i18next only takes the singular branch for a real
+    // number: given "1" it reads the plural one, which is how a one-mistake question came out as
+    // "1 of them". Whole numbers are handed over as numbers so the count decides the wording.
+    const values = Object.fromEntries(
+        Object.entries(question.values ?? {}).map(([name, value]) => [
+            name,
+            /^\d+$/.test(value) ? Number(value) : value,
+        ])
+    );
+
     return {
         id: question.id,
-        text: t(question.textKey, { ...slotWords, ...(question.values ?? {}) }),
+        text: t(question.textKey, { ...slotWords, ...values }),
         // The label travels with the chip so the answer we send back can name the words the student
         // actually read, rather than the internal id.
-        chips: (question.chips ?? []).map((chip) => ({ ...chip, label: t(chip.textKey) })),
+        chips: (question.chips ?? []).map((chip) => ({
+            ...chip,
+            // A chip whose sentence is about a number ("3 of them had no mistakes") carries that number
+            // from the server, so the plural form is picked here rather than the server keeping three
+            // copies of the same sentence.
+            label: chip.label && chip.label.length > 0
+                ? chip.label
+                : t(chip.textKey, chip.count != null ? { count: chip.count, total: chip.total ?? chip.count } : undefined),
+        })),
         terms: Object.values(slotWords),
     };
+}
+
+/**
+ * Whether two goals ask the same thing of the student.
+ *
+ * Compared field by field rather than by id, because a suggestion is built fresh from the catalogue
+ * every time it is offered: the same commitment pressed twice would otherwise be stored twice and the
+ * two would each count the same exercises towards themselves.
+ */
+function sameGoal(a: StudyGoal, b: StudyGoal): boolean {
+    return a.category === b.category
+        && (a.focus ?? "") === (b.focus ?? "")
+        && a.metric === b.metric
+        && a.target === b.target
+        && (a.quality ?? "") === (b.quality ?? "")
+        && (a.maxPerExercise ?? 0) === (b.maxPerExercise ?? 0);
+}
+
+/**
+ * The rail's label for a question, taken from its own kind rather than its position.
+ *
+ * The positions used to carry three fixed names, which stopped being true the moment an item had four
+ * questions: two "reflect" steps in a row says less than naming what each one is doing. The kind is what
+ * the server already decides, so the label follows it and cannot drift from the question.
+ */
+function stageKey(question: ReflectionQuestion | undefined): string {
+    switch (question?.kind) {
+        case "ungraded": return "reflection-stage-think";
+        case "judgement": return "reflection-stage-why";
+        case "next-action": return "reflection-stage-next";
+        default: return "reflection-stage-read";
+    }
 }
 
 /**
@@ -86,7 +139,7 @@ function BuddyBubble({ text, buddyName, buddyEmoji, buddyImgSrc, variant = "ask"
     );
 }
 
-export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddyImgSrc, onAwardInsight, onClose }: Props): ReactElement {
+export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddyImgSrc, onAwardInsight, onClose, onGoalAdded }: Props): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
 
     const [itemIndex, setItemIndex] = useState(0);
@@ -101,6 +154,49 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const [suggestedGoal, setSuggestedGoal] = useState<StudyGoal | null>(null);
 
     /**
+     * Where the suggested goal stands with the student's own list.
+     *
+     * Checked against the saved goals rather than assumed, because the same goal can be proposed after
+     * every reflection and pressing plus twice would leave two identical commitments side by side,
+     * each counting the same exercises.
+     */
+    const [goalOffer, setGoalOffer] = useState<"checking" | "offer" | "saving" | "added" | "already">("checking");
+
+    useEffect(() => {
+        if (!suggestedGoal) return;
+
+        let live = true;
+        void (async () => {
+            const saved = await getActiveGoals(studentId);
+            if (!live) return;
+            setGoalOffer(saved.some((goal) => sameGoal(goal, suggestedGoal)) ? "already" : "offer");
+        })();
+
+        return () => { live = false; };
+    }, [suggestedGoal, studentId]);
+
+    /**
+     * Accepting the suggestion with one tap.
+     *
+     * Recorded with origin "assistant" rather than "student": the goal is real and starts counting, but
+     * the award for deciding what to work on belongs to a goal the student thought of themselves. The
+     * rest of the flow is the picker's own, so a goal accepted here is an ordinary goal from then on.
+     */
+    async function handleAddGoal(): Promise<void> {
+        if (!suggestedGoal || goalOffer === "saving" || goalOffer === "added") return;
+
+        setGoalOffer("saving");
+        const saved = await addGoal(studentId, suggestedGoal, "assistant");
+        if (saved.some((goal) => sameGoal(goal, suggestedGoal))) {
+            setGoalOffer("added");
+            onGoalAdded?.(saved);
+        } else {
+            // Nothing was stored, so the offer has to stay pressable rather than claim a success.
+            setGoalOffer("offer");
+        }
+    }
+
+    /**
      * The panel for the question on screen: the one that came with the question, until an answer is sent,
      * and then the opened one the server sends back with the verdict.
      *
@@ -112,6 +208,16 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const [openPanel, setOpenPanel] = useState<ReflectionPanel | null>(null);
 
     /**
+     * The next question, when the answer to this one changed what it should ask.
+     *
+     * Kept beside the number it is meant for rather than on its own: it arrives while the student is
+     * still reading the reply, and applying it straight away would swap the question under the feedback
+     * they are looking at. Once they move on the number matches and it is used; one step later it no
+     * longer matches and stops mattering.
+     */
+    const [retargeted, setRetargeted] = useState<{ number: number; question: ReflectionQuestion } | null>(null);
+
+    /**
      * WHICH action is in flight, not merely that one is.
      *
      * A single `loading` flag drove both buttons, so pressing either made BOTH of them spin and the
@@ -120,6 +226,9 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
      * turns, and the other goes quiet and disabled.
      */
     const [pending, setPending] = useState<"" | "self" | "pippin">("");
+
+    /** Whether the "close it anyway?" prompt is showing, asked once an answer has been given. */
+    const [confirmingClose, setConfirmingClose] = useState(false);
 
     const item = items[itemIndex];
 
@@ -130,10 +239,13 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     // that decides how many a question set has, so the count is read from what it sent.
     const totalQuestions = item?.questions?.length ?? 3;
 
-    // The server sends them in order: observe, judge, look forward.
+    // The server sends them in order: what went well (or which run they are proudest of), the ungraded
+    // follow-up, the reason, and the plan. One of them can be replaced after the reason is answered.
+    const baseQuestion = retargeted?.number === question ? retargeted.question : item?.questions?.[question - 1];
+
     const asked = useMemo(
-        () => resolveQuestion(item?.questions?.[question - 1], t),
-        [item, question, t]
+        () => resolveQuestion(baseQuestion, t),
+        [baseQuestion, t]
     );
 
     // The suggested goal, in the goal system's own wording — the same sentence the goal card and the
@@ -150,7 +262,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     // The opened panel once an answer is in, and the question's own panel before that. Recomputed rather
     // than stored because the question does not change while the modal is open, and the two can never
     // both be right: after an answer the question's version is the stale one.
-    const panel = openPanel ?? item?.questions?.[question - 1]?.panel ?? null;
+    const panel = openPanel ?? baseQuestion?.panel ?? null;
     if (!item) {
         return (
             <div className="modal-overlay">
@@ -169,10 +281,13 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
 
     // ONE CHIP IS THE ANSWER, AND ONE BUTTON SENDS IT.
     //
-    // There is no text box any more: every question in the bank ships chips, so a tap is the only way to
-    // answer and the server grades it from the record without asking the model to judge anything. The
-    // button is still separate from the chips — a chip selects and the button sends, so a mis-tap is
-    // recoverable and a quick answer is decided rather than fired off on contact.
+    // Every question ships an answer menu, so a tap is the only way to answer and the server grades it
+    // from the record without asking the model to judge anything. The button is still separate from the
+    // chips — a chip selects and the button sends, so a mis-tap is recoverable and a quick answer is
+    // decided rather than fired off on contact.
+    //
+    // The end-of-session reflection asks for no writing: the pilot has no consent for collecting
+    // children's own words, so that dialog is a menu of true statements about their session instead.
     const hasAnswer = choice.length > 0;
 
     async function handleAnswer(mode: "self" | "pippin", chipId = choice): Promise<void> {
@@ -210,6 +325,9 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             // function that validates the goal picker's own suggestions, so a suggestion whose fields
             // do not fit the catalogue is dropped rather than rendered as a goal nobody could complete.
             setSuggestedGoal(result.suggestedGoal ? suggestionToGoal(result.suggestedGoal) : null);
+            // The plan question, rewritten around the reason they just gave. Parked against the number it
+            // belongs to, so the reply they are reading is not replaced mid-sentence.
+            setRetargeted(result.nextQuestion ? { number: question + 1, question: result.nextQuestion } : null);
             setPhase("feedback");
 
             // THE CHIP BELONGS ON THE STUDENT'S ROW.
@@ -284,8 +402,20 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
      * did not want to take it. The server keeps the item out of the queue once it is skipped.
      *
      * If the item was already finished, the skip is harmless: it is out of the queue either way.
+     *
+     * WITH ANSWERS ALREADY GIVEN IT ASKS FIRST, because closing loses the rest of the reflection and
+     * nothing puts it back: the item is out of the queue and the next one is a different question set.
      */
     async function dismiss(): Promise<void> {
+        const answered = history.some((entry) => entry.role === "student");
+        if (answered && !confirmingClose) {
+            setConfirmingClose(true);
+            return;
+        }
+        await closeAndSkip();
+    }
+
+    async function closeAndSkip(): Promise<void> {
         await completeReflection(studentId, item.id, [], true);
         onClose();
     }
@@ -300,10 +430,29 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 {/* The title and the step rail are chrome. Both sit ABOVE the conversation so the
                     companion's face and their question are never separated by a progress widget —
                     which is what the old row of three big labelled dots did, splitting one sentence
-                    into two halves with a stepper in the middle of it. */}
+                    into two halves with a stepper in the middle of it.
+
+                    THE SUBJECT IS THE BIGGEST LINE HERE, because the questions are all about it and a
+                    student should never have to work out which goal they are reflecting on. It used to
+                    be one dim 0.9rem line reading "Reflecting on: <label>", which is where the goal's
+                    name went to be missed. */}
                 <div className="reflection-modal__heading">
                     <h2 className="reflection-modal__title">{t("reflection-title", { buddy: buddyName })}</h2>
-                    <p className="reflection-modal__item">{t("reflection-completed-item", { label: item.itemLabel })}</p>
+                    <div className="reflection-modal__subject">
+                        <span className={`reflection-modal__subject-kind reflection-modal__subject-kind--${item.itemType}`}>
+                            {t(item.itemType === "goal"
+                                ? "reflection-subject-goal"
+                                : item.itemType === "session"
+                                    ? "reflection-subject-session"
+                                    : "reflection-subject-exercise")}
+                        </span>
+                        {/* A session's own label is "Today's session", which the tag already says, so it
+                            carries no second line. A goal and an exercise do: their name IS the thing the
+                            questions are about. */}
+                        {item.itemType !== "session" && (
+                            <span className="reflection-modal__subject-name">{item.itemLabel}</span>
+                        )}
+                    </div>
                 </div>
 
                 <div
@@ -312,7 +461,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                     aria-valuemin={1}
                     aria-valuemax={totalQuestions}
                     aria-valuenow={question}
-                    aria-label={t(`reflection-step-${question}`)}
+                    aria-label={t(stageKey(baseQuestion))}
                 >
                     <span className="buddy-steps__bar">
                         {Array.from({ length: totalQuestions }, (_, i) => i + 1).map((n) => (
@@ -323,7 +472,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                         ))}
                     </span>
                     <span className="buddy-steps__caption">
-                        <strong>{t(`reflection-step-${question}`)}</strong> · {question}/{totalQuestions}
+                        <strong>{t(stageKey(baseQuestion))}</strong> · {question}/{totalQuestions}
                     </span>
                 </div>
 
@@ -331,7 +480,34 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                     The bubble, the chips and the reply belong together and stay in one column, so the
                     companion's question is never separated from the answer being given to it. The panel
                     is a second column because it is about the question rather than part of it. */}
+                {/* The dashboard is a band across the dialog above the question, not a column beside
+                    it: the questions refer to it by name, so it has to be read before the question, and a
+                    narrow side column would make the bars unreadable. */}
+                <ReflectionPanelView panel={panel} itemType={item.itemType} itemLabel={item.itemLabel} />
+
                 <div className="reflection-modal__body">
+                    {/* Closing mid-way is a real choice, so it is asked rather than assumed. The wording
+                        says what is actually kept: the Insight for an answer is already in the ledger by
+                        the time the reply appears, so backing out never takes it away, and telling a
+                        student otherwise would be a lie in the one place it would be believed. */}
+                    {confirmingClose && (
+                        <div className="reflection-modal__confirm" role="alertdialog" aria-live="assertive">
+                            <p>
+                                {t("reflection-close-confirm", {
+                                    done: history.filter((entry) => entry.role === "student").length,
+                                    total: totalQuestions,
+                                })}
+                            </p>
+                            <div className="reflection-modal__confirm-actions">
+                                <button className="button primary-button" onClick={() => setConfirmingClose(false)}>
+                                    <FontAwesomeIcon icon={faArrowRight} /> {t("reflection-close-confirm-stay")}
+                                </button>
+                                <button className="button" onClick={() => void closeAndSkip()}>
+                                    {t("reflection-close-confirm-leave")}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="reflection-modal__conversation">
                         {/* The question, in the companion's own voice. */}
                         <BuddyBubble text={questionText} buddyName={buddyName} buddyEmoji={buddyEmoji} buddyImgSrc={buddyImgSrc} />
@@ -343,9 +519,16 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                             "your turn" label themselves. They used to be a row of pills BELOW a text box,
                             deliberately labelled "quick answer" so they would not read as the expected
                             answer to a reflection the student was meant to write in their own words. There
-                            is nothing to write now, so that framing is gone with the box: this is the
-                            answer, and the label says so. */}
+                            is nothing to write on those questions, so that framing is gone with the box:
+                            this is the answer, and the label says so.
+
+                            The end-of-session reflection is the one question with no chips, and there the
+                            box comes back: nothing about it is graded, so there is nothing to tap. */}
                         <span className="buddy-turn__label">{t("reflection-your-turn")}</span>
+                        {/* Every question is a menu, so the chips are the answer and there is nothing to
+                            write. The end-of-session reflection used to be a text box; the pilot has no
+                            consent for collecting children's writing, so it is a menu of true statements
+                            about their session now, with the day's own counts in them. */}
                         <div
                             className="reflection-modal__chips reflection-modal__chips--answer"
                             role="group"
@@ -364,6 +547,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                 </button>
                             ))}
                         </div>
+
                         {/* Two actions, and they are different things: send the answer the student chose,
                             or have the companion answer this question for them. A chip selects and the
                             button sends, so nothing is decided by a single tap. */}
@@ -409,10 +593,35 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                         legal targets belong to the catalogue — the server only says WHICH
                                         goal fits, and says nothing when none does. */}
                                     {suggestedGoalText && (
-                                        <p className="reflection-modal__suggested-goal">
+                                        <div className="reflection-modal__suggested-goal">
                                             <FontAwesomeIcon icon={faTrophy} className="reflection-modal__suggested-goal-icon" />
-                                            {t("reflection-suggested-goal", { goal: suggestedGoalText })}
-                                        </p>
+                                            <span>{t("reflection-suggested-goal", { goal: suggestedGoalText })}</span>
+                                            {goalOffer === "added" ? (
+                                                <span className="reflection-modal__goal-done">
+                                                    <FontAwesomeIcon icon={faCheck} /> {t("reflection-goal-added")}
+                                                </span>
+                                            ) : goalOffer === "already" ? (
+                                                <span className="reflection-modal__goal-done reflection-modal__goal-done--quiet">
+                                                    <FontAwesomeIcon icon={faCheck} /> {t("reflection-goal-already-set")}
+                                                </span>
+                                            ) : (
+                                                /* One tap turns the promise into a goal the app can count.
+                                                   Nothing about the wording changes: the student is
+                                                   accepting the sentence they just read. */
+                                                <button
+                                                    type="button"
+                                                    className="reflection-modal__goal-add"
+                                                    onClick={() => void handleAddGoal()}
+                                                    disabled={goalOffer === "checking" || goalOffer === "saving"}
+                                                    aria-label={t("reflection-goal-add", { goal: suggestedGoalText })}
+                                                    title={t("reflection-goal-add", { goal: suggestedGoalText })}
+                                                >
+                                                    {goalOffer === "saving"
+                                                        ? <FontAwesomeIcon icon={faSpinner} spin />
+                                                        : <FontAwesomeIcon icon={faPlus} />}
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -430,7 +639,6 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 )}
                     </div>
 
-                    <ReflectionPanelView panel={panel} itemType={item.itemType} />
                 </div>
             </div>
         </div>

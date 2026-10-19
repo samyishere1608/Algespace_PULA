@@ -121,96 +121,52 @@ namespace webapi.Models.Student
             Methods.FirstOrDefault(method => methodOrLabelKey.Contains(method, StringComparison.OrdinalIgnoreCase)) ?? "";
 
         /// <summary>
-        /// The goal from the catalogue that would carry out one of the commitments a reflection offers,
-        /// or null when there is no honest match.
+        /// The goal from the catalogue that would carry out one of the plans the reflection's last
+        /// question offers, or null when no goal in the catalogue measures it.
         ///
         /// The point is that a promise becomes something the app can actually help them do: the student
-        /// says "I'll explain my reasoning next time" and the reply names the goal that measures exactly
-        /// that. Null is a real answer — "try a different method" names no method, and "fewer mistakes
-        /// than my average" is a limit the goal picker cannot represent, so there is no goal that would
-        /// carry either of them out and inventing one would be worse than saying nothing.
+        /// says "Explain my choice next time" and the reply names the goal that counts explanations.
+        /// Null is a real answer: "Slow down" and "Check each step" name nothing the picker can count,
+        /// and "Ask for a hint when I'm stuck" would be contradicted by a hint limit, so inventing a
+        /// goal for them would be worse than saying nothing.
         ///
-        /// THE QUESTION IS PART OF THE KEY, because a chip id on its own is ambiguous. `pick-substitution`
-        /// is "the method I will compare next" under one question and "the method I will work out myself
-        /// next" under another, so the same id has to propose a different goal depending on which
-        /// question offered it. Reading the id alone would propose the wrong goal about half the time.
+        /// THE IDS ARE THE ONES THE BANK ACTUALLY SENDS. They were chip ids from the question set this
+        /// replaced, which meant every promise matched nothing and the suggestion silently disappeared
+        /// from every Q3 answer; the plan ids now come straight from `ReflectionSimpleQuestions.PlanIds`,
+        /// which is the only place they are written.
         ///
         /// The three-exercise target is the smallest the picker offers and the one that fits a
         /// commitment made about the next exercise rather than a resolution about the month.
         /// </summary>
-        public static SuggestedGoal? ForPromise(string questionKey, string chipId, string currentMethodFocus)
+        public static SuggestedGoal? ForPromise(string planId, string currentMethodFocus)
         {
-            // The three goal questions that ask WHICH method or type, where the chip is a name rather
-            // than a commitment. What the student promised is set by the question, not by the chip.
-            if (questionKey == "reflection-goal-q3-compare-method")
-                return chipId.StartsWith("pick-", StringComparison.Ordinal)
-                    ? new SuggestedGoal { Category = MethodComparison }
-                    : null;
+            var method = MethodFrom(currentMethodFocus);
 
-            if (questionKey == "reflection-goal-q3-solve-method")
-                return chipId.StartsWith("pick-", StringComparison.Ordinal)
-                    ? new SuggestedGoal { Category = SolveOnOwn }
-                    : null;
-
-            if (questionKey == "reflection-goal-q3-explain-type")
-                return chipId.StartsWith("pick-", StringComparison.Ordinal)
-                    ? new SuggestedGoal { Category = SelfExplanation }
-                    : null;
-
-            // The method exercise's own menu, where the chips are about the method rather than about a
-            // dimension.
-            if (questionKey == "reflection-q3-method")
+            return planId switch
             {
-                var method = MethodFrom(currentMethodFocus);
+                // Working the solution out before it is handed over, which every exercise type offers.
+                "try_myself_first" => new SuggestedGoal { Category = SolveOnOwn },
 
-                return chipId switch
-                {
-                    // Staying with it, which is what a narrowed method goal measures.
-                    "act-method-same" when method.Length > 0 =>
-                        new SuggestedGoal { Category = Method, Focus = method },
-                    // "Pick whichever fits the system" is the Suitability exercise's own question, so the
-                    // goal that measures it is the exercise type rather than a method.
-                    "act-method-fit" =>
-                        new SuggestedGoal { Category = ExerciseType, Focus = "Suitability" },
-                    // "Try a different method" names no method, so nothing in the catalogue carries it.
-                    _ => null,
-                };
-            }
+                // Explaining their reasoning instead of going straight on.
+                "explain_choice" => new SuggestedGoal { Category = SelfExplanation },
 
-            return chipId switch
-            {
-                // Explaining their reasoning, on whichever question offered it.
-                "act-explain-myself" or "act-explain-hint" or "act-explain-shown" or "act-explain" =>
-                    new SuggestedGoal { Category = SelfExplanation },
+                // Comparing two methods before choosing one, which only a suitability exercise invites.
+                "compare_classmate" => new SuggestedGoal { Category = MethodComparison },
 
-                // Comparing two methods, which only a Suitability exercise invites.
-                "act-compare-myself" or "act-compare-hint" or "act-compare-shown" or "act-compare" =>
-                    new SuggestedGoal { Category = MethodComparison },
+                // Deciding whether the method fits before committing to it, which is the suitability
+                // exercise's own question and therefore the exercise-type goal.
+                "check_fit" => new SuggestedGoal { Category = ExerciseType, Focus = "Suitability" },
 
-                // Working the solution out before being shown it, which every exercise type offers.
-                "act-solo-myself" or "act-solo-hint" or "act-solo-shown" or "act-solve-alone" =>
-                    new SuggestedGoal { Category = SolveOnOwn },
+                // Staying with the method they just used. No method named in the panel (a goal, or an
+                // exercise without a method) still makes a sensible promise: any method, counted.
+                "practise_method" => new SuggestedGoal { Category = Method, Focus = method },
 
-                // A hint limit, where the two chips that name a number map exactly onto a limit the
-                // picker offers. "The same as last time" does not: it depends on a limit from a previous
-                // goal that this call has no way to know.
-                "act-no-hints" or "act-target-none" =>
-                    new SuggestedGoal { Category = HintsAndErrors, Quality = "hints", MaxPerExercise = 0 },
-                "act-target-one" =>
+                // Trying before reaching for help, which a one-hint-per-exercise limit measures exactly.
+                // Zero would ask for more than the chip promised.
+                "try_before_hint" =>
                     new SuggestedGoal { Category = HintsAndErrors, Quality = "hints", MaxPerExercise = 1 },
 
-                // A mistake limit, and only where the chip names one. "Fewer than my average" is a
-                // relative promise the picker cannot express — its limits are 0, 1 and 2 — so it gets no
-                // suggestion rather than a fixed number that may be harder or easier than they meant.
-                "act-no-errors" =>
-                    new SuggestedGoal { Category = HintsAndErrors, Quality = "errors", MaxPerExercise = 0 },
-
-                // Picking a method that fits, which is what the two choice-paying exercise types are about.
-                "act-suitable-choice" =>
-                    new SuggestedGoal { Category = ExerciseType, Focus = "Suitability" },
-                "act-best-choice" =>
-                    new SuggestedGoal { Category = ExerciseType, Focus = "Efficiency" },
-
+                // "Slow down", "Check each step", "Ask for a hint when I'm stuck" and "I'm not sure yet".
                 _ => null,
             };
         }

@@ -1,6 +1,5 @@
 import {
     faArrowRight,
-    faBell,
     faBullseye,
     faChartBar,
     faCheck,
@@ -13,7 +12,6 @@ import {
     faLightbulb,
     faMedal,
     faPlus,
-    faRightFromBracket,
     faShieldHalved,
     faTimes,
     faTree,
@@ -349,7 +347,7 @@ export default function StudentDashboard(): ReactElement {
     }
 
     // ── Analytics computations ────────────────────────────────────────────────
-    const avgAccuracy = student ? getAccuracyLast5(student.id) : 100;
+    const avgAccuracy = student ? getAccuracyLast5(student.id) : 0;
     const accuracyStats = student
         ? getAccuracyStats(student.id)
         : { errors: 0, hints: 0, exercises: 0, avgErrors: 0, avgHints: 0 };
@@ -385,6 +383,17 @@ export default function StudentDashboard(): ReactElement {
         return { category: def.category, labelKey: def.labelKey, icon: def.icon, count: found?.count ?? 0 };
     });
     const goalCategoryTotal = goalCategoryRows.reduce((sum, row) => sum + row.count, 0);
+
+    /**
+     * Whether there is anything to report.
+     *
+     * A student who has just registered has no completed exercises, no XP and no finished goal, and
+     * every panel on the Analytics tab would still draw: five empty goal cards, a bar chart of three
+     * zeros, an XP donut with nothing in it, a 0% ring and a "your Choice XP is lowest" tip. That is
+     * not an empty screen, it is a screen full of nothing, and it reads as a report about a student
+     * who has failed at everything rather than one who has not started.
+     */
+    const hasAnalyticsData = accuracyStats.exercises > 0 || xpTotalDisplay > 0 || goalCategoryTotal > 0;
 
     // Chart-friendly data + colors
     const METHOD_COLORS: Record<string, string> = {
@@ -847,9 +856,6 @@ export default function StudentDashboard(): ReactElement {
                 </button>
 
                 <div className={"dashboard__nav-right"}>
-                    <button className={"dashboard__nav-bell"} title={t("dashboard-notifications")}>
-                        <FontAwesomeIcon icon={faBell} />
-                    </button>
                     <div className={"dashboard__nav-user"}>
                         <div className={"dashboard__nav-user-info"}>
                             <span className={"dashboard__nav-user-name"}>{student?.username ?? "Student"}</span>
@@ -868,13 +874,9 @@ export default function StudentDashboard(): ReactElement {
                     >
                         <FontAwesomeIcon icon={faHome} />
                     </button>
-                    <button
-                        className={"dashboard__nav-bell"}
-                        title={t("dashboard-logout")}
-                        onClick={handleLogout}
-                    >
-                        <FontAwesomeIcon icon={faRightFromBracket} />
-                    </button>
+                    {/* No logout button here: ending the session is the way out of the dashboard, and it
+                        offers logging out once the student has reflected. Two ways to leave, one of them
+                        skipping the session reflection, was a choice nobody needed to make. */}
                 </div>
             </nav>
 
@@ -1169,6 +1171,16 @@ export default function StudentDashboard(): ReactElement {
                             </div>
                         )}
 
+                        {/* Nothing recorded yet: one friendly panel in place of four empty charts, an
+                            empty donut and a "your weakest skill is" tip about a student with no data. */}
+                        {!hasAnalyticsData ? (
+                            <div className={"analytics-blank"}>
+                                <FontAwesomeIcon icon={faChartBar} className={"analytics-blank__icon"} aria-hidden />
+                                <p className={"analytics-blank__title"}>{t("analytics-empty-title")}</p>
+                                <p className={"analytics-blank__body"}>{t("analytics-empty-body")}</p>
+                            </div>
+                        ) : (
+                        <>
                         <div className={"analytics-grid"}>
                             {/* Goals completed per category, all time. First in the grid on purpose: it
                                 answers "what am I actually working on", which is the question this tab
@@ -1177,8 +1189,7 @@ export default function StudentDashboard(): ReactElement {
                             <div className={"analytics-section analytics-section--full"}>
                                 <div className={"analytics-section__title"}>{t("analytics-category-title")}</div>
                                 <div className={"analytics-category-row"}>
-                                    {goalCategoryRows.map((row) => (
-                                        <div key={row.category} className={`analytics-category${row.count > 0 ? " analytics-category--active" : ""}`}>
+                                    {goalCategoryRows.map((row) => (                                        <div key={row.category} className={`analytics-category${row.count > 0 ? " analytics-category--active" : ""}`}>
                                             <span className={"analytics-category__icon"}><FontAwesomeIcon icon={row.icon} /></span>
                                             <span className={"analytics-category__value"}>{row.count}</span>
                                             <span className={"analytics-category__label"}>{t(row.labelKey)}</span>
@@ -1300,6 +1311,8 @@ export default function StudentDashboard(): ReactElement {
                             </div>
                             <p className={"analytics-empty"}>{t("analytics-accuracy-hint")}</p>
                         </div>
+                        </>
+                        )}
                     </div>
                     )}
 
@@ -1309,7 +1322,7 @@ export default function StudentDashboard(): ReactElement {
                     </div>
                     )}
 
-                    {activeTab === "exercises" && <DashboardExercises onShowTutorial={() => playSection("exercises")} />}
+                    {activeTab === "exercises" && <DashboardExercises onShowTutorial={() => playSection("exercises")} goals={activeGoals} />}
                 </div>
             </div>
 
@@ -1442,6 +1455,7 @@ export default function StudentDashboard(): ReactElement {
                     buddyEmoji={activeBuddy.emoji}
                     buddyImgSrc={buddyImgSrc}
                     onAwardInsight={handleReflectionInsight}
+                    onGoalAdded={() => void refreshGoals(student.id)}
                     onClose={() => setSessionReflectionItem(null)}
                 />
             )}
@@ -1453,6 +1467,7 @@ export default function StudentDashboard(): ReactElement {
                     buddyEmoji={activeBuddy.emoji}
                     buddyImgSrc={buddyImgSrc}
                     onAwardInsight={handleReflectionInsight}
+                    onGoalAdded={() => void refreshGoals(student.id)}
                     onClose={() => {
                         setShowReflectionModal(false);
                         setReflectionQueue([]);

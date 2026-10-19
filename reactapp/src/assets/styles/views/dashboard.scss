@@ -678,6 +678,43 @@
     margin-top: 0.6rem;
 }
 
+/* The Analytics tab before there is anything to analyse. A card, not a blank space: the tab still
+   has to look like a place that is waiting for something rather than a page that failed to load. */
+.analytics-blank {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 18rem;
+    padding: 2.5rem 1.5rem;
+    border: 1px dashed rgba(255, 255, 255, 0.14);
+    border-radius: 0.9rem;
+    background-color: rgba(1, 38, 56, 0.35);
+    text-align: center;
+
+    &__icon {
+        font-size: 1.9rem;
+        color: rgba(142, 202, 230, 0.55);
+        margin-bottom: 0.4rem;
+    }
+
+    &__title {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    &__body {
+        margin: 0;
+        max-width: 34rem;
+        font-size: 0.92rem;
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.62);
+    }
+}
+
 /* ─── Growth Tree tab ────────────────────────────────────────── */
 .dashboard__tree-tab {
     flex: 1;
@@ -2344,6 +2381,9 @@
         margin: 0.9rem auto 0;
         padding: 0.5rem 1rem;
         max-width: 34rem;
+        // A promise is one of a few short chips again, so this is a pill. It was widened to a rounded
+        // panel while promises were free text and could run to a paragraph; with chips back, a pill is
+        // the shape that fits the sentence inside it.
         border-radius: 999px;
         background: rgba(6, 214, 160, 0.12);
         border: 1px solid rgba(6, 214, 160, 0.32);
@@ -2785,6 +2825,129 @@
     color: #06d6a0;
     background-color: rgba(6, 214, 160, 0.12);
     border-color: rgba(6, 214, 160, 0.3);
+}
+
+/* The exercises that might move the goal, in the goal filter's own words. Deliberately the quietest
+   chip on the row: it says "you decide here", which is a caution, not an invitation. */
+.dash-exercise__depends {
+    flex-shrink: 0;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: transparent;
+    color: rgba(255, 255, 255, 0.64);
+    font-size: 0.74rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Where the goal exercises are, in the ordinary view. One line, low contrast, and it is the only
+   thing the goal adds to the screen unless the filter is on. */
+.dash-exercises__goal-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 0 0.75rem;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.62);
+
+    svg {
+        color: #ffd166;
+        flex-shrink: 0;
+    }
+}
+
+/* Which goal the filter is filtering for. Shown only while the filter is on, and it is the only
+   place a goal's name appears on this screen. */
+.dash-exercises__goal-focus {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin: 0 0 0.75rem;
+}
+
+.dash-exercises__goal-focus-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.dash-exercises__goal-focus-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* The same goal, when there is only one: text rather than a control, because there is nothing to
+   switch to. */
+.dash-exercises__goal-focus-single {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    background-color: rgba(255, 209, 102, 0.16);
+    border: 1px solid rgba(255, 209, 102, 0.55);
+    color: #ffd166;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.dash-goal-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.72);
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #fff;
+    }
+
+    /* The selected goal is the one being filtered for, so it is the one chip that is coloured. */
+    &--active,
+    &--active:hover {
+        background-color: rgba(255, 209, 102, 0.16);
+        border-color: rgba(255, 209, 102, 0.55);
+        color: #ffd166;
+    }
+}
+
+/* The filter chip for the goal. Gold, and outside the three kinds' palette, so it does not read as a
+   fourth kind of exercise. */
+.dash-exercise-filter--goal {
+    color: #ffd166;
+
+    .dash-exercise-filter__icon,
+    .dash-exercise-filter__count {
+        color: #ffd166;
+    }
+
+    &.dash-exercise-filter--active {
+        background-color: rgba(255, 209, 102, 0.16);
+        border-color: rgba(255, 209, 102, 0.55);
+    }
+}
+
+/* Filtered down to nothing. Only reachable when a narrowed goal has no exercise that fits it, which
+   should not happen with the catalogue as it stands, but an empty list with no explanation reads as
+   a broken screen. */
+.dash-exercises__goal-empty {
+    margin: 0;
+    padding: 1rem 0.9rem;
+    text-align: center;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.6);
 }
 
 .dash-exercise__chevron {
@@ -3525,6 +3688,12 @@
     max-width: calc(100vw - 2rem);
     padding: 1.6rem 1.9rem 1.9rem;
 
+    // A short window used to cut the dialog off at the bottom, taking the answer buttons with it —
+    // the record band plus the question is taller than a laptop viewport. Capping the height and
+    // scrolling the dialog itself keeps every control reachable on any screen.
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+
     // Room for the record column. Only worn when the panel actually has something to show, which is
     // decided in the component and applied as this class — a dialog that widened for an empty card would
     // leave a blank stripe beside the conversation.
@@ -3532,37 +3701,20 @@
         width: 1010px;
     }
 
-    // The conversation and the record, side by side. The bubble, the chips and the reply stay together in
-    // one column so the companion's question is never separated from the answer to it; the record is a
-    // second column because it is about the question rather than part of it.
+    // The body is a single column because the dashboard is a band across the dialog above it, not a
+    // sidebar: the questions name the numbers, so the numbers have to be read first and full width.
+    // This used to reserve a 330px second column that nothing sat in, which is why the conversation was
+    // squeezed against the left edge with a blank stripe beside it.
     &__body {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         gap: 1.5rem;
     }
 
-    &--with-record &__body {
-        grid-template-columns: minmax(0, 1fr) 330px;
-    }
-
-    // Below this the second column has nowhere to go. The panel moves above the conversation rather than
-    // disappearing behind a tap, so it stays visible while the student answers — which is the whole point
-    // of it, and the first thing a narrow screen would otherwise take away.
+    // Below this the dialog is no wider than its content, so the four sections stack instead of shrinking.
     @media (max-width: 980px) {
         &--with-record {
             width: 620px;
-        }
-
-        &--with-record &__body {
-            grid-template-columns: minmax(0, 1fr);
-        }
-
-        &--with-record &__conversation {
-            order: 2;
-        }
-
-        &--with-record .reflection-panel {
-            order: 1;
         }
     }
 
@@ -3597,6 +3749,52 @@
         margin: 0;
     }
 
+    // What this reflection is about: a tag naming the kind of thing, then its own name.
+    //
+    // This is the line a student reads to know which goal they are being asked about, so it is the most
+    // prominent thing in the header rather than the smallest. Before this it was one 0.9rem grey
+    // sentence with the label trailing after a colon, and the goal's name was effectively invisible.
+    &__subject {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.5rem;
+        margin-top: 0.45rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    &__subject-kind {
+        flex-shrink: 0;
+        padding: 0.14rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: #8ecae6;
+        background: rgba(33, 158, 188, 0.16);
+        border: 1px solid rgba(33, 158, 188, 0.3);
+
+        &--goal {
+            color: #06d6a0;
+            background: rgba(6, 214, 160, 0.14);
+            border-color: rgba(6, 214, 160, 0.32);
+        }
+    }
+
+    &__subject-name {
+        flex: 1 1 12rem;
+        min-width: 0;
+        font-size: 1.12rem;
+        font-weight: 700;
+        line-height: 1.3;
+        color: #fff;
+        // A real goal title can be a full sentence ("Solve 3 exercises on your own"), so it wraps rather
+        // than being cut off or spilling out of the dialog.
+        overflow-wrap: anywhere;
+    }
+
     // The step rail is `.buddy-steps`, defined once in styles/shared/buddy-conversation.scss. It
     // replaced a row of three big labelled dots that sat BETWEEN the companion's face and their
     // question, cutting one sentence in half with a progress bar.
@@ -3620,24 +3818,6 @@
         box-shadow: 0 0 10px rgba(6, 214, 160, 0.15);
     }
 
-    // Shown when an answer is rejected as unrelated to the exercise. Amber rather than red:
-    // the student has done nothing wrong, they are simply being asked to write it again.
-    &__retry {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.6rem;
-        padding: 0.75rem 0.9rem;
-        border-radius: 0.75rem;
-        background: rgba(255, 183, 3, 0.1);
-        border: 1px solid rgba(255, 183, 3, 0.35);
-        color: #ffd166;
-        font-size: 0.95rem;
-        line-height: 1.45;
-
-        svg { flex-shrink: 0; margin-top: 0.15rem; }
-        p { margin: 0; color: inherit; }
-    }
-
     // The student's turn. The label sits above the box so an empty field says whose move it is.
     &__answer {
         display: flex;
@@ -3646,33 +3826,43 @@
         margin-top: 1.3rem;
     }
 
-    &__input {
-        width: 100%;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(33, 158, 188, 0.3);
-        border-radius: 0.9rem;
-        color: #fff;
-        font-family: inherit;
-        font-size: 1.05rem;
-        line-height: 1.55;
-        padding: 0.85rem 1rem;
-        resize: none;
-        outline: none;
-        transition: border-color 0.15s, box-shadow 0.15s;
-
-        &::placeholder { color: rgba(255, 255, 255, 0.4); }
-
-        &:focus {
-            border-color: rgba(142, 202, 230, 0.7);
-            box-shadow: 0 0 0 3px rgba(33, 158, 188, 0.18);
-        }
-    }
-
     &__actions {
         display: flex;
         justify-content: flex-end;
         gap: 0.6rem;
         margin-top: 0.35rem;
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+    }
+
+    // The "close it anyway?" prompt. Amber rather than red: closing is allowed, it just costs the rest
+    // of the reflection, so this is a confirmation and not an alarm.
+    &__confirm {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        margin-bottom: 0.9rem;
+        padding: 0.85rem 1rem;
+        background: rgba(255, 176, 32, 0.1);
+        border: 1px solid rgba(255, 176, 32, 0.4);
+        border-radius: 0.8rem;
+
+        p {
+            margin: 0;
+            font-size: 0.95rem;
+            line-height: 1.45;
+            color: #fff;
+        }
+    }
+
+    &__confirm-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
 
         .button {
             display: inline-flex;
@@ -3727,19 +3917,70 @@
     // not become two competing calls to action at the end of a reflection.
     &__suggested-goal {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 0.45rem;
         margin-top: 0.6rem !important;
         padding-top: 0.6rem;
         border-top: 1px solid rgba(29, 185, 84, 0.22);
         font-size: 0.95rem !important;
         color: rgba(255, 255, 255, 0.82) !important;
+
+        /* The sentence takes the room and the button keeps its own, so a long goal wraps instead of
+           squeezing the control the student is meant to press. */
+        > span:first-of-type {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
     }
 
     &__suggested-goal-icon {
         color: #1db954;
         flex-shrink: 0;
         margin-top: 0.2rem;
+    }
+
+    /* One tap accepts the goal the sentence above just proposed. Round and quiet rather than a second
+       primary button: the reflection already owns the one action on this screen. */
+    &__goal-add {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        border: 1px solid rgba(29, 185, 84, 0.55);
+        background: rgba(29, 185, 84, 0.16);
+        color: #7ee2a8;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.15s ease;
+
+        &:hover:not(:disabled) {
+            background: rgba(29, 185, 84, 0.3);
+            transform: scale(1.06);
+        }
+
+        &:disabled {
+            opacity: 0.55;
+            cursor: default;
+        }
+    }
+
+    &__goal-done {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #7ee2a8;
+        white-space: nowrap;
+
+        /* Still true, but there is nothing to celebrate: this goal was already on their list. */
+        &--quiet {
+            color: rgba(255, 255, 255, 0.55);
+            font-weight: 600;
+        }
     }
 }
 
@@ -3903,4 +4144,248 @@
         font-size: 0.68rem;
         color: rgba(255, 255, 255, 0.5);
     }
+}
+
+
+/* ─── The reflection dashboard ───────────────────────────────────
+   ONE surface, four sections. The numbers the three questions are about share a single plate: a header
+   naming what was attempted, then mistakes / hints / time / choices, each with one headline number and a
+   small chart. Sections are told apart by an accent colour and a tinted panel rather than by borders, so
+   the whole thing reads as one dashboard instead of four unrelated cards. Nothing here is interactive. */
+.rdash {
+    margin: 0.15rem 0 1.15rem;
+    padding: 0.85rem 0.95rem 0.9rem;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(33, 158, 188, 0.18);
+    background: linear-gradient(180deg, rgba(4, 58, 83, 0.72), rgba(1, 38, 56, 0.5));
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+}
+
+.rdash__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-bottom: 0.6rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rdash__eyebrow {
+    display: block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.42);
+}
+
+.rdash__headline {
+    margin: 0.18rem 0 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #fff;
+}
+
+.rdash__pill {
+    flex-shrink: 0;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid rgba(33, 158, 188, 0.32);
+    background: rgba(33, 158, 188, 0.13);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #9fe0f0;
+    white-space: nowrap;
+}
+
+/* Four across when there is room, two when there is not, one on a phone. The column count follows how
+   many sections actually have something to show, so a panel missing one never leaves a gap. */
+.rdash__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.7rem;
+
+    @media (min-width: 560px) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (min-width: 900px) {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+
+        &[data-sections="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        &[data-sections="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        &[data-sections="1"] { grid-template-columns: minmax(0, 1fr); }
+    }
+}
+
+.rdash__sec {
+    position: relative;
+    min-width: 0;
+    padding: 0.55rem 0.65rem 0.6rem 0.8rem;
+    border-radius: 0.6rem;
+    background: rgba(255, 255, 255, 0.035);
+
+    /* The accent is a rule down the left edge rather than a border around the section: a box inside the
+       plate would read as a second card, and these four numbers belong to one picture. */
+    &::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0.55rem;
+        bottom: 0.6rem;
+        width: 3px;
+        border-radius: 999px;
+        background: var(--rdash-tone, rgba(255, 255, 255, 0.25));
+    }
+
+    &--mistakes { --rdash-tone: #f87171; }
+    &--hints { --rdash-tone: #fbbf24; }
+    &--time { --rdash-tone: #60a5fa; }
+    &--steps { --rdash-tone: #34d399; }
+}
+
+.rdash__label {
+    margin: 0;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.58);
+}
+
+.rdash__stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    margin: 0.15rem 0 0;
+}
+
+.rdash__value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1.05;
+    color: #fff;
+}
+
+.rdash__caption {
+    font-size: 0.6rem;
+    color: rgba(255, 255, 255, 0.42);
+}
+
+.rdash__rows {
+    list-style: none;
+    margin: 0.55rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.rdash__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    column-gap: 0.35rem;
+    row-gap: 0.26rem;
+}
+
+.rdash__row-label {
+    font-size: 0.72rem;
+    line-height: 1.25;
+    color: rgba(255, 255, 255, 0.76);
+    /* Wraps rather than truncates: the part names are a phrase ("das Erklären deines Denkwegs"), not a
+       single word, and a cut-off name beside a number reads as a bug. The value keeps its own column, so
+       a second line only makes that row taller. */
+    overflow-wrap: anywhere;
+}
+
+.rdash__row-value {
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.rdash__track {
+    grid-column: 1 / -1;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+
+.rdash__fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.45s ease-out;
+
+    &--mistakes { background: linear-gradient(90deg, #ef4444, #fb7185); }
+    &--hints { background: linear-gradient(90deg, #f59e0b, #fcd34d); }
+    &--time { background: linear-gradient(90deg, #3b82f6, #7dd3fc); }
+}
+
+.rdash__steps {
+    list-style: none;
+    margin: 0.55rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.rdash__step {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.35rem;
+    row-gap: 0.05rem;
+
+    /* A state dot, not an icon: the four sections have to look like one chart, and pictograms beside two
+       rows would make this the only illustrated section. */
+    &::before {
+        content: "";
+        flex-shrink: 0;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.25);
+    }
+
+    &--own::before,
+    &--explained::before,
+    &--compared::before { background: #34d399; }
+
+    &--skipped::before { background: #fbbf24; }
+
+    &--app::before { background: #60a5fa; }
+}
+
+.rdash__step-name {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.76);
+    /* No ellipsis: with the count beside it ("compared in 2 of 3") the label was being cut to
+       "Compare s…", which reads as a bug rather than as a short word. It now takes the room it needs and
+       the value wraps under it when the column is narrow. */
+    white-space: nowrap;
+}
+
+.rdash__step-value {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.92);
+    white-space: nowrap;
+}
+
+/* The comparison the "I was in a hurry" chip is checked against, kept quiet under the bars it belongs
+   with so it reads as part of the Time card rather than as a fifth number. */
+.rdash__note {
+    margin: 0.5rem 0 0;
+    font-size: 0.66rem;
+    line-height: 1.3;
+    color: rgba(255, 255, 255, 0.6);
 }

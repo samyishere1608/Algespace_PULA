@@ -44,6 +44,9 @@ namespace webapi.Services
         /// </summary>
         public const string Session = "session";
 
+        /// <summary>The id every "I don't know" chip uses, whichever question it is on.</summary>
+        public const string NotSureChip = "not-sure";
+
         /// <summary>Insight for an answer that matches the record. Same ceiling the old grader used.</summary>
         private const int AlignedXp = 3;
 
@@ -106,7 +109,8 @@ namespace webapi.Services
                 _ => ""
             };
         }
-
+
+
         public static string StepLabelKey(string stepId) => $"reflection-step-{stepId}";
 
         // ── What the panel may show ───────────────────────────────────────────
@@ -332,7 +336,10 @@ namespace webapi.Services
         public static List<ReflectionQuestion> Build(ReflectionEvidence evidence)
         {
             var questions = BuildQuestions(evidence);
-            foreach (var question in questions) question.Meaning = MeaningFor(question, evidence);
+            // A question that came with its own line keeps it: the simple questions carry the one sentence
+            // about why the thing they ask about matters, because it depends on what they are asking about.
+            foreach (var question in questions)
+                if (question.Meaning.Length == 0) question.Meaning = MeaningFor(question, evidence);
             return questions;
         }
 
@@ -399,16 +406,15 @@ namespace webapi.Services
             };
         }
 
+        /// <summary>
+        /// The three questions an item gets: what went well, why the costliest thing happened, what next.
+        ///
+        /// One static dashboard sits above them and these three refer to it by name, so nothing is
+        /// tapped. The end-of-session reflection keeps its own pair, because it has no record to read.
+        /// </summary>
         private static List<ReflectionQuestion> BuildQuestions(ReflectionEvidence evidence) => evidence.IsSession
             ? BuildSession(evidence)
-            : evidence.IsGoal
-                ? evidence.GoalExercises.Count > 0
-                    // A goal with a readable window is asked its own questions.
-                    ? [BuildGoalObservation(evidence), BuildGoalJudgement(evidence), BuildGoalNextAction(evidence)]
-                    // A goal completed before the window was recorded, or one whose window was empty. The
-                    // plain questions are all that can be asked of it, and they still ask something real.
-                    : [BuildObservation(evidence), BuildJudgement(evidence), BuildNextAction(evidence)]
-                : [BuildObservation(evidence), BuildJudgement(evidence), BuildNextAction(evidence)];
+            : ReflectionSimpleQuestions.Build(evidence);
 
         // ── The end-of-session questions ──────────────────────────────────────
         //
@@ -416,14 +422,21 @@ namespace webapi.Services
         // judge and to commit to; a session is only ever asked the first and the last. The middle one is
         // missing on purpose rather than by omission: a judgement question needs a record that can settle
         // the answer, and "how did today compare with yesterday" cannot be settled from one day's row.
+        //
+        // BOTH ARE MENUS READ FROM THE DAY'S OWN EXERCISES, and both carry the day's numbers.
+        //
+        // The free-text version of this dialog was built and then taken out again: the pilot has no
+        // consent for collecting children's writing, so this question never asks for any. Every chip
+        // below is a sentence the day's record already proves, with the count that proves it, so the
+        // student is choosing between true statements rather than guessing at one -- and the menu is
+        // specific to their afternoon rather than generic.
 
         /// <summary>
-        /// Q1: what went well today, as a menu read from the day's own exercises.
+        /// Q1: what went well today, as a menu whose every option the day's record supports.
         ///
-        /// The options are the things that DID go well — every one of them is backed by a rule over the
-        /// session's window, so the student is choosing between true statements rather than guessing at
-        /// one. Nothing is graded, because the record cannot say which of several true things a student
-        /// noticed. The menu is capped so it stays a quick answer rather than a survey.
+        /// Nothing is graded, because the record cannot say which of several true things a student
+        /// noticed. The counts are what make the menu worth reading: "3 of them with no mistakes" is
+        /// about THIS session, where "some went by cleanly" could be about any day.
         /// </summary>
         private static ReflectionQuestion BuildSessionObservation(ReflectionEvidence evidence)
         {
@@ -450,19 +463,25 @@ namespace webapi.Services
             else
             {
                 // Finishing is the one thing a session cannot have happened without, so it is always on
-                // the menu and always first. The rest are offered only when the day actually shows them.
-                chips.Add(new ReflectionChip { Id = "session-went-finished", TextKey = "reflection-session-chip-finished" });
+                // the menu and always first, carrying how many.
+                chips.Add(new ReflectionChip
+                {
+                    Id = "session-went-finished",
+                    TextKey = "reflection-session-chip-finished",
+                    Count = window.Count,
+                });
 
-                if (window.Any(exercise => exercise.Errors == 0))
-                    chips.Add(new ReflectionChip { Id = "session-went-clean", TextKey = "reflection-session-chip-clean" });
-                if (window.Any(exercise => exercise.Hints == 0))
-                    chips.Add(new ReflectionChip { Id = "session-went-nohints", TextKey = "reflection-session-chip-nohints" });
-                if (window.Any(exercise => exercise.Own))
-                    chips.Add(new ReflectionChip { Id = "session-went-alone", TextKey = "reflection-session-chip-alone" });
-                if (window.Any(exercise => exercise.Explained))
-                    chips.Add(new ReflectionChip { Id = "session-went-explained", TextKey = "reflection-session-chip-explained" });
-                if (window.Any(exercise => exercise.Compared))
-                    chips.Add(new ReflectionChip { Id = "session-went-compared", TextKey = "reflection-session-chip-compared" });
+                void OfferWhen(int count, string id, string textKey)
+                {
+                    if (count <= 0) return;
+                    chips.Add(new ReflectionChip { Id = id, TextKey = textKey, Count = count, Total = window.Count });
+                }
+
+                OfferWhen(window.Count(exercise => exercise.Errors == 0), "session-went-clean", "reflection-session-chip-clean");
+                OfferWhen(window.Count(exercise => exercise.Hints == 0), "session-went-nohints", "reflection-session-chip-nohints");
+                OfferWhen(window.Count(exercise => exercise.Own), "session-went-alone", "reflection-session-chip-alone");
+                OfferWhen(window.Count(exercise => exercise.Explained), "session-went-explained", "reflection-session-chip-explained");
+                OfferWhen(window.Count(exercise => exercise.Compared), "session-went-compared", "reflection-session-chip-compared");
 
                 // A day where every exercise cost both a mistake and a hint leaves "I finished them"
                 // alone on the menu, and one chip is not a menu — it is a button with a foregone
@@ -481,30 +500,47 @@ namespace webapi.Services
         /// <summary>
         /// Q2: what to work on next session, which is the promise.
         ///
-        /// The three chips name the same three things the daily intention offers at the start of the next
+        /// The first three chips name the three things the daily intention offers at the start of the next
         /// session — more practice, a goal, a look at the numbers first — and deliberately so: the two
         /// are settled against each other tomorrow, and matching them is only possible because neither
-        /// side invented its own vocabulary. A student who writes instead of tapping is judged on the
-        /// text, which is why the "something else" answer needs no chip of its own.
+        /// side invented its own vocabulary.
         ///
-        /// ItemType stays "session" so the exercise settlement cannot read this promise. It judges
-        /// promises that name a dimension of the next exercise, and asking it to settle one about
-        /// tomorrow's intention would close the promise unpaid.
+        /// The extras after them are read off the day: a promise to take on the thing that actually went
+        /// wrong this afternoon is worth more than a generic one, and every extra maps back to the
+        /// "practice" intention so the settlement still settles it (see ChipsForIntention).
+        ///
+        /// ItemType stays "session" so the exercise settlement cannot read this promise.
         /// </summary>
         private static ReflectionQuestion BuildSessionNextAction(ReflectionEvidence evidence)
         {
+            var window = evidence.GoalExercises;
+
+            var chips = new List<ReflectionChip>
+            {
+                new() { Id = "session-next-practice", TextKey = "reflection-session-chip-next-practice" },
+                new() { Id = "session-next-goal", TextKey = "reflection-session-chip-next-goal" },
+                new() { Id = "session-next-review", TextKey = "reflection-session-chip-next-review" },
+            };
+
+            // The day's own loose ends, offered as promises. Only the ones the record shows: a student
+            // who took no hints today is not offered "try one without a hint", because nothing suggests
+            // they need it.
+            if (evidence.Hints > 0)
+                chips.Add(new ReflectionChip { Id = "session-next-fewer-hints", TextKey = "reflection-session-chip-next-fewer-hints" });
+
+            if (window.Count > 0 && window.Count(exercise => exercise.Compared) < window.Count)
+                chips.Add(new ReflectionChip { Id = "session-next-compare", TextKey = "reflection-session-chip-next-compare" });
+
+            if (window.Count > 0 && window.Count(exercise => exercise.Explained) < window.Count)
+                chips.Add(new ReflectionChip { Id = "session-next-explain", TextKey = "reflection-session-chip-next-explain" });
+
             return new ReflectionQuestion
             {
                 Id = "session-q2-next",
                 Kind = NextAction,
                 ItemType = "session",
                 TextKey = "reflection-session-q2",
-                Chips =
-                [
-                    new ReflectionChip { Id = "session-next-practice", TextKey = "reflection-session-chip-next-practice" },
-                    new ReflectionChip { Id = "session-next-goal", TextKey = "reflection-session-chip-next-goal" },
-                    new ReflectionChip { Id = "session-next-review", TextKey = "reflection-session-chip-next-review" },
-                ],
+                Chips = chips.Take(5).ToList(),
             };
         }
 
@@ -524,6 +560,11 @@ namespace webapi.Services
             "session-next-practice" => "reflection-session-chip-next-practice",
             "session-next-goal" => "reflection-session-chip-next-goal",
             "session-next-review" => "reflection-session-chip-next-review",
+            // The day-specific promises map back to the practice intention, so tomorrow's check-in can
+            // still settle them.
+            "session-next-fewer-hints" => "reflection-session-chip-next-fewer-hints",
+            "session-next-compare" => "reflection-session-chip-next-compare",
+            "session-next-explain" => "reflection-session-chip-next-explain",
             _ => "",
         };
 
@@ -1694,7 +1735,7 @@ namespace webapi.Services
         /// A lookup, deliberately. All the thinking happened in <see cref="Build"/>, where the record was
         /// in front of it, so grading cannot become a second, disagreeing copy of the same rule.
         /// </summary>
-        public static ReflectionVerdict Grade(ReflectionQuestion question, string chipId)
+        public static ReflectionVerdict Grade(ReflectionQuestion question, string chipId, string previousChipId = "")
         {
             // A commitment is not a claim, so there is nothing to be right about. Neither is a session
             // question: "what went well today" has several true answers and the record is in no position
@@ -1702,8 +1743,16 @@ namespace webapi.Services
             if (question.Kind is NextAction or Session)
                 return new ReflectionVerdict { Status = "no-award", InsightXp = 0 };
 
+            // Reading a number off the dashboard is worth more than naming a reason for it: the first is the
+            // skill the reflection is training, and the second is only ever checkable as "your description
+            // matched your numbers". So the two questions pay different amounts, and the reason can never
+            // take the whole reflection away from a student who read their chart correctly.
             if (chipId.Length > 0 && question.AlignedChipIds.Contains(chipId))
-                return new ReflectionVerdict { Status = "aligned", InsightXp = AlignedXp };
+                return new ReflectionVerdict
+                {
+                    Status = "aligned",
+                    InsightXp = question.Kind == Judgement ? PartialXp : AlignedXp,
+                };
 
             if (chipId.Length > 0 && question.PartialChipIds.Contains(chipId))
                 return new ReflectionVerdict { Status = "partial", InsightXp = PartialXp };

@@ -37,6 +37,13 @@ export class Paths {
     static readonly StudentRegisterPath: string = "/student/register";
     static readonly StudentDashboardPath: string = "/student/dashboard";
     /**
+     * The reflection lab: a developer-only page that seeds one crafted attempt (or goal window) and opens
+     * the real reflection dialog on it, so every scenario can be checked without doing the exercises.
+     *
+     * Registered only in development builds, and the endpoints behind it answer 404 outside Development.
+     */
+    static readonly DevReflectionLabPath: string = "/dev/reflection-lab";
+    /**
      * A read-only stand-in for a flexibility exercise, used by the walkthrough.
      *
      * A real exercise cannot be opened by URL: `FlexibilityExercise` reads the exercise type and id

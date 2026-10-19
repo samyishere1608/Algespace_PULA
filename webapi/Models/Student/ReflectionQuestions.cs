@@ -19,6 +19,23 @@ namespace webapi.Models.Student
         /// part of the app rather than a second copy of them being kept here.
         /// </summary>
         public string TextKey { get; set; } = "";
+
+        /// <summary>
+        /// Literal text, for a chip that is a number and needs no translating ("3", "2"). Takes
+        /// precedence over <see cref="TextKey"/> when it is set, with the key still naming what it is.
+        /// </summary>
+        public string Label { get; set; } = "";
+
+        /// <summary>
+        /// The number a chip's own sentence is about, for a menu built from the day's figures:
+        /// "{{count}} of them with no mistakes". Sent to the client, which resolves the key with it.
+        ///
+        /// Null for a chip whose sentence carries no number, which is most of them.
+        /// </summary>
+        public int? Count { get; set; }
+
+        /// <summary>How many there were in all, when the sentence says "3 of 5" rather than just "3".</summary>
+        public int? Total { get; set; }
     }
 
     /// <summary>
@@ -172,8 +189,27 @@ namespace webapi.Models.Student
         /// <summary>How many exercises the item covers, so the wording can say "in this one" or "altogether".</summary>
         public int RunCount { get; set; }
 
+        /// <summary>
+        /// How many exercises the goal counted in all, when that is more than <see cref="RunCount"/>.
+        ///
+        /// The window is capped for readability, and a minutes goal has no bound on how many exercises it
+        /// takes, so this is what lets the panel say "your last 5 of 9 exercises" instead of showing five
+        /// and leaving the missing four unmentioned. Zero when nothing was left out.
+        /// </summary>
+        public int CountedRuns { get; set; }
+
         /// <summary>Hints taken across the item, or null when the hints are what is being asked about.</summary>
         public int? Hints { get; set; }
+
+        /// <summary>
+        /// How long this student's earlier attempts at the same exercise type took, in seconds.
+        ///
+        /// Null when there is no earlier attempt to compare with. It exists because two of the reason
+        /// chips say "I was in a hurry", and on the exercise panel there is nothing else to check that
+        /// against — the phases on screen are the ones being explained, so a claim about being quicker
+        /// than usual would be the one thing the student could not see.
+        /// </summary>
+        public double? UsualSeconds { get; set; }
 
         /// <summary>
         /// Whether anything about this question is still held back, so the client can say so.
@@ -183,24 +219,62 @@ namespace webapi.Models.Student
         /// tell you after you answer" — is also the one that makes the answer worth giving.
         /// </summary>
         public bool HeldBack { get; set; }
+
+        /// <summary>The decisions the student made, as dashboard rows.</summary>
+        public List<ReflectionPanelDecision> Decisions { get; set; } = [];
     }
 
-    /// <summary>One phase of one run, for the panel's time bars.</summary>
+    /// <summary>One phase of one run, for the dashboard's three bars.</summary>
     public class ReflectionPanelPhase
     {
         public string LabelKey { get; set; } = "";
 
         /// <summary>Seconds, sent as a number and rounded by the client, which owns the wording.</summary>
         public double Seconds { get; set; }
+
+        /// <summary>
+        /// Mistakes and hints in this phase. Shown now rather than withheld: the questions are about
+        /// reading these bars, so the bars have to carry the numbers they are asking about.
+        /// </summary>
+        public int Mistakes { get; set; }
+        public int Hints { get; set; }
     }
 
-    /// <summary>One exercise the item covers, for the panel's run circles.</summary>
+    /// <summary>One exercise the item covers, for the dashboard's per-exercise bars.</summary>
     public class ReflectionPanelRun
     {
         /// <summary>1-based position, so the client can say "1st", "2nd", "3rd" without counting.</summary>
         public int Position { get; set; }
 
         public int Mistakes { get; set; }
+        public int Hints { get; set; }
+        public double Seconds { get; set; }
+    }
+
+    /// <summary>
+    /// One decision the student made, as a row of the dashboard: who did the calculating, and what they
+    /// did at the compare or explain step.
+    /// </summary>
+    public class ReflectionPanelDecision
+    {
+        /// <summary>Translation key for the row's name, e.g. "Calculating".</summary>
+        public string LabelKey { get; set; } = "";
+
+        /// <summary>Translation key for what they did, e.g. "I did it".</summary>
+        public string ValueKey { get; set; } = "";
+
+        /// <summary>"own" | "app" | "explained" | "compared" | "skipped", for the icon.</summary>
+        public string Icon { get; set; } = "";
+
+        /// <summary>
+        /// How many of <see cref="Total"/> exercises the row is true for, and how many were looked at.
+        ///
+        /// Zero for a single exercise, where the row describes the whole thing. On a goal the same row
+        /// covers three exercises, and "Compare step: I skipped it" then says nothing about whether that
+        /// was one of them or all three — so the count is carried and the client says "skipped in 2 of 3".
+        /// </summary>
+        public int Count { get; set; }
+        public int Total { get; set; }
     }
 
     /// <summary>One step of an exercise, reduced to what a question can be built from.</summary>
@@ -279,6 +353,18 @@ namespace webapi.Models.Student
         public List<ReflectionGoalExercise> Exercises { get; set; } = [];
 
         /// <summary>
+        /// How many exercises the goal counted in all, which can be more than
+        /// <see cref="Exercises"/> holds.
+        ///
+        /// The window is capped so the reflection stays readable, and a minutes goal has no bound on how
+        /// many exercises it takes: a thirty-minute goal can be four runs or twelve. This is what lets the
+        /// panel say "your last 5 of 9 exercises" instead of quietly showing five and leaving the student
+        /// to wonder where the rest went. Zero on windows stored before it was recorded, and on items that
+        /// are not a completed goal.
+        /// </summary>
+        public int TotalExercises { get; set; }
+
+        /// <summary>
         /// The student's exercises from BEFORE this goal, bounded to a recent slice.
         ///
         /// Needed for two things: the question that compares this method against their others, and the
@@ -348,6 +434,14 @@ namespace webapi.Models.Student
         /// <summary>How many exercises the question is about: one for an exercise item, the set for a goal.</summary>
         public int InSet { get; set; }
 
+        /// <summary>
+        /// How many exercises the goal counted in all, when that is more than <see cref="InSet"/>.
+        ///
+        /// Zero when nothing was left out, and on everything that is not a completed goal. Only the panel
+        /// reads it, so that a window of five out of nine is stated rather than implied.
+        /// </summary>
+        public int CountedExercises { get; set; }
+
         // Run counts across the set, each for the dimension its question asks about.
         /// <summary>Exercises in the set that went by with no mistakes. Hints are counted separately, in <see cref="HintFreeRuns"/>.</summary>
         public int CleanRuns { get; set; }
@@ -413,6 +507,21 @@ namespace webapi.Models.Student
         /// <summary>Errors on the attempt before this one, for the fallback question when steps are missing.</summary>
         public int PreviousErrors { get; set; }
         public bool HasHistory { get; set; }
+
+        /// <summary>
+        /// How long the student's earlier attempts at this exercise type took, in seconds. Zero when
+        /// there are none, which is read as "no usual to compare with" rather than as a fast run.
+        /// </summary>
+        public double UsualSeconds { get; set; }
+
+        /// <summary>
+        /// The same student's average numbers per step, over their earlier attempts at this type.
+        ///
+        /// What "fewer mistakes than usual" is measured against on the opening question, which asks why
+        /// one part of the exercise went well. Empty when there is no earlier attempt, and the reasons
+        /// then fall back to what the run itself shows.
+        /// </summary>
+        public List<ReflectionStepStat> UsualSteps { get; set; } = [];
 
         /// <summary>
         /// Whether this exercise is one we can check a method choice against. False for Matching, which

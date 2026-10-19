@@ -11,6 +11,15 @@ const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 export interface ReflectionChip {
     id: string;
     textKey: string;
+    /** Literal text for a chip that is a number, so it needs no translating. */
+    label?: string;
+    /**
+     * The figure the chip's own sentence is about, for a menu built from the day's numbers
+     * ("3 of them had no mistakes"). Passed to t() so a plural key picks the right form.
+     */
+    count?: number | null;
+    /** How many there were in all, when the sentence says "3 of 5". */
+    total?: number | null;
 }
 
 export interface ReflectionQuestion {
@@ -50,18 +59,35 @@ export interface ReflectionPanel {
      * One run and not the window, because phase times sum to the run's total, and on a goal's "what went
      * well" the trend in those totals is one of the chips.
      */
-    phases: { labelKey: string; seconds: number }[];
+    phases: { labelKey: string; seconds: number; mistakes: number; hints: number }[];
     /** One entry per exercise, in order. Empty when the mistakes are what the question asks about, and
      * also when the total is safe but the split is not — the split is what answers "did they go down". */
-    runs: { position: number; mistakes: number }[];
+    runs: { position: number; mistakes: number; hints: number; seconds: number }[];
     /** Mistakes across the item: this exercise's, or the window's summed. The safe half of the pair. */
     mistakes: number | null;
     /** How many exercises the item covers, so the wording can say "in this one" or "altogether". */
     runCount: number;
+    /**
+     * How many exercises the goal counted in all, when that is more than `runCount`.
+     *
+     * The panel shows a capped window, and a minutes goal has no bound on how many exercises it takes, so
+     * this is what lets the plate say "your last 5 of 9" rather than showing five without a word. 0 when
+     * nothing was left out.
+     */
+    countedRuns?: number;
     /** Hints taken, or null when the hints are what the question asks about. */
     hints: number | null;
     /** Whether something is still held back until an answer is sent. */
     heldBack: boolean;
+    /** The decisions the student made, shown as dashboard rows. */
+    decisions: { labelKey: string; valueKey: string; icon: string; count: number; total: number }[];
+    /**
+     * How long their earlier attempts at this exercise type took, in seconds, when there are any.
+     *
+     * The "I was in a hurry" chip is checked against it, so it is shown: a description of their own work
+     * that they cannot verify before choosing it is a guess dressed up as a reflection.
+     */
+    usualSeconds?: number | null;
 }
 
 export interface ReflectionQueueItem {
@@ -121,6 +147,14 @@ export interface ReflectionEvaluateResult {
         quality: string;
         maxPerExercise: number;
     } | null;
+    /**
+     * The next question, when this answer changes what it should ask.
+     *
+     * The plan question names the reason the student just gave and puts the plan that answers it
+     * first, which can only be written once the reason is in. Null when the next question does not
+     * depend on the answer, which is every question but the reason one.
+     */
+    nextQuestion?: ReflectionQuestion | null;
 }
 
 export async function fetchReflectionQueue(studentId: number): Promise<ReflectionQueueItem[]> {
@@ -221,8 +255,7 @@ export async function evaluateReflection(
         // because a reply that says "step-solve" is a reply about our data structure, not about
         // their work.
         choiceLabel: choiceLabel ?? "",
-        subjectTerms: subjectTerms ?? [],
-    });
+        subjectTerms: subjectTerms ?? [],    });
     return data;
 }
 

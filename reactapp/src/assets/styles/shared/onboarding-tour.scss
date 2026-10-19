@@ -120,9 +120,14 @@
     color: rgba(255, 255, 255, 0.88);
 
     // A body that carries a short list renders as several blocks inside this one wrapper, so the
-    // type and colour above are set once and the blocks only provide rhythm.
+    // type and colour above are set once and the blocks only provide rhythm. `color` and the sizes
+    // are re-stated because index.css sets a dark colour on every `p`, which an inner paragraph
+    // would otherwise obey on a dark card.
     p {
         margin: 0 0 0.55rem;
+        color: inherit;
+        font-size: inherit;
+        line-height: inherit;
 
         &:last-child {
             margin-bottom: 0;
@@ -142,6 +147,9 @@
     li {
         margin: 0 0 0.2rem;
         padding-left: 0.15rem;
+        color: inherit;
+        font-size: inherit;
+        line-height: inherit;
 
         &::marker {
             color: rgba(33, 158, 188, 0.9);

@@ -77,6 +77,32 @@ namespace webapi.Services
             return cleaned.Trim();
         }
 
+        /// <summary>A dash between two words: the em dash and the en dash, spaced or not.</summary>
+        private static readonly Regex SpacedDash = new(@"\s*[\u2014\u2013]\s*", RegexOptions.Compiled);
+
+        private static readonly Regex DoubleComma = new(@",\s*,", RegexOptions.Compiled);
+        private static readonly Regex CommaBeforePunctuation = new(@",\s*([.!?])", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Replaces em and en dashes with the punctuation they were standing in for.
+        ///
+        /// The companion's voice is spoken, and a dash in the middle of a spoken sentence reads as a
+        /// written tic — the kind that makes a reply look machine-made to the person reading it. A comma
+        /// is what the same sentence sounds like said out loud, so that is what goes in; a dash before a
+        /// full stop is simply dropped rather than becoming a stray comma.
+        ///
+        /// Punctuation only: it never removes a word.
+        /// </summary>
+        public static string StripDashes(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+
+            var cleaned = SpacedDash.Replace(text, ", ");
+            cleaned = CommaBeforePunctuation.Replace(cleaned, "$1");
+            cleaned = DoubleComma.Replace(cleaned, ",");
+            return cleaned.Trim();
+        }
+
         /// <summary>
         /// Turns \frac{A}{B} into the same inline "A/B" form the app already uses elsewhere
         /// (see equationToString in the frontend), adding brackets only where they change meaning.

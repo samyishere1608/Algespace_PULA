@@ -376,10 +376,14 @@ export function asTranslate(t: unknown): Translate {
 export function describeGoal(goal: StudyGoal, t: Translate): string {
     const args = goalSummaryArgs(goal);
 
+    // A limit of one reads "at most 1 hints" otherwise. English and German need the singular noun, and
+    // Japanese has the same word either way, so the key exists in all three.
+    const singular = goal.category === "hintsAndErrors" && goal.maxPerExercise === 1;
+
     return t(goalSummaryKey(goal), {
         ...args,
         focus: t(String(args.focus)),
-        quality: t(`goal-quality-${args.quality}`),
+        quality: t(`goal-quality-${args.quality}${singular ? "-one" : ""}`),
         unit: t(`goal-unit-${args.unit}`),
     });
 }
