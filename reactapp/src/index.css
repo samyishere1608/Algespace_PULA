@@ -65,8 +65,16 @@ body {
     }
 }
 
+/* Paragraphs default to the dark body colour, but a surface may override it.
+ *
+ * `--paragraph-color` exists because a rule set ON an element beats the colour it would inherit from
+ * its container. A dark card that says `color: #eaf6fb` therefore does not reach the paragraphs
+ * inside it: this rule does, and they render near-black on near-black. That is exactly how the
+ * walkthrough card shipped unreadable text, and it costs nothing to make it impossible again — a
+ * surface says `--paragraph-color: currentColor` and every paragraph inside follows its container.
+ */
 p {
-    color: var(--dark-text);
+    color: var(--paragraph-color, var(--dark-text));
     font-size: 1rem;
     line-height: 1.5;
     padding: 0;

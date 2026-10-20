@@ -47,6 +47,12 @@
     border: 1px solid rgba(33, 158, 188, 0.34);
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
     color: #eaf6fb;
+    // Every paragraph in this card sits on the card's own dark background, so none of them should
+    // take index.css's dark default. Without this, a paragraph that carries no colour class of its
+    // own (step bodies, list items, and anything added to a later step) renders near-black on
+    // near-black; that is what the student's walkthrough once looked like. `currentColor` means
+    // "whatever the surrounding surface says", so a paragraph with its own colour rule still wins.
+    --paragraph-color: currentColor;
     outline: none;
     // Position is an inline style, because only the component knows where the target is. Opacity is
     // inline too, and stays 0 until the card has been measured, so it never flashes at the top-left
@@ -129,12 +135,11 @@
     color: rgba(255, 255, 255, 0.88);
 
     // A body that carries a short list renders as several blocks inside this one wrapper, so the
-    // type and colour above are set once and the blocks only provide rhythm. `color` and the sizes
-    // are re-stated because index.css sets a dark colour on every `p`, which an inner paragraph
-    // would otherwise obey on a dark card.
+    // type above is set once and the blocks only provide rhythm. The sizes are re-stated because
+    // index.css sizes every `p`; the colour needs no re-stating, because the card already points
+    // `--paragraph-color` at its own text colour (see `.onboarding-tour__card`).
     p {
         margin: 0 0 0.55rem;
-        color: inherit;
         font-size: inherit;
         line-height: inherit;
 
