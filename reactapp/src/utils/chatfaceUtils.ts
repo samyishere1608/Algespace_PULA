@@ -43,6 +43,13 @@ import pippinFace3 from "@images/Character/Chatfaces/Pipin/Five Chibi Red Pandas
 import pippinFace4 from "@images/Character/Chatfaces/Pipin/Five Chibi Red Pandas Presenting_png_Cropped_3.png";
 import pippinFace5 from "@images/Character/Chatfaces/Pipin/Five Chibi Red Pandas Presenting_png_Cropped_4.png";
 
+// Pippin's expression art — see `CHATFACE_MOODS` below.
+import pippinMoodHint from "@images/Character/Chatfaces/Pipin/hintpipin.png";
+import pippinMoodQuestion from "@images/Character/Chatfaces/Pipin/Questionpipin.png";
+import pippinMoodSolo from "@images/Character/Chatfaces/Pipin/Solveonownpipin.png";
+import pippinMoodApprove from "@images/Character/Chatfaces/Pipin/Red Panda Chibi Emote Sticker Strip_png_Cropped_5.png";
+import pippinMoodCelebrate from "@images/Character/Chatfaces/Pipin/Red Panda Chibi Emote Sticker Strip_png_Cropped_3.png";
+
 // Chimi — `Chatfaces/Chibi/`
 import chimiFaceDefault from "@images/Character/Chatfaces/Chibi/Chibi Samurai Festival Lineup.png";
 import chimiFace2 from "@images/Character/Chatfaces/Chibi/2.png";
@@ -134,4 +141,53 @@ export function resolveChatfaceSrc(
 /** Whether a character has any chatface art at all. */
 export function hasChatface(characterId: string): boolean {
     return CHATFACE_CATALOGUE[characterId] !== undefined;
+}
+
+// ── Expression art ───────────────────────────────────────────────────────────
+//
+// A "mood" is the same character in the same outfit, drawn with a different face and prop, so the
+// picture itself says what kind of thing is being said — no caption needed, and readable by a
+// student who cannot or does not read the bubble first:
+//
+//   hint      pointing up at a lightbulb      -> here is a hint
+//   question  hand on chin, question mark     -> you are being asked to decide something
+//   solo      two fists up, cheering          -> try it yourself, you can do this
+//   approve   thumbs up, winking              -> yes, that was right
+//   celebrate both arms up, sparks            -> the exercise is finished
+//
+// The drawings exist for Pippin in the DEFAULT look only. `resolveChatfaceMoodSrc` therefore answers
+// only for a default look and returns undefined otherwise, so a student who has equipped an outfit
+// keeps their outfit and loses the prop. That is the right way round: the outfit is what they chose,
+// the prop is decoration.
+export type ChatfaceMood = "hint" | "question" | "solo" | "approve" | "celebrate";
+
+const CHATFACE_MOODS: Record<string, Partial<Record<ChatfaceMood, string>>> = {
+    pippin: {
+        hint: pippinMoodHint,
+        question: pippinMoodQuestion,
+        solo: pippinMoodSolo,
+        approve: pippinMoodApprove,
+        celebrate: pippinMoodCelebrate,
+    },
+};
+
+/**
+ * The expression art for a character, if it has any for this mood AND is wearing its default look.
+ *
+ * `outfitId` follows the same rules as `resolveChatfaceSrc`: null/undefined/"default"/"<id>-default"
+ * all mean "the default look".
+ */
+export function resolveChatfaceMoodSrc(
+    characterId: string,
+    outfitId: string | null | undefined,
+    mood: ChatfaceMood | undefined
+): string | undefined {
+    if (!mood) return undefined;
+
+    const isDefaultLook = !outfitId
+        || outfitId === DEFAULT_ITEM_SUFFIX
+        || outfitId === `${characterId}-${DEFAULT_ITEM_SUFFIX}`;
+    if (!isDefaultLook) return undefined;
+
+    return CHATFACE_MOODS[characterId]?.[mood];
 }

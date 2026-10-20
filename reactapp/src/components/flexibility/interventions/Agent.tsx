@@ -1,6 +1,7 @@
 import { ReactElement } from "react";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { getActiveBuddy, getActiveBuddyAvatarSrc } from "@utils/buddyUtils.ts";
+import type { ChatfaceMood } from "@utils/chatfaceUtils.ts";
 import "@styles/flexibility/flexibility.scss";
 
 /**
@@ -13,14 +14,17 @@ import "@styles/flexibility/flexibility.scss";
  * The image itself comes from `getActiveBuddyAvatarSrc`, the same resolver the hint button uses, so
  * the face the student presses is the face that answers them. Keeping one resolver here rather than
  * a second copy in this file is what makes that hold when either side changes.
+ *
+ * `mood` asks for the expression art that matches what this popover is doing — the same face pointing
+ * at a lightbulb for a hint, thinking for a decision, cheering for the end of an exercise.
  */
-export function Agent(): ReactElement {
+export function Agent({ mood }: { mood?: ChatfaceMood } = {}): ReactElement {
     const { student } = useAuth();
     const studentId = student?.id ?? "guest";
 
     return (
         <div className="agent-image__container agent-image__container--large">
-            <img src={getActiveBuddyAvatarSrc(studentId)} alt={getActiveBuddy(studentId).name} />
+            <img src={getActiveBuddyAvatarSrc(studentId, mood)} alt={getActiveBuddy(studentId).name} />
         </div>
     );
 }

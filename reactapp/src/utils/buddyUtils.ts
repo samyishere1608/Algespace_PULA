@@ -1,7 +1,7 @@
 import pippinImg from "@images/Character/Pipin_de.png";
 import { BUDDIES, type Buddy } from "@views/student/dashboard/ChooseBuddyModal.tsx";
 import { CHARACTER_CATALOGUE, resolveOutfitSrc } from "@views/student/dashboard/CharacterShopModal.tsx";
-import { resolveChatfaceSrc } from "@utils/chatfaceUtils.ts";
+import { resolveChatfaceMoodSrc, resolveChatfaceSrc, type ChatfaceMood } from "@utils/chatfaceUtils.ts";
 import { getActiveBuddyId, getEquippedOutfitId } from "@utils/wardrobeUtils.ts";
 
 /**
@@ -33,12 +33,17 @@ export function getActiveBuddyName(studentId: number | string): string {
  *
  * This is the ONE place that decides that precedence, so the hint button and the popover's portrait
  * cannot drift apart: the student presses a face, and the same face is what answers them.
+ *
+ * `mood` asks for the character's EXPRESSION art — the same face with a prop that says what is
+ * happening (a lightbulb for a hint, a question mark when a decision is being asked). It is honoured
+ * only for a character in its default look; see `resolveChatfaceMoodSrc`.
  */
-export function getActiveBuddyAvatarSrc(studentId: number | string): string {
+export function getActiveBuddyAvatarSrc(studentId: number | string, mood?: ChatfaceMood): string {
     const buddyId = getActiveBuddyId(studentId);
     const equippedId = getEquippedOutfitId(studentId, buddyId);
 
-    return resolveChatfaceSrc(buddyId, equippedId)
+    return resolveChatfaceMoodSrc(buddyId, equippedId, mood)
+        ?? resolveChatfaceSrc(buddyId, equippedId)
         ?? (equippedId ? resolveOutfitSrc(buddyId, equippedId) : undefined)
         ?? CHARACTER_CATALOGUE.find((character) => character.id === buddyId)?.baseSrc
         ?? pippinImg;

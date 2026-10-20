@@ -71,7 +71,7 @@ export function EliminationResult(
     // layout would jump sideways the moment one replaced the other.
     const studentId = student?.id ?? "guest";
     const buddyName = getActiveBuddyName(studentId);
-    const buddyAvatarSrc = getActiveBuddyAvatarSrc(studentId);
+    const buddyAvatarSrc = getActiveBuddyAvatarSrc(studentId, "hint");
 
     const containsFirst: boolean = equationContainsVariable(resultingEquation, firstVariable.name);
     const containsSecond: boolean = equationContainsVariable(resultingEquation, secondVariable.name);

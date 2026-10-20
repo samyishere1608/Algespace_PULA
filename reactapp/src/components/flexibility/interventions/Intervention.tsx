@@ -7,6 +7,7 @@ import { AgentExpression, AgentType } from "@/types/flexibility/enums.ts";
 import { GeneralTranslations } from "@/types/shared/generalTranslations.ts";
 import { usePendingNudge } from "@/contexts/nudgeContext.ts";
 import { NUDGE_ASK_KEY } from "@utils/nudges.ts";
+import type { ChatfaceMood } from "@utils/chatfaceUtils.ts";
 import { FlexibilityPopover } from "@components/flexibility/interventions/FlexibilityPopover.tsx";
 import "@styles/shared/popover.scss";
 import "@styles/shared/nudge.scss";
@@ -20,7 +21,7 @@ import "@styles/shared/nudge.scss";
  * already reading becomes the offer. One card, one place, different text — which is what the
  * interaction actually is. A second card at the same anchor only reads as a glitch.
  */
-export function Intervention({ children, handleYes, handleNo, agentType, agentExpression, additionalMessage, reconsider }: {
+export function Intervention({ children, handleYes, handleNo, agentType, agentExpression, additionalMessage, reconsider, mood }: {
     children: ReactElement;
     handleYes: () => void;
     /**
@@ -37,6 +38,12 @@ export function Intervention({ children, handleYes, handleNo, agentType, agentEx
      * that can be offered, and "no" is then immediate.
      */
     reconsider?: () => Promise<boolean>;
+    /**
+     * Overrides the expression this dialog asks with. Every use of this component IS a decision, so
+     * the default is the thinking face; a caller that is asking something more specific — "work it
+     * out yourself?" — names that instead.
+     */
+    mood?: ChatfaceMood;
 }): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.General);
     const { t: tStudent } = useTranslation(TranslationNamespaces.Student);
@@ -76,6 +83,7 @@ export function Intervention({ children, handleYes, handleNo, agentType, agentEx
         <FlexibilityPopover
             agentType={offer?.agentType ?? agentType}
             agentExpression={offer !== null ? AgentExpression.Smiling : agentExpression}
+            mood={mood ?? "question"}
         >
             <React.Fragment>
                 {offer !== null ? (

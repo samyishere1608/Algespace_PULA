@@ -34,7 +34,7 @@ export function EfficiencyExerciseEnd({
     agentType?: AgentType;
 }): ReactElement {
     const popover: ReactElement = (
-        <FlexibilityPopover agentType={agentType} agentExpression={AgentExpression.Smiling}>
+        <FlexibilityPopover agentType={agentType} agentExpression={AgentExpression.Smiling} mood={"celebrate"}>
             <ContinueMessage message={FlexibilityTranslations.SYSTEM_SOLUTION_SUCCESS_CONTINUE} loadNextStep={loadNextStep} />
         </FlexibilityPopover>
     );

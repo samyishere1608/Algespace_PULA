@@ -115,6 +115,7 @@ export function VariableComputation({ variable, loadNextStep, agentType, additio
                         goNext(engaged);
                     }}
                     agentType={agentType} agentExpression={AgentExpression.Smiling} additionalMessage={additionalMessage}
+                    mood={"solo"}
                 >
                     <p>{t(FlexibilityTranslations.FIRST_SOLUTION_CHOICE)}</p>
                 </Intervention>

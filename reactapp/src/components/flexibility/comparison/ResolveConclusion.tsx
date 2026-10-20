@@ -49,7 +49,7 @@ export function ResolveConclusion({ initialSystem, firstMethod, secondMethod, lo
                 </button>
             </div>
             {choice !== undefined && (
-                <FlexibilityPopover agentType={agentType} agentExpression={AgentExpression.Smiling}>
+                <FlexibilityPopover agentType={agentType} agentExpression={AgentExpression.Smiling} mood={"celebrate"}>
                     <ContinueMessage
                         message={choice === ComparisonChoice.First ? FlexibilityTranslations.RESOLVING_REPLY_DISAGREE : FlexibilityTranslations.RESOLVING_REPLY_AGREE}
                         loadNextStep={loadNextStep} />

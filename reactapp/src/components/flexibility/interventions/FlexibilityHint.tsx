@@ -20,10 +20,11 @@ export function FlexibilityHint({ hints, disabled, agentType, agentExpression, t
 
     // The button wears the companion's own portrait, so it is obvious at a glance who is about to
     // answer, and the label says what pressing it does. Same face as the popover will show, because
-    // both read it from the same resolver.
+    // both read it from the same resolver — including the expression: the button is the lightbulb
+    // face, and so is the hint that opens beside it.
     const studentId = student?.id ?? "guest";
     const buddyName = getActiveBuddyName(studentId);
-    const buddyAvatarSrc = getActiveBuddyAvatarSrc(studentId);
+    const buddyAvatarSrc = getActiveBuddyAvatarSrc(studentId, "hint");
 
     const [open, setOpen] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -72,7 +73,7 @@ export function FlexibilityHint({ hints, disabled, agentType, agentExpression, t
                     {/* Inside the popover so it is positioned relative to the dialog — see FlexibilityPopover.tsx.
                         As a sibling it could only use a fixed `left`, which left the character overlapping the
                         dialog at some window widths and hundreds of pixels away from it at others. */}
-                    {useAgent && <Agent />}
+                    {useAgent && <Agent mood={"hint"} />}
                     <button className={"span-button primary-button hint-popover__button"} onClick={handleClick}>
                         <FontAwesomeIcon icon={faXmark} />
                     </button>
