@@ -1,4 +1,5 @@
 import { useAuth } from "@/contexts/AuthProvider.tsx";
+import { SKIP_CONCEPT_TUTORIAL } from "@/config/study.ts";
 import { IStudent } from "@/types/student/student.ts";
 import { faArrowLeft, faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -121,6 +122,18 @@ export default function StudentLoginView(): ReactElement {
             const step = getOnboardingStep(student.id);
 
             if (step === "complete") {
+                navigate(Paths.StudentDashboardPath);
+                return;
+            }
+
+            // The pilot runs without the concept tutorial: straight to the dashboard, and the step is
+            // recorded as complete rather than merely skipped in this one navigation. Left unrecorded,
+            // the student would be sent back into the tour by the next login, by "Continue tutorial" on
+            // the home page, and by Pippin's dashboard walkthrough, which will not start until the
+            // concept tour is finished. Recording it also makes the decision follow the account to
+            // another computer.
+            if (SKIP_CONCEPT_TUTORIAL) {
+                setOnboardingStep(student.id, "complete");
                 navigate(Paths.StudentDashboardPath);
                 return;
             }

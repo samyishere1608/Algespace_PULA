@@ -433,6 +433,12 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
                     {t("tour-step-count", { current: index - bounds.from + 1, total })}
                 </span>
 
+                {step.greetingKey !== undefined && (
+                    <p className={"onboarding-tour__greeting"}>
+                        {t(step.greetingKey, { name: buddyName })}
+                    </p>
+                )}
+
                 <h2 id={`tour-title-${step.id}`} className={"onboarding-tour__title"}>
                     {/* `name` is the student's own character. The buddy steps name them, and passing
                         it everywhere costs nothing and avoids a step that renders a raw {{name}}.

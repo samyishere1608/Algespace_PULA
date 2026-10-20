@@ -167,6 +167,13 @@ export interface TourStep {
     /** Optional extra line rendered under the body, in the smaller note style. */
     noteKey?: string;
     /**
+     * Optional greeting rendered ABOVE the title.
+     *
+     * The walkthrough opens mid-sentence ("Hi, I'm Pippin…"), which reads as if the student walked in
+     * on a conversation. One line above it says where they have arrived before the introduction.
+     */
+    greetingKey?: string;
+    /**
      * One of the dashboard's side tabs that this step needs OPEN behind it.
      *
      * The exercise leg of the walkthrough lives on the dashboard now, and the exercise list is behind
@@ -196,7 +203,7 @@ export const TOUR_STEPS: TourStep[] = [
     // The step that used to sit second — a card explaining that the exercises build on the three
     // methods — has gone. It described exercise TYPES, which the exercise leg covers properly later
     // with a real screenshot of each one, so it was the same lesson told twice and in less detail.
-    { id: "buddy", section: "core", route: DASHBOARD, placement: "center", visual: "buddy" },
+    { id: "buddy", section: "core", route: DASHBOARD, placement: "center", visual: "buddy", greetingKey: "tour-buddy-greeting" },
     { id: "skills", section: "core", route: DASHBOARD, placement: "center", visual: "currency" },
     { id: "xp", section: "core", route: DASHBOARD, placement: "center", visual: "xp", noteKey: "tour-xp-note" },
     { id: "tree", section: "core", route: DASHBOARD, placement: "center", visual: "tree", noteKey: "tour-tree-note" },

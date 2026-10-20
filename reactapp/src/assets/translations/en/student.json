@@ -578,6 +578,7 @@
   "tour-offer-exercises-title": "Want a quick look at the exercises?",
   "tour-offer-exercises-body": "Two minutes on the exercises: the three kinds, what each one asks of you, and inside a real one so you know what to expect. You can also just carry on. The tour stays available here afterwards.",
 
+  "tour-buddy-greeting": "Welcome to AlgeSPACE! I am {{name}}.",
   "tour-buddy-title": "Hi, I'm {{name}}, your learning buddy!",
   "tour-buddy-body": "If you're stuck, ask me for a hint. When you finish, earn points for telling me how it went. More buddies unlock when you level up!",
 

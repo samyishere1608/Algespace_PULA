@@ -279,6 +279,23 @@ The reset deletes every row of every table with a `StudentId` column, plus the d
 then vacuums the file. It reports how many rows went from which table. Do **not** delete the SQLite volume
 instead: that takes `algespace.db` with it and leaves the deployment with no exercises.
 
+#### Skipping the tutorial on first login
+
+The pilot runs without the concept tutorial (bartering → equalization → elimination). A student who signs
+in lands on the dashboard, and the onboarding step is recorded as `complete`, so no later login, no home
+page link and no dashboard tour sends them back into it.
+
+This is a build-time switch in `reactapp/src/config/study.ts`, read from `VITE_SKIP_CONCEPT_TUTORIAL` and
+**on by default**. To put the first-login walkthrough back, set it and rebuild:
+
+```sh
+VITE_SKIP_CONCEPT_TUTORIAL=false npm run build
+```
+
+Pippin's dashboard walkthrough is a separate tour and still runs; it simply stops being held back by the
+concept tutorial. Nothing is deleted either way — each method's tutorial is still listed on its own page,
+which the method cards on the home page lead to.
+
 # License
 
 This project is licensed under the terms of the MIT license. See the LICENSE file for details.

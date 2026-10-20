@@ -10,6 +10,7 @@ import LanguageSwitch from "@components/views/LanguageSwitch.tsx";
 import NavLink from "@components/views/NavLink.tsx";
 import { Paths } from "@routes/paths.ts";
 import { getOnboardingStep } from "@utils/storageUtils.ts";
+import { SKIP_CONCEPT_TUTORIAL } from "@/config/study.ts";
 import Logo from "@images/home/logo640.png";
 import "@styles/views/homepage.scss";
 
@@ -18,6 +19,10 @@ export default function Home(): ReactElement {
     const navigate = useNavigate();
     const { student, logoutStudent } = useAuth();
     const onboardingStep = student ? getOnboardingStep(student.id) : null;
+    // With the concept tutorial skipped for the pilot there is no tour to continue, so the badge is
+    // always the way into the dashboard — otherwise a student who shook hands with the login page
+    // without ever completing a tour (or who signed in on a fresh browser) is offered a link into it.
+    const hasDashboard = SKIP_CONCEPT_TUTORIAL || onboardingStep === "complete";
 
     return (
         <div className={"homepage"}>
@@ -30,7 +35,7 @@ export default function Home(): ReactElement {
                     <div className={"homepage__student-badge"}>
                         <FontAwesomeIcon icon={faUserCircle} className={"homepage__student-badge-icon"} />
                         <span className={"homepage__student-badge-name"}>{student.username}</span>
-                        {onboardingStep === "complete" ? (
+                        {hasDashboard ? (
                             <Link className={"homepage__student-badge-action"} to={Paths.StudentDashboardPath}>
                                 {t("home-dashboard")}
                             </Link>
