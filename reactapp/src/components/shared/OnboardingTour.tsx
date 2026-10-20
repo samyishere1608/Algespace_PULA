@@ -434,9 +434,7 @@ export function OnboardingTour({ studentId, steps, onClose, onStepChange, buddyN
                 </span>
 
                 {step.greetingKey !== undefined && (
-                    <p className={"onboarding-tour__greeting"}>
-                        {t(step.greetingKey, { name: buddyName })}
-                    </p>
+                    <p className={"onboarding-tour__greeting"}>{t(step.greetingKey)}</p>
                 )}
 
                 <h2 id={`tour-title-${step.id}`} className={"onboarding-tour__title"}>

@@ -170,7 +170,8 @@ export interface TourStep {
      * Optional greeting rendered ABOVE the title.
      *
      * The walkthrough opens mid-sentence ("Hi, I'm Pippin…"), which reads as if the student walked in
-     * on a conversation. One line above it says where they have arrived before the introduction.
+     * on a conversation. One line above it says where they have arrived; the introduction itself stays
+     * in the title, so the name is not said twice.
      */
     greetingKey?: string;
     /**
