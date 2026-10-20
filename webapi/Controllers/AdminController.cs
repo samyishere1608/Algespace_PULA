@@ -76,12 +76,50 @@ namespace webapi.Controllers
                 .OrderByDescending(entry => entry.rows)
                 .ToList();
 
+            // Whether a copy of students.db on its own would be up to date. In WAL mode every write lands
+            // in the -wal file first, so a download that takes only the main file shows the state as of
+            // the last checkpoint: 135 accounts in the database can read as 10 in the copy. Better to say
+            // so here than to let someone discover it in a spreadsheet.
+            var wal = DBSettings.GetDBLocation(DBSettings.StudentsDB) + "-wal";
+            var walBytes = System.IO.File.Exists(wal) ? new System.IO.FileInfo(wal).Length : 0;
+
             return Ok(new
             {
                 database = DBSettings.GetDBLocation(DBSettings.StudentsDB),
                 totalRows = counts.Sum(entry => entry.rows),
                 tables = counts,
+                walBytes,
+                downloadIsCurrent = walBytes == 0,
             });
+        }
+
+        /// <summary>
+        /// Merges the write-ahead log into the main database file.
+        ///
+        /// Needed when someone is about to copy `students.db` (downloading it from the host's volume
+        /// browser, or taking a backup). It deletes nothing, so unlike the two routes below it needs no
+        /// confirmation word, only the key.
+        /// </summary>
+        [HttpPost("checkpoint")]
+        public ActionResult Checkpoint()
+        {
+            if (ResetKey is null) return NotFound();
+            if (!Authorized()) return Unauthorized();
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+
+            var wal = DBSettings.GetDBLocation(DBSettings.StudentsDB) + "-wal";
+            var before = System.IO.File.Exists(wal) ? new System.IO.FileInfo(wal).Length : 0;
+
+            // TRUNCATE rather than PASSIVE: PASSIVE can stop early while another reader is mid-statement,
+            // and the caller's next action is to copy the file.
+            conn.Query("PRAGMA wal_checkpoint(TRUNCATE)");
+
+            var after = System.IO.File.Exists(wal) ? new System.IO.FileInfo(wal).Length : 0;
+
+            logger.LogInformation("[Admin] WAL checkpointed: {Before} -> {After} bytes", before, after);
+            return Ok(new { walBytesBefore = before, walBytesAfter = after, downloadIsCurrent = after == 0 });
         }
 
         /// <summary>
