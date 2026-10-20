@@ -36,6 +36,13 @@ namespace webapi.Controllers
         /// </summary>
         public const string ConfirmToken = "DELETE-STUDENT-DATA";
 
+        /// <summary>
+        /// The confirmation word for removing accounts by prefix. Deliberately different from
+        /// <see cref="ConfirmToken"/>: forgetting one of the two words should not be able to turn "clean the
+        /// activity" into "delete the logins", or the other way round.
+        /// </summary>
+        public const string DeleteAccountsToken = "DELETE-ACCOUNTS";
+
         /// <summary>The key this route demands, or null when the route should not exist at all.</summary>
         private string? ResetKey =>
             configuration.GetValue<string>("Admin:ResetKey") is { Length: > 0 } key ? key : null;
@@ -162,6 +169,86 @@ namespace webapi.Controllers
         }
 
         /// <summary>
+        /// Deletes the accounts whose username starts with a prefix, and everything those accounts own.
+        ///
+        /// Why a prefix rather than a list: the accounts to remove are the ones a tool created, and a tool
+        /// names them in a family (`lt_s001` … `lt_s120`). Listing them would mean a hand-typed list that
+        /// is wrong the moment one is added, and this way the same route removes a finished class with
+        /// `jp-test-student-` later.
+        ///
+        /// DRY BY DEFAULT. `DryRun` is true unless the caller says otherwise, so a call that forgets the
+        /// flag reports what it would delete and deletes nothing. Deleting accounts is not reversible: the
+        /// rows behind them go with them.
+        /// </summary>
+        [HttpPost("delete-accounts")]
+        public ActionResult DeleteAccounts([FromBody] AdminDeleteAccountsRequest request)
+        {
+            if (ResetKey is null) return NotFound();
+            if (!Authorized()) return Unauthorized();
+
+            if (!string.Equals(request.Confirm, DeleteAccountsToken, StringComparison.Ordinal))
+                return BadRequest($"Send {{\"confirm\":\"{DeleteAccountsToken}\"}} to confirm. Nothing was deleted.");
+
+            var prefix = (request.UsernamePrefix ?? "").Trim();
+            // Two characters, because one is a family name that is also the start of another ("l" would
+            // take "lt_runner" and every "lea…" with it). An empty prefix is a full wipe, which is what
+            // /admin/reset is for.
+            if (prefix.Length < 2)
+                return BadRequest("usernamePrefix must be at least 2 characters. Use /admin/reset for a full wipe.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+
+            // Escaped, because LIKE treats `_` as "any single character" and `%` as "anything": the prefix
+            // `lt_` would otherwise also match `ltXanything`.
+            var pattern = prefix
+                .Replace("\\", "\\\\")
+                .Replace("%", "\\%")
+                .Replace("_", "\\_") + "%";
+
+            var matched = conn.Query<(long Id, string Username)>(
+                $"SELECT Id, Username FROM {StudentDBSettings.TableName} WHERE Username LIKE @Pattern ESCAPE '\\' ORDER BY Username",
+                new { Pattern = pattern })
+                .Select(row => new { id = row.Id, username = row.Username })
+                .ToList();
+
+            if (matched.Count == 0)
+                return Ok(new { dryRun = request.DryRun, prefix, accounts = Array.Empty<object>(), removed = Array.Empty<object>() });
+
+            var ids = matched.Select(entry => entry.id).ToList();
+
+            if (request.DryRun)
+                return Ok(new { dryRun = true, prefix, accounts = matched, removed = Array.Empty<object>() });
+
+            var removed = new List<object>();
+            foreach (var table in StudentTables(conn).Where(table => table != StudentDBSettings.TableName))
+            {
+                var rows = conn.Execute($"DELETE FROM {table} WHERE StudentId IN @Ids", new { Ids = ids });
+                if (rows > 0) removed.Add(new { table, rows });
+            }
+
+            // Analysis rows hang off a history row rather than a student, so anything left pointing at a
+            // deleted history row is garbage.
+            if (TableExists(conn, "NlpAnalysis") && ColumnExists(conn, "NlpAnalysis", "HistoryId"))
+            {
+                var rows = conn.Execute("DELETE FROM NlpAnalysis WHERE HistoryId NOT IN (SELECT Id FROM ReflectionHistory)");
+                if (rows > 0) removed.Add(new { table = "NlpAnalysis", rows });
+            }
+
+            var accounts = conn.Execute($"DELETE FROM {StudentDBSettings.TableName} WHERE Id IN @Ids", new { Ids = ids });
+
+            // Same reason as the reset: the deletions live in the write-ahead log until it is merged, and a
+            // copy of the file on its own would still show these accounts.
+            conn.Query("PRAGMA wal_checkpoint(TRUNCATE)");
+
+            logger.LogWarning(
+                "[Admin] Deleted {Accounts} accounts with prefix '{Prefix}'. Removed: {Removed}",
+                accounts, prefix, string.Join(", ", removed.Select(entry => entry.ToString())));
+
+            return Ok(new { dryRun = false, prefix, accounts = matched, removed });
+        }
+
+        /// <summary>
         /// Every table that holds something about a student, found rather than listed.
         ///
         /// Found, because a hardcoded list is wrong the moment a table is added, and being wrong here
@@ -205,5 +292,23 @@ namespace webapi.Controllers
         /// wants before its first session; false is a full reset.
         /// </summary>
         public bool KeepAccounts { get; set; } = true;
+    }
+
+    /// <summary>
+    /// The body of a targeted account delete. `Confirm` must equal
+    /// <see cref="AdminController.DeleteAccountsToken"/>.
+    /// </summary>
+    public class AdminDeleteAccountsRequest
+    {
+        public string Confirm { get; set; } = "";
+
+        /// <summary>Usernames starting with this are removed, with everything they own.</summary>
+        public string UsernamePrefix { get; set; } = "";
+
+        /// <summary>
+        /// True unless the caller says otherwise, so a call that forgets this flag reports what it would
+        /// delete rather than deleting it.
+        /// </summary>
+        public bool DryRun { get; set; } = true;
     }
 }
