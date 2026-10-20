@@ -136,6 +136,15 @@ namespace webapi.Controllers
             // rather than one still carrying the pages of everything deleted above.
             conn.Execute("VACUUM");
 
+            // Merge the write-ahead log back into the main file.
+            //
+            // Without this the deletions live only in `students.db-wal`, and anyone who copies
+            // `students.db` alone — which is exactly what downloading it from the host's volume browser
+            // does — gets the pre-deletion contents. Measured here: the app saw 0 rows while the same
+            // file copied without its `-wal` still reported 2002. TRUNCATE also empties the log, so the
+            // pair on disk is one consistent file plus an empty journal.
+            conn.Query("PRAGMA wal_checkpoint(TRUNCATE)");
+
             var remaining = StudentTables(conn).ToDictionary(table => table, table => CountRows(conn, table));
 
             logger.LogWarning(
