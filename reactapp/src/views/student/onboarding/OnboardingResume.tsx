@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import Loader from "@components/shared/Loader.tsx";
 import { Paths, getPathToExercises } from "@routes/paths.ts";
-import { getOnboardingStep } from "@utils/storageUtils.ts";
+import { getOnboardingStep, startOnboardingDemos } from "@utils/storageUtils.ts";
 
 /**
  * Intermediate route that reads the student's current onboarding step,
@@ -16,6 +16,9 @@ export default function OnboardingResume(): ReactElement {
     const navigate = useNavigate();
 
     const step = student ? (getOnboardingStep(student.id) ?? "bartering") : "bartering";
+
+    // Resuming the tour from the "Continue tutorial" button: still a demonstration.
+    useEffect(() => { startOnboardingDemos(); }, []);
 
     const exercisePath =
         step === "equalization" ? Paths.EqualizationGamePath :

@@ -18,6 +18,22 @@ function getCurrentStudentId(): number | null {
     }
 }
 
+const ONBOARDING_DEMO_FLAG = "onboarding-demo-active";
+
+/**
+ * Completions belong to one student, so their storage key says which.
+ *
+ * They used to be written under a bare key ("elimination", "flexibility-training"), which every
+ * account signing in on that browser shared: the second student on a classroom laptop saw the first
+ * student's exercises already ticked off, and the login sync then pushed them into the second
+ * student's account as if they had done the work. Adding the id keeps two students out of each
+ * other's progress on a shared machine.
+ */
+function scopedKey(storageKey: string): string {
+    const studentId = getCurrentStudentId();
+    return studentId ? `${storageKey}-student-${studentId}` : storageKey;
+}
+
 function syncTutorialToBackend(studentId: number, onboardingStep?: string, tutorialKey?: string): void {
     try {
         axios.post(`${BACKEND}/student-progress/tutorial/${studentId}`, {
@@ -28,7 +44,37 @@ function syncTutorialToBackend(studentId: number, onboardingStep?: string, tutor
     } catch { /* silent */ }
 }
 
+/**
+ * Whether a tour demonstration is on screen right now.
+ *
+ * The guided onboarding tour walks a new student through a bartering tutorial and two demos on the
+ * real exercises, and those steps mark themselves complete exactly as real work does. Recorded, they
+ * made a one-minute-old account report "6 exercises today" and three bars in the methods chart, and
+ * every student would start the study with that already on their record.
+ *
+ * The flag is a session marker set when the tour is entered and cleared when it ends or when the
+ * dashboard opens, rather than something inferred from the page URL: the tour's first two tutorials
+ * sit on the ordinary /elimination/conceptual-knowledge/tutorial routes, so a path check cannot tell
+ * them from real work. The dashboard is never part of the tour, so anything started from there always
+ * counts — a student who abandons the tour and works anyway still has that work recorded.
+ */
+function isOnboardingDemoActive(): boolean {
+    try { return sessionStorage.getItem(ONBOARDING_DEMO_FLAG) === "1"; } catch { return false; }
+}
+
+/** Marks everything recorded from here on as a tour demonstration, until endOnboardingDemos(). */
+export function startOnboardingDemos(): void {
+    try { sessionStorage.setItem(ONBOARDING_DEMO_FLAG, "1"); } catch { /* non-critical */ }
+}
+
+/** The tour is over (or the student is somewhere the tour never goes): record normally again. */
+export function endOnboardingDemos(): void {
+    try { sessionStorage.removeItem(ONBOARDING_DEMO_FLAG); } catch { /* non-critical */ }
+}
+
 function syncExerciseToBackend(studentId: number, category: string, exerciseKey: string, exerciseId: string | number): void {
+    if (isOnboardingDemoActive()) return;
+
     try {
         axios.post(`${BACKEND}/student-progress/exercises/${studentId}`, {
             studentId,
@@ -68,6 +114,14 @@ export function setOnboardingStep(studentId: number, step: OnboardingStep): void
 }
 
 function setExerciseCompleted(storageKey: string, propertyKey: string, exerciseId: number | string, isSession: boolean = false): void {
+    // A tour demo leaves no trace at all — not on the server, and not in localStorage. The local mark
+    // would otherwise be pushed up as "local-only" by syncProgressFromBackend on the student's next
+    // login, so the pollution would come back a day later with no exercise behind it.
+    if (!isSession) {
+        if (isOnboardingDemoActive()) return;
+        storageKey = scopedKey(storageKey);
+    }
+
     const jsonString: string | null = isSession ? sessionStorage.getItem(storageKey) : localStorage.getItem(storageKey);
 
     if (jsonString === null) {
@@ -130,6 +184,7 @@ export function setFlexibilityStudyStudyCompleted(studyId: number | string, stud
 }
 
 export function getCompletedExercises(storageKey: string, propertyKey: string, isSession: boolean = false): (number | string)[] | undefined {
+    if (!isSession) storageKey = scopedKey(storageKey);
     const jsonString: string | null = isSession ? sessionStorage.getItem(storageKey) : localStorage.getItem(storageKey);
     if (jsonString !== null) {
         const jsonObj = JSON.parse(jsonString);
@@ -272,9 +327,9 @@ export async function syncProgressFromBackend(studentId: number): Promise<void> 
         const localState: Record<string, Record<string, (string | number)[]>> = {};
         const exerciseKeys = ["elimination", "equalization", "bartering", "substitution", "flexibility-training"];
         exerciseKeys.forEach((key) => {
-            const raw = localStorage.getItem(key);
+            const raw = localStorage.getItem(scopedKey(key));
             if (raw) {
-                try { localState[key] = JSON.parse(raw); } catch { }
+                try { localState[key] = JSON.parse(raw); } catch { /* unreadable cache — ignore */ }
             }
         });
 
@@ -304,7 +359,7 @@ export async function syncProgressFromBackend(studentId: number): Promise<void> 
 
         // Write merged state back to localStorage
         Object.entries(localState).forEach(([key, cats]) => {
-            localStorage.setItem(key, JSON.stringify(cats));
+            localStorage.setItem(scopedKey(key), JSON.stringify(cats));
         });
     } catch {
         // Backend unreachable — keep whatever localStorage already has

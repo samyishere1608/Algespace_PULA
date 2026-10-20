@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Paths } from "@routes/paths.ts";
 import { TranslationNamespaces } from "@/i18n.ts";
-import { getOnboardingStep, setOnboardingStep, syncProgressFromBackend } from "@utils/storageUtils.ts";
+import { getOnboardingStep, setOnboardingStep, startOnboardingDemos, syncProgressFromBackend } from "@utils/storageUtils.ts";
 import Logo from "@images/home/logo640.png";
 import "@styles/views/login.scss";
 
@@ -129,6 +129,9 @@ export default function StudentLoginView(): ReactElement {
             if (step === null) {
                 setOnboardingStep(student.id, "bartering");
             }
+
+            // Everything the tour records from here on is a demonstration, not work.
+            startOnboardingDemos();
 
             // Navigate to resume page which will redirect to the right tutorial
             navigate(Paths.OnboardingResumePath);

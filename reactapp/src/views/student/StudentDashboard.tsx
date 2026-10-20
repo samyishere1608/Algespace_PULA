@@ -62,7 +62,7 @@ import { claimCompletedGoals, computeProgress, earliestGoalStart, fetchGoalEvent
 import { awardChoiceForSettingAGoal } from "@utils/choiceAwards.ts";
 import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addChoiceXP, getInsightXP, creditAwardAlreadyRecorded } from "@utils/agencyUtils.ts";
 import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
-import { getOnboardingStep } from "@utils/storageUtils.ts";
+import { endOnboardingDemos, getOnboardingStep } from "@utils/storageUtils.ts";
 import { startSession, endSession, currentSessionId, recordIntention } from "@utils/sessionLog.ts";
 import { OnboardingTour } from "@components/shared/OnboardingTour.tsx";
 import { TourOffer } from "@components/shared/TourOffer.tsx";
@@ -191,6 +191,11 @@ export default function StudentDashboard(): ReactElement {
     // back, which unmounts and re-mounts this page; reading the flag instead of starting at `false`
     // is what stops the overlay vanishing the moment the student presses Back.
     const [showTour, setShowTour] = useState(() => isTourActive());
+
+    // The guided tour never runs on the dashboard, so reaching it means whatever the student opens
+    // from here is their own work. This clears a demonstration marker the tour might have left
+    // behind, so a student who walks away from the tour and starts an exercise still gets credit.
+    useEffect(() => { endOnboardingDemos(); }, []);
 
     /**
      * The section being offered, with whatever the student was trying to open.
@@ -347,10 +352,25 @@ export default function StudentDashboard(): ReactElement {
     }
 
     // ── Analytics computations ────────────────────────────────────────────────
-    const avgAccuracy = student ? getAccuracyLast5(student.id) : 0;
-    const accuracyStats = student
-        ? getAccuracyStats(student.id)
-        : { errors: 0, hints: 0, exercises: 0, avgErrors: 0, avgHints: 0 };
+    /**
+     * Accuracy is kept in the browser, per student, and a database reset cannot reach it; so on a
+     * wiped account it went on showing the ring and "based on your last 5 exercises" from before the
+     * wipe. Anything the server says it has never seen is treated as no history, whatever the cache
+     * remembers.
+     *
+     * Zeroed rather than hidden: a first-timer still gets the panels, at 0.
+     */
+    const serverHasNoWork = exercisesCompleted === 0 && exercisesToday === 0;
+    const accuracyStats = (() => {
+        const cached = student
+            ? getAccuracyStats(student.id)
+            : { errors: 0, hints: 0, exercises: 0, avgErrors: 0, avgHints: 0 };
+
+        return serverHasNoWork
+            ? { errors: 0, hints: 0, exercises: 0, avgErrors: 0, avgHints: 0 }
+            : cached;
+    })();
+    const avgAccuracy = serverHasNoWork ? 0 : student ? getAccuracyLast5(student.id) : 0;
 
     // Agency XP split + focus step for the weakest wallet
     const xpSplit = [
@@ -385,15 +405,18 @@ export default function StudentDashboard(): ReactElement {
     const goalCategoryTotal = goalCategoryRows.reduce((sum, row) => sum + row.count, 0);
 
     /**
-     * Whether there is anything to report.
+     * The Analytics tab always draws its panels, with zeros when nothing has happened yet.
      *
-     * A student who has just registered has no completed exercises, no XP and no finished goal, and
-     * every panel on the Analytics tab would still draw: five empty goal cards, a bar chart of three
-     * zeros, an XP donut with nothing in it, a 0% ring and a "your Choice XP is lowest" tip. That is
-     * not an empty screen, it is a screen full of nothing, and it reads as a report about a student
-     * who has failed at everything rather than one who has not started.
+     * It used to be gated: a first-timer got one placeholder panel instead, on the argument that four
+     * empty charts read as failure. The placeholder showed two untranslated keys, and hiding the tab
+     * until something is recorded also hides the thing that says what the tab is for. Zeros answer
+     * "where am I" honestly, and they are what the panels look like after a reset anyway.
+     *
+     * One thing does have to wait for data: the "your Choice XP is lowest" tip. With every wallet at
+     * zero it picks a wallet arbitrarily and tells a student who has done nothing that they are
+     * behind. Until there is XP to compare, the tip stays on the neutral "practise all three" line.
      */
-    const hasAnalyticsData = accuracyStats.exercises > 0 || xpTotalDisplay > 0 || goalCategoryTotal > 0;
+    const focusTipKey = xpTotalDisplay > 0 ? focusStepKeys[weakestWallet.key] : "analytics-focus-default";
 
     // Chart-friendly data + colors
     const METHOD_COLORS: Record<string, string> = {
@@ -1171,16 +1194,6 @@ export default function StudentDashboard(): ReactElement {
                             </div>
                         )}
 
-                        {/* Nothing recorded yet: one friendly panel in place of four empty charts, an
-                            empty donut and a "your weakest skill is" tip about a student with no data. */}
-                        {!hasAnalyticsData ? (
-                            <div className={"analytics-blank"}>
-                                <FontAwesomeIcon icon={faChartBar} className={"analytics-blank__icon"} aria-hidden />
-                                <p className={"analytics-blank__title"}>{t("analytics-empty-title")}</p>
-                                <p className={"analytics-blank__body"}>{t("analytics-empty-body")}</p>
-                            </div>
-                        ) : (
-                        <>
                         <div className={"analytics-grid"}>
                             {/* Goals completed per category, all time. First in the grid on purpose: it
                                 answers "what am I actually working on", which is the question this tab
@@ -1274,7 +1287,7 @@ export default function StudentDashboard(): ReactElement {
                                 </div>
                                 <div className={"analytics-focus"}>
                                     <FontAwesomeIcon icon={faLightbulb} className={"analytics-focus__icon"} />
-                                    <p>{t(focusStepKeys[weakestWallet.key], t("analytics-focus-default"))}</p>
+                                    <p>{t(focusTipKey, t("analytics-focus-default"))}</p>
                                 </div>
                             </div>
                         </div>
@@ -1311,8 +1324,6 @@ export default function StudentDashboard(): ReactElement {
                             </div>
                             <p className={"analytics-empty"}>{t("analytics-accuracy-hint")}</p>
                         </div>
-                        </>
-                        )}
                     </div>
                     )}
 

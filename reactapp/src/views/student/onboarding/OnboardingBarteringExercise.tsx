@@ -1,6 +1,6 @@
 import useAxios from "axios-hooks";
 import { plainToClass } from "class-transformer";
-import { ReactElement } from "react";
+import { ReactElement, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
@@ -14,9 +14,12 @@ import Loader from "@components/shared/Loader.tsx";
 import BarteringGame from "@components/substitution/bartering/BarteringGame.tsx";
 import CKExercise from "@components/views/CKExercise.tsx";
 import { Paths, getPathToExercise, getPathToExercises } from "@routes/paths.ts";
-import { setOnboardingStep } from "@utils/storageUtils.ts";
+import { setOnboardingStep, startOnboardingDemos } from "@utils/storageUtils.ts";
 
 export default function OnboardingBarteringExercise(): ReactElement {
+    // A demo reached by URL in a fresh tab is still a demo.
+    useEffect(() => { startOnboardingDemos(); }, []);
+
     return (
         <CKExercise
             routeToReturn={Paths.BarteringGameTutorialPath}

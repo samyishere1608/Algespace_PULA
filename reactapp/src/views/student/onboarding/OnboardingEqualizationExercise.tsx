@@ -1,6 +1,6 @@
 import useAxios from "axios-hooks";
 import { plainToClass } from "class-transformer";
-import { ReactElement } from "react";
+import { ReactElement, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
@@ -14,11 +14,14 @@ import { OnboardingProgressOverlay } from "@components/shared/ExerciseOverlay.ts
 import Loader from "@components/shared/Loader.tsx";
 import CKExercise from "@components/views/CKExercise.tsx";
 import { Paths, getPathToExercise, getPathToExercises } from "@routes/paths.ts";
-import { setOnboardingStep } from "@utils/storageUtils.ts";
+import { setOnboardingStep, startOnboardingDemos } from "@utils/storageUtils.ts";
 import "@styles/equalization/equalization.scss";
 import "@styles/shared/draggable.scss";
 
 export default function OnboardingEqualizationExercise(): ReactElement {
+    // A demo reached by URL in a fresh tab is still a demo.
+    useEffect(() => { startOnboardingDemos(); }, []);
+
     return (
         <CKExercise
             routeToReturn={Paths.EqualizationGameTutorialPath}
