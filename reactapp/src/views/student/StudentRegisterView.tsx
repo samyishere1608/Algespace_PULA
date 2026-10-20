@@ -44,6 +44,12 @@ export default function StudentRegisterView(): ReactElement {
                             value={username}
                             placeholder={t("student-register-username-placeholder")}
                             maxLength={20}
+                            // Same reason as the login field: the keyboard must not capitalise or
+                            // autocorrect a name the student is choosing.
+                            autoCapitalize={"none"}
+                            autoCorrect={"off"}
+                            spellCheck={false}
+                            autoComplete={"username"}
                             onChange={(e) => { setError(""); setUsername(e.target.value); }}
                         />
                     </div>

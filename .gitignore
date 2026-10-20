@@ -31,3 +31,6 @@ webapi/Data/databases/*.db-shm
 
 tools/reflection-audit/bin
 tools/reflection-audit/obj
+
+# Handouts written by tools/create-accounts.mjs: one line per account, passwords included.
+*-accounts.csv

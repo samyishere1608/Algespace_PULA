@@ -1569,12 +1569,22 @@ namespace webapi.Controllers
                 "WHERE StudentId = @StudentId AND LoggedAt >= @Today",
                 new { StudentId = studentId, Today = today }).ToList();
 
-            // Demo data for user 1
-            if (studentId == 1 && todayExercises.Count == 0)
+            // Demo data, for the demonstration accounts only.
+            //
+            // This used to key on `studentId == 1`, which is a property of insertion order rather than of
+            // the account: after a database reset the ids start again at 1, so whichever student was
+            // created first would be handed invented exercise numbers in their end-of-session analysis,
+            // and a study would record them as real. The name is the thing the demo accounts actually
+            // have in common.
+            var isDemoAccount = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(1) FROM {StudentDBSettings.TableName} WHERE Id = @Id AND Username LIKE 'userdemo%'",
+                new { Id = studentId }) > 0;
+
+            if (isDemoAccount && todayExercises.Count == 0)
             {
                 todayExercises = GenerateDemoData().Where(e => e.CompletedAt?.CompareTo(today) >= 0).ToList();
                 if (progress == null)
-                    progress = new StudentProgressRecord { StudentId = 1, ExercisesCompleted = 3, StreakDays = 2, ChoiceXP = 10, InsightXP = 15, ResolveXP = 20 };
+                    progress = new StudentProgressRecord { StudentId = studentId, ExercisesCompleted = 3, StreakDays = 2, ChoiceXP = 10, InsightXP = 15, ResolveXP = 20 };
             }
 
             int choiceXpToday = agencyLog.Where(a => a.XpType == "choice").Sum(a => a.Amount);

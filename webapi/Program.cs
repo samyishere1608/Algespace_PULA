@@ -114,8 +114,14 @@ else
     // check itself, against a value that can travel in the URL (LoadTestController.Authorized), so
     // this branches AROUND the gate rather than lifting it. It is also off unless
     // LoadTest:Enabled is set, and then it is one route on a path nothing else uses.
+    //
+    // /admin is branched for the same shape of reason and with a stronger gate of its own: it demands
+    // X-Admin-Key in constant time and refuses to exist at all unless Admin:ResetKey is configured. The
+    // shared API key would add nothing there — it ships inside the front end bundle — so the admin key is
+    // the only thing standing in front of a route that empties a database.
     app.UseWhen(
-        context => !context.Request.Path.StartsWithSegments("/loadtest"),
+        context => !context.Request.Path.StartsWithSegments("/loadtest")
+            && !context.Request.Path.StartsWithSegments("/admin"),
         branch => branch.UseMiddleware<ApiKeyMiddleware>());
 }
 

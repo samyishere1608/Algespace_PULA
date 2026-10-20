@@ -37,14 +37,18 @@ namespace webapi.Services
             DBUtils.CreateOrClearTable(connection, StudentDBSettings.TableName, StudentDBSettings.TableScheme, clearTable: false);
 
             // Check username uniqueness
-            string checkQuery = $"SELECT COUNT(1) FROM {StudentDBSettings.TableName} WHERE Username = @Username";
+            //
+            // COLLATE NOCASE, because the column's own UNIQUE is case-sensitive: without it "Pula-01"
+            // and "pula-01" would be two accounts that a student cannot tell apart, and one of them
+            // would answer "username is already taken" the next time they tried to register it.
+            string checkQuery = $"SELECT COUNT(1) FROM {StudentDBSettings.TableName} WHERE Username = @Username COLLATE NOCASE";
             int count = connection.ExecuteScalar<int>(checkQuery, new { request.Username });
             if (count > 0)
             {
                 return false;
             }
 
-            var serialized = new SerializedStudent(request.Username, request.Password);
+            var serialized = new SerializedStudent(request.Username.Trim(), request.Password);
             string insertQuery = $"INSERT INTO {StudentDBSettings.TableName} {StudentDBSettings.TableColumns} VALUES {StudentDBSettings.TableValues}";
             connection.Execute(insertQuery, serialized);
             return true;
@@ -55,8 +59,11 @@ namespace webapi.Services
             using var connection = DBSettings.GetSQLiteConnectionForStudentsDB();
             connection.Open();
 
-            string query = $"SELECT * FROM {StudentDBSettings.TableName} WHERE Username = @Username";
-            var serialized = connection.QueryFirstOrDefault<SerializedStudent>(query, new { request.Username });
+            // Case-insensitive, and trimmed: a tablet keyboard capitalises the first letter of a
+            // username as readily as of a sentence, and a student typing "Jp-test-student-001" means the
+            // account that exists. Trimming covers the trailing space a paste or an autocorrect adds.
+            string query = $"SELECT * FROM {StudentDBSettings.TableName} WHERE Username = @Username COLLATE NOCASE";
+            var serialized = connection.QueryFirstOrDefault<SerializedStudent>(query, new { Username = request.Username.Trim() });
 
             if (serialized == null)
             {

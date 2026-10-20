@@ -222,6 +222,63 @@ sudo apt install -y nginx
 
 9. The project is currently located at */opt/algespace* on the server.
 
+### 3. Running a study: accounts and a clean database
+
+Two operational tasks are not reachable from the student app and are done with the tools below. Neither
+touches the exercise catalogue (`algespace.db`) or the study configuration (`studies.db`); only
+`students.db` holds accounts and activity.
+
+#### Creating a class's accounts
+
+`tools/create-accounts.mjs` creates accounts through the app's own register route, so a scripted account
+is indistinguishable from one made on the register page. It is safe to re-run: an existing name is
+reported, never overwritten or silently re-passworded.
+
+```sh
+# Local API: no key is needed (the gate is Development-only)
+node tools/create-accounts.mjs --dry-run
+node tools/create-accounts.mjs
+
+# Deployed API: pass the key the front end already carries, or set ALGESPACE_API_KEY
+node tools/create-accounts.mjs --base https://YOUR-API-HOST --api-key THE_API_KEY
+```
+
+Defaults: `jp-test-student-001` … `jp-test-student-120` plus five tester accounts `jp-test-check-01` …
+`jp-test-check-05`, all with the password `test123`, then one sign-in per account to prove the password
+works. The handout CSV (`jp-test-student-accounts.csv`) lists every username with its id and status; it
+contains passwords, so it is written to the working directory and should not be committed.
+
+Note the default range is 120 accounts; `--from/--to/--prefix/--password` change that.
+
+#### Emptying the student database before a study
+
+```sh
+# What is in it now (read-only)
+curl -H "X-Admin-Key: $ADMIN_KEY" https://YOUR-API-HOST/admin/status
+
+# Wipe the activity, keep the logins. What a study wants: create the class first, clean second.
+curl -X POST https://YOUR-API-HOST/admin/reset \
+     -H "X-Admin-Key: $ADMIN_KEY" -H "Content-Type: application/json" \
+     -d '{"confirm":"DELETE-STUDENT-DATA","keepAccounts":true}'
+
+# Full reset, accounts included. Ids restart at 1 afterwards.
+curl -X POST https://YOUR-API-HOST/admin/reset \
+     -H "X-Admin-Key: $ADMIN_KEY" -H "Content-Type: application/json" \
+     -d '{"confirm":"DELETE-STUDENT-DATA","keepAccounts":false}'
+```
+
+Both routes answer **404 unless `Admin:ResetKey` is configured**, so a deployment that does not set it has
+no such surface. On the server deployment that means adding the key to the Web API's configuration, for
+example an environment variable:
+
+```sh
+Admin__ResetKey=some-long-random-string
+```
+
+The reset deletes every row of every table with a `StudentId` column, plus the derived `NlpAnalysis` rows,
+then vacuums the file. It reports how many rows went from which table. Do **not** delete the SQLite volume
+instead: that takes `algespace.db` with it and leaves the deployment with no exercises.
+
 # License
 
 This project is licensed under the terms of the MIT license. See the LICENSE file for details.

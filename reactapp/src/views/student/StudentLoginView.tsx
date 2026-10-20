@@ -46,6 +46,14 @@ export default function StudentLoginView(): ReactElement {
                             value={username}
                             placeholder={t("student-login-username-placeholder")}
                             maxLength={20}
+                            // A tablet keyboard capitalises the first letter of a fresh field, and
+                            // autocorrect happily rewrites a name it does not recognise. Both turned off, so
+                            // "jp-test-student-001" arrives as typed. The server looks the name up without
+                            // regard to case, so this is the belt; that is the braces.
+                            autoCapitalize={"none"}
+                            autoCorrect={"off"}
+                            spellCheck={false}
+                            autoComplete={"username"}
                             onChange={(e) => { setError(""); setUsername(e.target.value); }}
                             onKeyDown={handleKeyDown}
                         />
@@ -59,6 +67,10 @@ export default function StudentLoginView(): ReactElement {
                                 value={password}
                                 placeholder={t("student-login-password-placeholder")}
                                 maxLength={50}
+                                autoCapitalize={"none"}
+                                autoCorrect={"off"}
+                                spellCheck={false}
+                                autoComplete={"current-password"}
                                 onChange={(e) => { setError(""); setPassword(e.target.value); }}
                                 onKeyDown={handleKeyDown}
                             />
