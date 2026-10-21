@@ -47,6 +47,24 @@ namespace webapi.Controllers
         private string? ResetKey =>
             configuration.GetValue<string>("Admin:ResetKey") is { Length: > 0 } key ? key : null;
 
+        /// <summary>When this process started. See the note at the use, in <c>Status</c>.</summary>
+        private static readonly DateTime ProcessStartUtc = ReadProcessStartUtc();
+
+        private static DateTime ReadProcessStartUtc()
+        {
+            try
+            {
+                using var self = System.Diagnostics.Process.GetCurrentProcess();
+                return self.StartTime.ToUniversalTime();
+            }
+            catch
+            {
+                // Some sandboxes refuse it. Declining to answer is better than reporting a full uptime,
+                // because a caller reading "3 weeks" would conclude there had been no restart.
+                return DateTime.UtcNow;
+            }
+        }
+
         private bool Authorized()
         {
             var required = ResetKey;
@@ -83,6 +101,16 @@ namespace webapi.Controllers
             var wal = DBSettings.GetDBLocation(DBSettings.StudentsDB) + "-wal";
             var walBytes = System.IO.File.Exists(wal) ? new System.IO.FileInfo(wal).Length : 0;
 
+            // How long this PROCESS has been up. A container that restarted drops every request that was
+            // in flight at that moment, which reaches the caller as a failed connection with no HTTP
+            // status at all — indistinguishable, from the outside, from a client-side network fault. One
+            // number here settles which of the two it was.
+            //
+            // The process start time, not `Environment.TickCount64`: that counts from machine boot, so it
+            // would report how long the HOST had been up and never move. Cached, because reading it is a
+            // /proc lookup on Linux and nothing about it changes while the process lives.
+            var started = ProcessStartUtc;
+
             return Ok(new
             {
                 database = DBSettings.GetDBLocation(DBSettings.StudentsDB),
@@ -90,6 +118,8 @@ namespace webapi.Controllers
                 tables = counts,
                 walBytes,
                 downloadIsCurrent = walBytes == 0,
+                startedAtUtc = started.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                uptimeSeconds = (long)(DateTime.UtcNow - started).TotalSeconds,
             });
         }
 

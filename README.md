@@ -256,12 +256,25 @@ is not uniform about it: `jpstudent01` and `jp-test-check-01` are both in use.
 the rows in class order and two empty columns for signing accounts out on paper. It is gitignored next to
 the CSV.
 
+A request that gets no answer at all — the connection was reset, or the container was being replaced —
+is retried (four attempts, backing off) instead of being reported as a failed account. That is safe
+because a retry that finds the account already created comes back 409 and is reported as "already
+existed" rather than inventing a second row. If it still fails, the reported reason now includes the
+transport cause (`ECONNRESET`, `ENOTFOUND`), not just "fetch failed".
+
 #### Emptying the student database before a study
 
 ```sh
 # What is in it now (read-only)
 curl -H "X-Admin-Key: $ADMIN_KEY" https://YOUR-API-HOST/admin/status
+```
 
+It reports the row count per table, whether a copy of `students.db` would be current, and how long the
+process has been up (`uptimeSeconds`, `startedAtUtc`). The uptime is there for one question: a burst of
+requests that failed with no HTTP status at all is either a client-side network fault or a container that
+restarted under them, and this number tells the two apart.
+
+```sh
 # Wipe the activity, keep the logins. What a study wants: create the class first, clean second.
 curl -X POST https://YOUR-API-HOST/admin/reset \
      -H "X-Admin-Key: $ADMIN_KEY" -H "Content-Type: application/json" \

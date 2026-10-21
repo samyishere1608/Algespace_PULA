@@ -112,21 +112,51 @@ function usage() {
 
 const name = (prefix, separator, index, pad) => `${prefix}${separator}${String(index).padStart(pad, "0")}`;
 
-async function post(base, path, apiKey, body) {
+/**
+ * A POST that survives the wire failing under it.
+ *
+ * A request that never reached a response — the connection was reset, the container was replaced, the
+ * edge proxy dropped an idle socket Node had kept alive — throws instead of returning a status. That is
+ * not the server saying no; nothing was decided. Retrying is the right answer, and it is safe here:
+ * a retry that finds the account already created comes back 409, which the caller reports as "already
+ * existed" rather than inventing a second row.
+ *
+ * Only transport failures are retried. A 4xx/5xx is a real answer from a working server and is returned
+ * as soon as it arrives.
+ */
+async function post(base, path, apiKey, body, attempts = 4) {
     const headers = { "Content-Type": "application/json" };
     if (apiKey) headers["X-API-Key"] = apiKey;
 
-    const response = await fetch(`${base}${path}`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-    });
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+            const response = await fetch(`${base}${path}`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(body),
+                // A fresh socket per retry: the failure being retried is a socket that died, so reusing
+                // the pool would just fail the same way again.
+                keepalive: false,
+                signal: AbortSignal.timeout(30_000),
+            });
 
-    const text = await response.text();
-    let json = null;
-    try { json = text ? JSON.parse(text) : null; } catch { /* not JSON; the status says enough */ }
+            const text = await response.text();
+            let json = null;
+            try { json = text ? JSON.parse(text) : null; } catch { /* not JSON; the status says enough */ }
 
-    return { status: response.status, ok: response.ok, json, text };
+            return { status: response.status, ok: response.ok, json, text, attempts: attempt };
+        } catch (error) {
+            lastError = error;
+            if (attempt === attempts) break;
+            await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+        }
+    }
+
+    // Reported with the cause, because "fetch failed" alone says nothing about which of the possible
+    // faults it was — and that difference is the whole answer when this happens again.
+    const cause = lastError?.cause?.code ?? lastError?.cause?.message ?? "";
+    throw new Error(`${lastError?.message ?? "request failed"}${cause ? ` (${cause})` : ""}`);
 }
 
 /** Runs `task` over `items`, `size` at a time, so the server is not asked to accept 120 at once. */
