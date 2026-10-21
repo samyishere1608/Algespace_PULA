@@ -15,22 +15,28 @@
  * The key is read from --api-key or from ALGESPACE_API_KEY, and is never written to the output. Prefer the
  * environment variable: a command line is visible to every process on the machine.
  *
- * Defaults match the pilot: 120 students named jp-test-student-001..120, five tester accounts named
+ * Defaults match the pilot: 120 students named jpstudent01..120, five tester accounts named
  * jp-test-check-01..05, and the password "test123" for all of them. Re-running is safe: a name that
  * already exists is reported, not overwritten, and never silently re-passworded.
+ *
+ * The separator between prefix and number is an option because the class roster is not uniform about
+ * it: `jpstudent01` and `jp-test-check-01` are both in use, so neither spelling can be baked into the
+ * name builder.
  */
 
 import { writeFile } from "node:fs/promises";
 
 const DEFAULTS = {
     base: "http://localhost:7273",
-    prefix: "jp-test-student",
+    prefix: "jpstudent",
+    separator: "",
     from: 1,
     to: 120,
-    pad: 3,
+    pad: 2,
     password: "test123",
     testers: 5,
     testerPrefix: "jp-test-check",
+    testerSeparator: "-",
     testerPad: 2,
     concurrency: 8,
     verify: true,
@@ -65,12 +71,14 @@ function parseArgs(argv) {
             case "base": args.base = value; break;
             case "api-key": args.apiKey = value; break;
             case "prefix": args.prefix = value; break;
+            case "separator": args.separator = value; break;
             case "from": args.from = Number(value); break;
             case "to": args.to = Number(value); break;
             case "pad": args.pad = Number(value); break;
             case "password": args.password = value; break;
             case "testers": args.testers = Number(value); break;
             case "tester-prefix": args.testerPrefix = value; break;
+            case "tester-separator": args.testerSeparator = value; break;
             case "tester-pad": args.testerPad = Number(value); break;
             case "concurrency": args.concurrency = Number(value); break;
             case "out": args.out = value; break;
@@ -87,11 +95,13 @@ function usage() {
   --base <url>          API base (default ${DEFAULTS.base})
   --api-key <key>       X-API-Key, or set ALGESPACE_API_KEY
   --prefix <name>       student username prefix (default ${DEFAULTS.prefix})
+  --separator <s>       between prefix and number, may be empty (default "${DEFAULTS.separator}")
   --from <n> --to <n>   student number range (default ${DEFAULTS.from}..${DEFAULTS.to})
   --pad <n>             number width, zero padded (default ${DEFAULTS.pad})
   --password <pw>       password for every account (default ${DEFAULTS.password})
   --testers <n>         extra tester accounts, prefix below (default ${DEFAULTS.testers})
   --tester-prefix <p>   (default ${DEFAULTS.testerPrefix})
+  --tester-separator <s> (default "${DEFAULTS.testerSeparator}")
   --tester-pad <n>      (default ${DEFAULTS.testerPad})
   --concurrency <n>     parallel requests (default ${DEFAULTS.concurrency})
   --no-verify           skip the sign-in check
@@ -100,7 +110,7 @@ function usage() {
 `);
 }
 
-const name = (prefix, index, pad) => `${prefix}-${String(index).padStart(pad, "0")}`;
+const name = (prefix, separator, index, pad) => `${prefix}${separator}${String(index).padStart(pad, "0")}`;
 
 async function post(base, path, apiKey, body) {
     const headers = { "Content-Type": "application/json" };
@@ -149,12 +159,12 @@ async function main() {
     const base = args.base.replace(/\/+$/, "");
     const students = [];
     for (let index = args.from; index <= args.to; index++) {
-        students.push(name(args.prefix, index, args.pad));
+        students.push(name(args.prefix, args.separator, index, args.pad));
     }
 
     const testers = [];
     for (let index = 1; index <= args.testers; index++) {
-        testers.push(name(args.testerPrefix, index, args.testerPad));
+        testers.push(name(args.testerPrefix, args.testerSeparator, index, args.testerPad));
     }
 
     if (args.dryRun) {

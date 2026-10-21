@@ -7,6 +7,7 @@ the CSV and must not be emailed to students as a whole - cut it up into the rows
     python tools/make-accounts-xlsx.py jp-test-student-accounts.csv jp-test-student-accounts.xlsx
 """
 import csv
+import re
 import sys
 from pathlib import Path
 
@@ -28,6 +29,18 @@ BORDER = Border(bottom=THIN)
 def read_csv(path):
     with open(path, newline="", encoding="utf-8-sig") as handle:
         return list(csv.DictReader(handle))
+
+
+def natural_key(row):
+    """Class order, not dictionary order.
+
+    Sorting the usernames as plain strings puts jpstudent100 next to jpstudent10 and jpstudent120
+    before jpstudent13, which is unreadable on a sheet that is handed out row by row. The trailing
+    number is compared as a number; anything without one keeps its place at the end.
+    """
+    match = re.search(r"(\d+)$", row["username"])
+    return (row["username"][: match.start()] if match else row["username"],
+            int(match.group(1)) if match else 0)
 
 
 def write_sheet(workbook, title, rows, first=False):
@@ -84,10 +97,10 @@ def write_sheet(workbook, title, rows, first=False):
 
 
 def main():
-    source = Path(sys.argv[1] if len(sys.argv) > 1 else "jp-test-student-accounts.csv")
+    source = Path(sys.argv[1] if len(sys.argv) > 1 else "jpstudent-accounts.csv")
     target = Path(sys.argv[2] if len(sys.argv) > 2 else source.with_suffix(".xlsx"))
 
-    rows = read_csv(source)
+    rows = sorted(read_csv(source), key=natural_key)
     students = [r for r in rows if "tester" not in r["status"]]
     testers = [r for r in rows if "tester" in r["status"]]
     others = [r for r in rows if r not in students and r not in testers]

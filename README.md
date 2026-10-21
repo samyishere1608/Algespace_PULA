@@ -243,12 +243,18 @@ node tools/create-accounts.mjs
 node tools/create-accounts.mjs --base https://YOUR-API-HOST --api-key THE_API_KEY
 ```
 
-Defaults: `jp-test-student-001` … `jp-test-student-120` plus five tester accounts `jp-test-check-01` …
+Defaults: `jpstudent01` … `jpstudent120` plus five tester accounts `jp-test-check-01` …
 `jp-test-check-05`, all with the password `test123`, then one sign-in per account to prove the password
-works. The handout CSV (`jp-test-student-accounts.csv`) lists every username with its id and status; it
+works. The handout CSV (`jpstudent-accounts.csv`) lists every username with its id and status; it
 contains passwords, so it is written to the working directory and should not be committed.
 
-Note the default range is 120 accounts; `--from/--to/--prefix/--password` change that.
+Note the default range is 120 accounts; `--from/--to/--prefix/--pad/--password` change that. The
+separator between prefix and number is an option (`--separator`, empty by default) because the roster
+is not uniform about it: `jpstudent01` and `jp-test-check-01` are both in use.
+
+`tools/make-accounts-xlsx.py` turns that CSV into a printable workbook (`jpstudent-accounts.xlsx`) with
+the rows in class order and two empty columns for signing accounts out on paper. It is gitignored next to
+the CSV.
 
 #### Emptying the student database before a study
 
