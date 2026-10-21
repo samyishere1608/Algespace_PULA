@@ -222,6 +222,38 @@ export async function fetchStudentProgress(studentId: number): Promise<StudentPr
     return response.data;
 }
 
+// ── Leaderboard ──────────────────────────────────────────────────────────────
+
+export interface LeaderboardRow {
+    studentId: number;
+    username: string;
+    /** Choice + Insight + Resolve — the same three numbers the student's header shows. */
+    xp: number;
+    /** 1-based position; 0 means "has not earned any XP yet", so the board does not rank them. */
+    rank: number;
+}
+
+export interface LeaderboardData {
+    /** Highest first. Students who have earned nothing are not on the board. */
+    top: LeaderboardRow[];
+    /** The asking student's own line, ranked or not. */
+    me: LeaderboardRow | null;
+    /** How many students have earned any XP at all. */
+    rankedCount: number;
+}
+
+/**
+ * The class ranked by XP. Read fresh each time the tab is opened: it is about other people, so a value
+ * cached from an earlier visit would be a claim about the class that the class may already have moved
+ * past — and it is one small request.
+ */
+export async function fetchLeaderboard(studentId: number, take = 10): Promise<LeaderboardData> {
+    const response = await axios.get<LeaderboardData>(`${BACKEND}/student-progress/leaderboard/${studentId}`, {
+        params: { take },
+    });
+    return response.data;
+}
+
 // ── Weak-Area Detection ──────────────────────────────────────────────────────
 
 export interface WeaknessDimension {

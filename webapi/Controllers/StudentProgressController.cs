@@ -253,6 +253,68 @@ namespace webapi.Controllers
                 new { StudentId = studentId });
         }
 
+        // ── GET /student-progress/leaderboard/{studentId} ─────────────────────
+        /// <summary>
+        /// The class as a ranked list, by the XP a student can see in their own header.
+        ///
+        /// WHICH XP. Choice + Insight + Resolve, not `TotalXP`. The header shows those three wallets and
+        /// the level is derived from their sum, so a board built on any other number could tell a student
+        /// they are 40th while their own screen says they have 300 XP and everyone above them has none.
+        /// The database column `TotalXP` is goal XP, which is never displayed anywhere.
+        ///
+        /// WHO IS ON IT. Only students who have earned something. A class on its first morning is 120
+        /// students on zero, and listing the first ten of those alphabetically would look like a result.
+        /// The asking student is returned separately, ranked or not, so the tab can always show where they
+        /// stand — including "not on the board yet".
+        ///
+        /// The class is read in one query and ranked in memory: 120 rows is not worth a window function,
+        /// and doing it here keeps the tie rule (equal XP shares a rank) visible in one place.
+        /// </summary>
+        [HttpGet("leaderboard/{studentId}")]
+        public ActionResult<LeaderboardResponse> GetLeaderboard(long studentId, [FromQuery] int take = 10)
+        {
+            if (studentId <= 0) return BadRequest("Invalid request.");
+
+            take = Math.Clamp(take, 1, 50);
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            // LEFT JOIN, so a student with no progress row at all is still a row on this list — at zero,
+            // and therefore not on the board, but present to be found as "me".
+            var standings = conn.Query<LeaderboardRow>(
+                $"SELECT s.Id AS StudentId, s.Username AS Username, " +
+                $"       COALESCE(p.ChoiceXP, 0) + COALESCE(p.InsightXP, 0) + COALESCE(p.ResolveXP, 0) AS Xp " +
+                $"FROM {StudentDBSettings.TableName} s " +
+                $"LEFT JOIN {StudentProgressDBSettings.ProgressTable} p ON p.StudentId = s.Id " +
+                "ORDER BY Xp DESC, s.Username COLLATE NOCASE ASC")
+                .ToList();
+
+            // Ties share a rank; the next distinct score jumps to its own position in the list.
+            var previousXp = int.MinValue;
+            for (var index = 0; index < standings.Count; index++)
+            {
+                var row = standings[index];
+                row.Rank = row.Xp == previousXp ? standings[index - 1].Rank : index + 1;
+                previousXp = row.Xp;
+            }
+
+            foreach (var row in standings.Where(row => row.Xp == 0))
+            {
+                row.Rank = 0;
+            }
+
+            var ranked = standings.Where(row => row.Xp > 0).ToList();
+
+            return Ok(new LeaderboardResponse
+            {
+                Top = ranked.Take(take).ToList(),
+                Me = standings.FirstOrDefault(row => row.StudentId == studentId),
+                RankedCount = ranked.Count,
+            });
+        }
+
         // ── GET /student-progress/{studentId} ────────────────────────────────
         /// <summary>Returns the student's total XP and goals completed in the current ISO week.</summary>
         [HttpGet("{studentId}")]

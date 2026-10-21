@@ -53,8 +53,8 @@ import XpGuideModal from "./dashboard/XpGuideModal.tsx";
 import { EndSessionModal } from "./dashboard/EndSessionModal.tsx";
 import { ReflectionModal } from "./dashboard/ReflectionModal.tsx";
 import { getEquippedOutfitId, persistEquippedOutfitId, getActiveBuddyId, persistActiveBuddyId, getAgencyLevel, getWalletXp, getAnnouncedUnlocks, markUnlockAnnounced } from "@utils/wardrobeUtils.ts";
-import { fetchStudentProgress, getAccuracyLast5, getAccuracyStats } from "@utils/progressUtils.ts";
-import type { StudentProgressData } from "@utils/progressUtils.ts";
+import { fetchStudentProgress, fetchLeaderboard, getAccuracyLast5, getAccuracyStats } from "@utils/progressUtils.ts";
+import type { LeaderboardRow, StudentProgressData } from "@utils/progressUtils.ts";
 import type { GoalProgress, StudyGoal } from "@/types/student/goal.ts";
 import { addGoal, getActiveGoals, removeGoal } from "@utils/activeGoals.ts";
 import { GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef } from "@utils/goalCatalog.ts";
@@ -84,14 +84,6 @@ import { MilestoneCelebrationOverlay } from "@components/shared/MilestoneCelebra
 import { GrowingTree } from "@components/shared/GrowingTree.tsx";
 import { AgencyXpToast, showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
 
-// ─── Placeholder data types — swap with real API data when available ──────────
-
-interface LeaderboardEntry {
-    rank: number;
-    username: string;
-    xp: number;
-}
-
 // ─── Placeholder static data — replace with API calls when backend is ready ──
 
 const PLACEHOLDER_STATS = {
@@ -103,12 +95,6 @@ const PLACEHOLDER_STATS = {
     levelName: "Beginner",
     streakDays: 0,
 };
-
-const PLACEHOLDER_LEADERBOARD: LeaderboardEntry[] = [
-    { rank: 1, username: "—", xp: 0 },
-    { rank: 2, username: "—", xp: 0 },
-    { rank: 3, username: "—", xp: 0 },
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -327,7 +313,43 @@ export default function StudentDashboard(): ReactElement {
     const totalAgency = agency.totalXP;
     const agencyWallets = { choiceXP: agency.choiceXP, insightXP: agency.insightXP, resolveXP: agency.resolveXP };
     const stats = { ...PLACEHOLDER_STATS, currentXP: totalAgency, exercisesCompleted, exercisesToday, streakDays, ...getLevelInfo(totalAgency) };
-    const leaderboard = PLACEHOLDER_LEADERBOARD;
+
+    // ── Leaderboard ─────────────────────────────────────────────────────────
+    //
+    // Read when the tab is opened, not on mount: it is a fact about the rest of the class, and loading
+    // it for a student who never opens the tab would be a request about other people for nothing. The
+    // three states are kept apart because they read differently — "nobody has started" is not "you are
+    // not on the board", and neither is an error.
+    const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
+    const [myStanding, setMyStanding] = useState<LeaderboardRow | null>(null);
+    const [leaderboardSize, setLeaderboardSize] = useState(0);
+    const [leaderboardState, setLeaderboardState] = useState<"loading" | "ready" | "failed">("loading");
+
+    useEffect(() => {
+        if (activeTab !== "leaderboard" || !student) return;
+
+        let current = true;
+        setLeaderboardState("loading");
+
+        void fetchLeaderboard(student.id, 10)
+            .then((data) => {
+                if (!current) return;
+                setLeaderboard(data.top ?? []);
+                setMyStanding(data.me ?? null);
+                setLeaderboardSize(data.rankedCount ?? 0);
+                setLeaderboardState("ready");
+            })
+            .catch(() => {
+                // A board that cannot be read is not an empty board, and saying so is the point.
+                if (current) setLeaderboardState("failed");
+            });
+
+        return () => { current = false; };
+    }, [activeTab, student]);
+
+    /** Whether the student's own line is already drawn in the top rows. */
+    const myRowIsListed = myStanding !== null && myStanding.rank > 0
+        && leaderboard.some((row) => row.studentId === myStanding.studentId);
 
     // ── Newly unlocked characters — one-time celebration popup ──────────────
     useEffect(() => {
@@ -1140,10 +1162,26 @@ export default function StudentDashboard(): ReactElement {
                             <div className={"dashboard__leaderboard-title"}>
                                 <FontAwesomeIcon icon={faTrophy} /> {t("dashboard-leaderboard")}
                             </div>
-                            {leaderboard.map((entry) => (
+
+                            {leaderboardState === "loading" && (
+                                <p className={"dashboard__leaderboard-note"}>{t("leaderboard-loading")}</p>
+                            )}
+
+                            {leaderboardState === "failed" && (
+                                <p className={"dashboard__leaderboard-note"}>{t("leaderboard-failed")}</p>
+                            )}
+
+                            {/* Two different empty screens. "Nobody has started" is about the class; "not on the
+                                board yet" is about this student, and it is only said once there is a board to be
+                                missing from. */}
+                            {leaderboardState === "ready" && leaderboard.length === 0 && (
+                                <p className={"dashboard__leaderboard-note"}>{t("leaderboard-empty")}</p>
+                            )}
+
+                            {leaderboardState === "ready" && leaderboard.map((entry) => (
                                 <div
-                                    key={entry.rank}
-                                    className={`leaderboard-entry${entry.username === student?.username ? " leaderboard-entry--current" : ""}`}
+                                    key={entry.studentId}
+                                    className={`leaderboard-entry${entry.studentId === myStanding?.studentId ? " leaderboard-entry--current" : ""}`}
                                 >
                                     <span className={"leaderboard-entry__rank"} aria-label={`${entry.rank}`}>
                                         {entry.rank <= 3
@@ -1154,7 +1192,31 @@ export default function StudentDashboard(): ReactElement {
                                     <span className={"leaderboard-entry__xp"}>{entry.xp} XP</span>
                                 </div>
                             ))}
-                            <p className={"dashboard__leaderboard-hint"}>{t("dashboard-leaderboard-hint")}</p>
+
+                            {/* The student's own line, when the top ten does not already contain it. Comes last,
+                                under a rule, because it is a different kind of row: everyone above is someone
+                                else. */}
+                            {leaderboardState === "ready" && myStanding !== null && myStanding.rank > 0 && !myRowIsListed && (
+                                <div className={"leaderboard-entry leaderboard-entry--current leaderboard-entry--mine"}>
+                                    <span className={"leaderboard-entry__rank"} aria-label={`${myStanding.rank}`}>
+                                        {myStanding.rank <= 3
+                                            ? <FontAwesomeIcon icon={faMedal} className={`leaderboard-entry__medal leaderboard-entry__medal--${myStanding.rank}`} />
+                                            : myStanding.rank}
+                                    </span>
+                                    <span className={"leaderboard-entry__name"}>{myStanding.username}</span>
+                                    <span className={"leaderboard-entry__xp"}>{myStanding.xp} XP</span>
+                                </div>
+                            )}
+
+                            {leaderboardState === "ready" && leaderboard.length > 0 && myStanding !== null && myStanding.rank === 0 && (
+                                <p className={"dashboard__leaderboard-note"}>{t("leaderboard-not-ranked")}</p>
+                            )}
+
+                            <p className={"dashboard__leaderboard-hint"}>
+                                {leaderboardSize > 0
+                                    ? t("dashboard-leaderboard-hint-counted", { count: leaderboardSize })
+                                    : t("dashboard-leaderboard-hint")}
+                            </p>
                         </div>
                     </div>
                     )}

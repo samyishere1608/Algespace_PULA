@@ -566,6 +566,35 @@ namespace webapi.Models.Student
         public List<DailyXp> DailyXp { get; set; } = [];
     }
 
+    // ── Leaderboard ───────────────────────────────────────────────────────────
+
+    /// <summary>One line on the leaderboard.</summary>
+    public class LeaderboardRow
+    {
+        public long StudentId { get; set; }
+        public string Username { get; set; } = "";
+        /// <summary>Choice + Insight + Resolve: the same three numbers the student's header shows.</summary>
+        public int Xp { get; set; }
+        /// <summary>
+        /// Position in the class, 1-based. Students on the same XP share a position — the next one then
+        /// skips ahead, the way a sports table reads. 0 means "not ranked", which only happens to a
+        /// student who has not earned any XP yet: putting them at the bottom of a class list would be a
+        /// statement about their work rather than about the board.
+        /// </summary>
+        public int Rank { get; set; }
+    }
+
+    /// <summary>Response for GET /student-progress/leaderboard/{studentId}.</summary>
+    public class LeaderboardResponse
+    {
+        /// <summary>The top rows, highest first, students with no XP excluded.</summary>
+        public List<LeaderboardRow> Top { get; set; } = [];
+        /// <summary>The asking student's own line, ranked or not.</summary>
+        public LeaderboardRow? Me { get; set; }
+        /// <summary>How many students have earned any XP — the size of the board.</summary>
+        public int RankedCount { get; set; }
+    }
+
     // ── Weak-Area Detection ───────────────────────────────────────────────────
 
     /// <summary>One dimension of student weakness evaluation.</summary>

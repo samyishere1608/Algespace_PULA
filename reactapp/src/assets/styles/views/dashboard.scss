@@ -738,6 +738,25 @@
         padding: 0.65rem 0.75rem;
         border-radius: 0.55rem;
     }
+
+    // The student's own row when the top ten does not contain it. Separated by a rule, because every
+    // row above it is somebody else and this one is not.
+    .leaderboard-entry--mine {
+        margin-top: 0.5rem;
+        border-top: 1px solid rgba(33, 158, 188, 0.28);
+        padding-top: 0.75rem;
+        border-radius: 0 0 0.55rem 0.55rem;
+    }
+}
+
+// Loading, failure, "nobody yet" and "not on the board yet" all land here. Neutral on purpose: two of
+// the four are not errors, and telling a student their class is slow to start is not a failure.
+.dashboard__leaderboard-note {
+    padding: 0.9rem 0.25rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.72);
 }
 
 /* ─── Left panel (GrowingTree) ────────────────────────────────── */
