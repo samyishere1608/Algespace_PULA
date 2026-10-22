@@ -107,6 +107,38 @@ export interface ReflectionQueueItem {
     questions: ReflectionQuestion[];
 }
 
+/**
+ * The words to print for "You just finished …".
+ *
+ * A GOAL's label is written by the app when the goal completes (`describeGoal`), so it is already in the
+ * student's language and is used as it stands.
+ *
+ * An EXERCISE's label is not: the server stores the exercise TYPE, because that is what it is handed
+ * (`"Suitability"`, `"Efficiency"`, `"Matching"` — the same words the database keys on). Printed raw, a
+ * Japanese student was asked to reflect on "Suitability". The three known types are translated here
+ * instead — on the client, so rows already queued are fixed too and no migration is needed — and
+ * anything unrecognised falls through unchanged rather than becoming a missing-key placeholder.
+ */
+export function reflectionItemLabel(
+    item: { itemType: string; itemLabel: string },
+    t: (key: string, options?: Record<string, unknown>) => string
+): string {
+    const label = item.itemLabel ?? "";
+
+    // The session's own label ("Today's session") is already said by the tag beside it.
+    if (item.itemType === "session") return "";
+
+    const exerciseType = EXERCISE_TYPE_KEYS[label.trim().toLowerCase()];
+    return exerciseType ? t(exerciseType) : label;
+}
+
+/** The three exercise kinds as the server spells them, and the key each one is printed from. */
+const EXERCISE_TYPE_KEYS: Record<string, string> = {
+    suitability: "exercise-type-suitability",
+    efficiency: "exercise-type-efficiency",
+    matching: "exercise-type-matching",
+};
+
 export interface ReflectionHistoryEntry {
     role: string;       // "pippin" | "student" | "system"
     text: string;

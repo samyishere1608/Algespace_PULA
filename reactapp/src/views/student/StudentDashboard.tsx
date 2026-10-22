@@ -79,7 +79,7 @@ import {
     type TourStep,
 } from "@utils/onboardingTour.ts";
 import { seedDemoData } from "@utils/demoData.ts";
-import { fetchReflectionQueue, completeReflection, startSessionReflection, settleSessionPromise, ReflectionQueueItem } from "@utils/reflectionUtils.ts";
+import { fetchReflectionQueue, completeReflection, startSessionReflection, settleSessionPromise, reflectionItemLabel, ReflectionQueueItem } from "@utils/reflectionUtils.ts";
 import { MilestoneCelebrationOverlay } from "@components/shared/MilestoneCelebrationOverlay.tsx";
 import { GrowingTree } from "@components/shared/GrowingTree.tsx";
 import { AgencyXpToast, showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
@@ -1414,7 +1414,7 @@ export default function StudentDashboard(): ReactElement {
                             <strong>{activeBuddy.name}</strong>
                         </div>
                         <p className={"buddy-reflection-bubble__text"}>
-                            {t("reflection-prompt-text", { label: reflectionQueue[0].itemLabel })}
+                            {t("reflection-prompt-text", { label: reflectionItemLabel(reflectionQueue[0], t) })}
                         </p>
                         <div className={"buddy-reflection-bubble__actions"}>
                             <button className={"buddy-reflection-bubble__no"} onClick={handleReflectionNo}>

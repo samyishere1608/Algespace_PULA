@@ -14,6 +14,7 @@ import type { StudyGoal } from "@/types/student/goal.ts";
 import {
     completeReflection,
     evaluateReflection,
+    reflectionItemLabel,
     ReflectionHistoryEntry,
     ReflectionQuestion,
     ReflectionQueueItem,
@@ -448,9 +449,10 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                         </span>
                         {/* A session's own label is "Today's session", which the tag already says, so it
                             carries no second line. A goal and an exercise do: their name IS the thing the
-                            questions are about. */}
+                            questions are about. Resolved through the same helper the prompt uses, so an
+                            exercise type arrives in the student's language here too. */}
                         {item.itemType !== "session" && (
-                            <span className="reflection-modal__subject-name">{item.itemLabel}</span>
+                            <span className="reflection-modal__subject-name">{reflectionItemLabel(item, t)}</span>
                         )}
                     </div>
                 </div>
