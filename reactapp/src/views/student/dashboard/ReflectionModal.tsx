@@ -28,6 +28,15 @@ interface Props {
     buddyImgSrc?: string;
     onAwardInsight: (amount: number) => void;
     onClose: () => void;
+    /**
+     * Runs instead of `onClose` when the student answers the LAST question of the LAST item.
+     *
+     * The two are different acts. `onClose` is a dismissal — the ✕, or a "not now" — and has to leave
+     * them where they are. This is the finish: the end-of-session reflection uses it to close the
+     * session down, because answering it was the last thing they were asked to do today and dropping
+     * them back on the dashboard afterwards leaves a finished session open behind them.
+     */
+    onFinished?: () => void;
     /** Told when the student accepts a suggested goal, so the dashboard can show it at once. */
     onGoalAdded?: (goals: StudyGoal[]) => void;
 }
@@ -140,7 +149,7 @@ function BuddyBubble({ text, buddyName, buddyEmoji, buddyImgSrc, variant = "ask"
     );
 }
 
-export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddyImgSrc, onAwardInsight, onClose, onGoalAdded }: Props): ReactElement {
+export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddyImgSrc, onAwardInsight, onClose, onFinished, onGoalAdded }: Props): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
 
     const [itemIndex, setItemIndex] = useState(0);
@@ -390,7 +399,10 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setOpenPanel(null);
             setPhase("answering");
         } else {
-            onClose();
+            // The last question of the last item. `onFinished` is the end of the sitting when there is
+            // one to end; without it this is simply "done", which is what every other reflection is.
+            if (onFinished) onFinished();
+            else onClose();
         }
     }
 

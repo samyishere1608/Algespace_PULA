@@ -1530,6 +1530,11 @@ export default function StudentDashboard(): ReactElement {
                     onAwardInsight={handleReflectionInsight}
                     onGoalAdded={() => void refreshGoals(student.id)}
                     onClose={() => setSessionReflectionItem(null)}
+                    // This reflection IS the end of the session: it was opened from "End today's
+                    // session", and answering it was the last thing of the day. Finishing it closes the
+                    // session and signs the student out, rather than dropping them back on a dashboard
+                    // belonging to a session that is already over.
+                    onFinished={handleLogout}
                 />
             )}
             {showReflectionModal && student && (
