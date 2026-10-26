@@ -18,6 +18,47 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// ── Which browser origins the deployed API answers ───────────────────────────
+//
+// The front end and the API live on different hosts, so every request from the app is cross-origin.
+//
+// EXACT HOST MATCHING, not a prefix. The old check was `StartsWith("https://algespacepula.netlify.app")`,
+// which also accepts `https://algespacepula.netlify.app.example.test` — a different site that merely
+// begins with the name — and the same for the university domain.
+//
+// The list below is where this project is served from, and `Cors:AllowedOrigins` (comma separated)
+// adds to it, so moving the front end to another domain is an environment variable rather than a code
+// change. `www.` is accepted for each, because people type it.
+var corsDefaultOrigins = new[]
+{
+    "https://algespace.com",
+    "https://www.algespace.com",
+    "https://algespace.sic.saarland",
+    "https://www.algespace.sic.saarland",
+};
+
+var corsConfiguredOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "")
+    .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+    .Select(entry => entry.Trim().TrimEnd('/'))
+    .Where(entry => entry.Length > 0);
+
+var corsAllowedOrigins = new HashSet<string>(
+    corsDefaultOrigins.Concat(corsConfiguredOrigins), StringComparer.OrdinalIgnoreCase);
+
+bool IsAllowedProductionOrigin(string origin)
+{
+    if (string.IsNullOrWhiteSpace(origin)) return false;
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+    if (uri.Scheme != Uri.UriSchemeHttps) return false;
+
+    // Netlify serves every deploy of a site from <deploy-id>--<site>.netlify.app, so previews are
+    // matched by the suffix only this site's deploys end with while the plain host is matched exactly.
+    var host = uri.Host.ToLowerInvariant();
+    if (host == "algespacepula.netlify.app" || host.EndsWith("--algespacepula.netlify.app")) return true;
+
+    return corsAllowedOrigins.Contains($"{uri.Scheme}://{uri.Host}".ToLowerInvariant());
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevelopmentPolicy", builder =>
@@ -38,13 +79,7 @@ builder.Services.AddCors(options =>
         builder.WithMethods("GET", "PUT", "POST")
             .WithHeaders(HeaderNames.Accept, HeaderNames.ContentType, HeaderNames.Authorization, "X-API-Key")
             .AllowCredentials()
-            .SetIsOriginAllowed(origin =>
-            {
-                if (string.IsNullOrWhiteSpace(origin)) return false;
-                if (origin.ToLower().StartsWith("https://algespace.sic.saarland")) return true;
-                if (origin.ToLower().StartsWith("https://algespacepula.netlify.app")) return true;
-                return false;
-            });
+            .SetIsOriginAllowed(IsAllowedProductionOrigin);
     });
 });
 

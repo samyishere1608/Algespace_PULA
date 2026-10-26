@@ -11,7 +11,7 @@
 
 # Description
 
-The AlgeSPACE web application is hosted at https://algespace.sic.saarland/ and was developed as part of a Master's thesis project in Computer Science at Saarland University.
+The AlgeSPACE web application is hosted at https://algespace.com/ and was developed as part of a Master's thesis project in Computer Science at Saarland University.
 
 The website includes multiple Intelligent Tutoring Systems (ITSs) for fostering a conceptual understanding in solving systems of two linear equations in two unknown variables with the equalization, substitution, and elimination methods, as well as one ITS for training flexibility in solving linear systems with the three mentioned methods. The website and its learning contents are freely accessible to researchers, educators and students.
 
@@ -297,6 +297,24 @@ Admin__ResetKey=some-long-random-string
 The reset deletes every row of every table with a `StudentId` column, plus the derived `NlpAnalysis` rows,
 then vacuums the file. It reports how many rows went from which table. Do **not** delete the SQLite volume
 instead: that takes `algespace.db` with it and leaves the deployment with no exercises.
+
+#### Which front-end domains the API will answer
+
+The app and the API are on different hosts, so every request from the browser is cross-origin and the
+deployed API has to name the origins it accepts. The list lives in `Program.cs` and covers
+`algespace.com` (with `www`), `algespace.sic.saarland` (with `www`), and Netlify's site host plus its
+per-deploy previews.
+
+Moving the front end to another domain does **not** need a code change — set the extra origins and
+restart:
+
+```sh
+Cors__AllowedOrigins=https://another.example,https://www.another.example
+```
+
+Matching is on the exact origin, not on a prefix, so a look-alike host such as
+`algespace.com.example.test` is still refused. Anything not on the list gets no
+`Access-Control-Allow-Origin` header and the browser blocks the response.
 
 #### Skipping the tutorial on first login
 

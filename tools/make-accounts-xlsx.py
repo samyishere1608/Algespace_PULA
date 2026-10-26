@@ -16,7 +16,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
-LOGIN_URL = "https://algespacepula.netlify.app/student/login"
+LOGIN_URL = "https://algespace.com/student/login"
 INK = "012638"
 ACCENT = "219EBC"
 BAND = "EAF4F8"
