@@ -35,3 +35,7 @@ tools/reflection-audit/obj
 # Handouts written by tools/create-accounts.mjs: one line per account, passwords included.
 *-accounts.csv
 *-accounts.xlsx
+
+# Byte-code from the content generator in tools/flexibility-content.
+__pycache__/
+*.pyc

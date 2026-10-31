@@ -102,11 +102,24 @@
     gap: 0.55rem;
     // Asymmetric on purpose: the portrait is flush to the left edge of the pill, so the text gets
     // the breathing room and the button does not look like a circle with a label bolted on.
+    //
+    // That asymmetry only makes sense WITH a portrait. The control arm has none, and the same padding
+    // then left the word "Help" jammed against the left edge of an otherwise empty pill — so the plain
+    // variant below squares it up and restores the height the avatar used to provide.
     padding: 0.3rem 1.1rem 0.3rem 0.3rem;
     border-radius: 999px;
     background-color: var(--primary-blue);
     background-image: linear-gradient(135deg, var(--primary-blue) 0%, var(--shade-primary-blue) 100%);
     box-shadow: 0 6px 16px rgba(33, 158, 188, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+
+    // No companion, so nothing to sit flush to the left: equal padding both sides, and a minimum
+    // height matching what the avatar's 1.95rem plus its 2px ring plus the pill's own padding gives
+    // the other variant (44.8px), so the two arms put the same size control in the same place.
+    &--plain {
+        padding: 0.3rem 1.5rem;
+        min-height: 2.8rem;
+        justify-content: center;
+    }
 
     // The portrait sits in its own ringed circle, the same treatment the buddy widget in the corner
     // uses. They are the same character, so they should not look like two different things.

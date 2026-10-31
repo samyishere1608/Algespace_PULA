@@ -390,6 +390,16 @@ namespace webapi.Models.Student
         /// </summary>
         public string ChoiceLabel { get; set; } = "";
         /// <summary>
+        /// The student's own words, when they answered by writing instead of choosing a chip.
+        ///
+        /// A menu can only offer the answers someone thought of in advance, so every question also
+        /// allows this. When this is set, <see cref="Choice"/> is empty — nothing was claimed from the
+        /// menu — and the sentence is judged on its meaning against the question's own record, then paid
+        /// from the same table a chip is paid from. It is never weighed for how it was written, and a
+        /// question with no claim in it (a promise, the end of the day) still pays nothing.
+        /// </summary>
+        public string FreeText { get; set; } = "";
+        /// <summary>
         /// The localised words the question is about, resolved by the client from the question's own
         /// slots. Sent so the reply can name the thing the question asked about in the student's own
         /// language without the server keeping a second copy of the app's copy.

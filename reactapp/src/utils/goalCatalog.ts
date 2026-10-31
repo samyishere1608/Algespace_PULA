@@ -5,7 +5,6 @@ import {
     faCalculator,
     faCommentDots,
     faScaleBalanced,
-    faShapes,
 } from "@fortawesome/free-solid-svg-icons";
 import type { GoalCategory, GoalMetric, QualityDimension, StudyGoal } from "@/types/student/goal.ts";
 
@@ -142,10 +141,14 @@ const MATCHING: GoalFocusOption = { value: "Matching", labelKey: "exercise-type-
 const EXERCISE_TYPES: GoalFocusOption[] = [SUITABILITY, EFFICIENCY, MATCHING];
 
 /**
- * The six categories, in the order they are shown.
+ * The five categories, in the order they are shown.
  *
- * Ordered from the most concrete to the most reflective: what you practise, then how you practise
- * it, then how you think about it. A student scanning the list meets the easy choices first.
+ * Ordered from the most concrete to the most reflective: what you practise, then how you think about
+ * it. A student scanning the list meets the easy choices first.
+ *
+ * There is no exercise-type goal: the method goal already says what to practise, and the method of
+ * every exercise is recorded anyway, so a separate "do three Suitability exercises" goal measures
+ * nothing the method goal does not.
  */
 export const GOAL_CATEGORIES: GoalCategoryDef[] = [
     {
@@ -164,20 +167,6 @@ export const GOAL_CATEGORIES: GoalCategoryDef[] = [
             { type: MATCHING.value, key: "goals-in-method-matching" },
         ],
         whereKey: "goals-where-method",
-        restrictionKey: "",
-    },
-    {
-        category: "exerciseType",
-        icon: faShapes,
-        labelKey: "goals-cat-exercise-type",
-        descriptionKey: "goals-cat-exercise-type-desc",
-        metrics: ["exercises", "minutes"],
-        targets: { exercises: [3, 5, 10], minutes: [10, 20, 30] },
-        focuses: EXERCISE_TYPES,
-        anyFocusKey: "goals-focus-any-exercise-type",
-        availableIn: EXERCISE_TYPES,
-        inExercise: EXERCISE_TYPES.map((type) => ({ type: type.value, key: "goals-in-exercise-type" })),
-        whereKey: "goals-where-exercise-type",
         restrictionKey: "",
     },
     {
@@ -306,7 +295,7 @@ export function goalSummaryKey(goal: StudyGoal): string {
     // hints and errors share one template because only the noun changes.
     if (goal.category === "hintsAndErrors") return "goals-summary-hints-errors";
 
-    if (goal.category === "method" || goal.category === "exerciseType") {
+    if (goal.category === "method") {
         // "any method" cannot be slotted into "{{target}} {{focus}} exercises" without producing
         // "5 Any method exercises", so the unnarrowed case gets its own sentence.
         const suffix = goal.focus === null ? "-any" : "";

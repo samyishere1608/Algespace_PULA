@@ -1,22 +1,24 @@
 /**
- * The six things a student can set a goal about.
+ * The five things a student can set a goal about.
  *
- * FIVE of these are the dimensions the avoidance profile measures: method, exercise type, explaining
- * your reasoning, comparing methods and working it out yourself. A student who consistently declines
- * to compare methods is told so, and can then set a goal about comparing methods — the gap and the
- * goal name the same behaviour, which is what makes the nudge make sense to them.
+ * FOUR of these are the dimensions the avoidance profile measures: method, explaining your reasoning,
+ * comparing methods and working it out yourself. A student who consistently declines to compare
+ * methods is told so, and can then set a goal about comparing methods — the gap and the goal name the
+ * same behaviour, which is what makes the nudge make sense to them.
  *
  * `hintsAndErrors` is the exception and is NOT an avoidance dimension. It measures accuracy rather
  * than a decision, so it is absent from `ANCHOR_ELEMENT` below and from the server's
  * `AnchorElement`. It is still a goal worth setting — the server proposes it from the average hints
  * and errors — but it has no gap behind it and is never nudged.
  *
- * So the two lists to keep in step are the five avoidance dimensions and their five categories, NOT
- * all six categories.
+ * THE EXERCISE TYPE IS NOT ONE OF THESE ON PURPOSE. Avoiding an exercise type is still measured by
+ * the profile (`ANCHOR_ELEMENT.ExerciseType`), but there is no goal about it any more: the method
+ * goal already says what to practise, and we record the method of every exercise anyway. So the two
+ * lists to keep in step are now the five avoidance dimensions and their FOUR categories — see
+ * `CATEGORY_FOR_ELEMENT`, which deliberately has no entry for the exercise type.
  */
 export type GoalCategory =
     | "method"
-    | "exerciseType"
     | "selfExplanation"
     | "methodComparison"
     | "solveOnOwn"
@@ -44,13 +46,13 @@ export const ANCHOR_ELEMENT = {
 /**
  * The goal category that addresses a given avoidance element.
  *
- * Every element has one, and every one of them is an element, so a lookup can never miss. Only three
- * of the five appear in `DECLINABLE` in `anchorDecisions.ts` — a student cannot decline a method or
- * an exercise type, they simply pick another — but all five are measured by the profile.
+ * The exercise type has NO category: avoiding a type is still measured, but the goal it would have
+ * mapped to was retired (see `GoalCategory`). Nothing looks that element up — `withCategory` in
+ * `anchorDecisions.ts` is only ever called for the three decisions a student can decline, and an
+ * exercise type is not one of them — so the gap is a missing key, not a broken lookup.
  */
 export const CATEGORY_FOR_ELEMENT: Record<string, GoalCategory> = {
     [ANCHOR_ELEMENT.Method]: "method",
-    [ANCHOR_ELEMENT.ExerciseType]: "exerciseType",
     [ANCHOR_ELEMENT.SelfExplanation]: "selfExplanation",
     [ANCHOR_ELEMENT.MethodComparison]: "methodComparison",
     [ANCHOR_ELEMENT.SolveOnOwn]: "solveOnOwn",
@@ -59,9 +61,9 @@ export const CATEGORY_FOR_ELEMENT: Record<string, GoalCategory> = {
 /**
  * How the goal is counted.
  *
- * "minutes" is only offered for method and exercise type, because those are the only two we can
- * time meaningfully — we know how long an exercise took, not how long the student spent on the
- * specific act of comparing two methods.
+ * "minutes" is only offered for the method goal, because it is the only one we can time
+ * meaningfully — we know how long an exercise took, not how long the student spent on the specific
+ * act of comparing two methods.
  */
 export type GoalMetric = "exercises" | "minutes";
 

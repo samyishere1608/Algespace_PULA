@@ -18,7 +18,6 @@ namespace webapi.Models.Student
     public static class GoalCatalogue
     {
         public const string Method = "method";
-        public const string ExerciseType = "exerciseType";
         public const string SelfExplanation = "selfExplanation";
         public const string MethodComparison = "methodComparison";
         public const string SolveOnOwn = "solveOnOwn";
@@ -36,10 +35,9 @@ namespace webapi.Models.Student
         public const string MinutesMetric = "minutes";
 
         public static readonly string[] Categories =
-            [Method, ExerciseType, SelfExplanation, MethodComparison, SolveOnOwn, HintsAndErrors];
+            [Method, SelfExplanation, MethodComparison, SolveOnOwn, HintsAndErrors];
 
         public static readonly string[] Methods = ["Elimination", "Substitution", "Equalization"];
-        public static readonly string[] ExerciseTypes = ["Suitability", "Efficiency", "Matching"];
 
         public static readonly int[] ExerciseTargets = [3, 5, 10];
         public static readonly int[] MinuteTargets = [10, 20, 30];
@@ -48,11 +46,11 @@ namespace webapi.Models.Student
         public static bool IsCategory(string? value) => value is not null && Categories.Contains(value);
 
         /// <summary>
-        /// Only method and exercise type can be counted in minutes, because those are the only two we
-        /// can time meaningfully — we know how long an exercise took, not how long the student spent
-        /// on the specific act of comparing two methods.
+        /// Only the method goal can be counted in minutes, because it is the only one we can time
+        /// meaningfully — we know how long an exercise took, not how long the student spent on the
+        /// specific act of comparing two methods.
         /// </summary>
-        public static bool AllowsMinutes(string category) => category is Method or ExerciseType;
+        public static bool AllowsMinutes(string category) => category is Method;
 
         public static string[] MetricsFor(string category) =>
             AllowsMinutes(category) ? [ExercisesMetric, MinutesMetric] : [ExercisesMetric];
@@ -60,7 +58,6 @@ namespace webapi.Models.Student
         public static string[] FocusesFor(string category) => category switch
         {
             Method => Methods,
-            ExerciseType => ExerciseTypes,
             _ => []
         };
 
@@ -79,15 +76,14 @@ namespace webapi.Models.Student
         /// <summary>
         /// The goal category that addresses one of the tracked avoidance dimensions.
         ///
-        /// Five of the six categories appear here. Hints and errors does not, because it is not an
-        /// avoidance dimension — see <see cref="AnchorElement"/>. Both callers already handle a null
-        /// for it: one is guarded by a `is null` check, the other only ever passes an element taken
-        /// from the profile's own gap list.
+        /// Four of the five dimensions appear here. Hints and errors does not, because it is not an
+        /// avoidance dimension — see <see cref="AnchorElement"/>. Neither does the exercise type: the
+        /// profile still measures it, but the goal that used to address it was retired, so there is
+        /// nothing to aim at and a null is the honest answer.
         /// </summary>
         public static string? CategoryForElement(string element) => element switch
         {
             AnchorElement.Method => Method,
-            AnchorElement.ExerciseType => ExerciseType,
             AnchorElement.SelfExplanation => SelfExplanation,
             AnchorElement.MethodComparison => MethodComparison,
             AnchorElement.SolveOnOwn => SolveOnOwn,
@@ -98,7 +94,6 @@ namespace webapi.Models.Student
         public static string Describe(string category) => category switch
         {
             Method => "practise one solving method (elimination, substitution or equalization)",
-            ExerciseType => "focus on one exercise type (suitability, efficiency or matching)",
             SelfExplanation => "explain their own reasoning instead of going straight to the answer",
             MethodComparison => "compare two methods before choosing one",
             SolveOnOwn => "work the solution out themselves instead of being shown it",
@@ -153,9 +148,10 @@ namespace webapi.Models.Student
                 // Comparing two methods before choosing one, which only a suitability exercise invites.
                 "compare_classmate" => new SuggestedGoal { Category = MethodComparison },
 
-                // Deciding whether the method fits before committing to it, which is the suitability
-                // exercise's own question and therefore the exercise-type goal.
-                "check_fit" => new SuggestedGoal { Category = ExerciseType, Focus = "Suitability" },
+                // Deciding whether the method fits before committing to it. This used to become the
+                // exercise-type goal; with that goal retired there is nothing in the picker that
+                // measures the act, and inventing one would be worse than saying nothing.
+                "check_fit" => null,
 
                 // Staying with the method they just used. No method named in the panel (a goal, or an
                 // exercise without a method) still makes a sensible promise: any method, counted.

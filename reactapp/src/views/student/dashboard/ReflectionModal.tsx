@@ -44,6 +44,25 @@ interface Props {
 type Phase = "answering" | "feedback";
 
 /**
+ * The id recorded for an answer the student wrote instead of tapping.
+ *
+ * A real value rather than an empty string, because an empty choice already means "the help button
+ * was pressed" in this codebase — two different acts must not share one code in the data.
+ */
+const FREE_TEXT_CHOICE = "free-text";
+
+/**
+ * How many characters a written answer needs before it can be sent.
+ *
+ * Three, so a stray keypress cannot be submitted as an answer, and low enough that a short true
+ * answer ("more practice") is not refused. The server caps the length it will store.
+ */
+const MIN_FREE_TEXT = 3;
+
+/** The most a written answer may contain, matching the server's own cap. */
+const MAX_FREE_TEXT = 400;
+
+/**
  * The question the student is on, with its text and its chips ready to render.
  *
  * The BANK lives on the server, so nothing here decides what to ask or which chip is right. The
@@ -240,6 +259,20 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     /** Whether the "close it anyway?" prompt is showing, asked once an answer has been given. */
     const [confirmingClose, setConfirmingClose] = useState(false);
 
+    /**
+     * The student's own words, when the menu does not contain their answer.
+     *
+     * Every question ships chips and they are graded against the record, which is what keeps a reply
+     * from contradicting the dashboard. But a menu can only ever offer the answers someone thought of
+     * in advance, and a student whose experience is not on it is left choosing the least wrong option.
+     * So the box sits under every menu. What they write is judged on its meaning against the same
+     * record — never on how well it is written — and paid from the same table a chip is paid from.
+     *
+     * A chip and a sentence are mutually exclusive answers, so touching one clears the other and what
+     * is on screen is always what will be sent.
+     */
+    const [freeText, setFreeText] = useState("");
+
     const item = items[itemIndex];
 
     // How many questions this item has, taken from the questions themselves.
@@ -289,21 +322,26 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
     const questionText = asked.text
         || (question === 1 ? t("reflection-q1") : question === 2 ? t("reflection-q2-generic") : t("reflection-q3"));
 
-    // ONE CHIP IS THE ANSWER, AND ONE BUTTON SENDS IT.
+    // ONE ANSWER, AND ONE BUTTON SENDS IT.
     //
-    // Every question ships an answer menu, so a tap is the only way to answer and the server grades it
-    // from the record without asking the model to judge anything. The button is still separate from the
-    // chips — a chip selects and the button sends, so a mis-tap is recoverable and a quick answer is
-    // decided rather than fired off on contact.
+    // Every question ships an answer menu, so a tap is the only way to answer a question that is
+    // graded, and the server grades it from the record without asking the model to judge anything. The
+    // button is still separate from the chips — a chip selects and the button sends, so a mis-tap is
+    // recoverable and a quick answer is decided rather than fired off on contact.
     //
-    // The end-of-session reflection asks for no writing: the pilot has no consent for collecting
-    // children's own words, so that dialog is a menu of true statements about their session instead.
-    const hasAnswer = choice.length > 0;
+    // The menu is not the only route, though: the box under every question is the student's own words,
+    // for the answers nobody wrote a chip for. Typing clears the chip and tapping a chip clears the box,
+    // so only one of the two can ever be waiting to be sent.
+    const ownWordsReady = freeText.trim().length >= MIN_FREE_TEXT;
+    const hasAnswer = choice.length > 0 || ownWordsReady;
 
     async function handleAnswer(mode: "self" | "pippin", chipId = choice): Promise<void> {
         if (loading) return;
         setPending(mode);
         setLoading(true);
+        // The answer this turn carries: what they tapped, or what they wrote.
+        const sentChip = mode === "self" && !ownWordsReady ? chipId : "";
+        const sentText = mode === "self" && ownWordsReady ? freeText.trim() : "";
         try {
             const result = await evaluateReflection(
                 studentId,
@@ -312,9 +350,12 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                 mode,
                 i18n.language?.slice(0, 2) ?? "en",
                 asked.id,
-                mode === "self" ? chipId : "",
+                sentChip,
                 asked.terms,
-                mode === "self" ? (asked.chips.find((chip) => chip.id === chipId)?.label ?? "") : ""
+                // The chip's own words, empty when they wrote instead — the words they wrote travel
+                // beside it rather than standing in for a chip that was never chosen.
+                asked.chips.find((chip) => chip.id === chipId)?.label ?? "",
+                sentText
             );
             // ── Debug log: what the backend/AI decided ───────────────────
             console.log("[Reflection] RESULT", JSON.stringify({
@@ -340,14 +381,24 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setRetargeted(result.nextQuestion ? { number: question + 1, question: result.nextQuestion } : null);
             setPhase("feedback");
 
-            // THE CHIP BELONGS ON THE STUDENT'S ROW.
+            // THE ANSWER BELONGS ON THE STUDENT'S ROW.
             //
             // It used to be written onto the companion's row as well, which made a chip answer look like
             // something the companion had chosen — 68 rows carried it, only 2 answered ones did. The
-            // student's row is now the one row that holds the answer: the question it answered and the
-            // chip that was chosen. Nothing reads the companion's copy.
+            // student's row is now the one row that holds the answer: the question it answered and what
+            // was given, as a chip id or as their own sentence.
             const newEntries: ReflectionHistoryEntry[] = [
-                { role: "student", text: "", insightXp: 0, itemType: item.itemType, itemId: item.itemId, questionId: asked.id, choice: chipId },
+                {
+                    role: "student",
+                    // What they wrote, when they wrote it. This is the only copy of a written answer that
+                    // survives the dialog, so a blank here would lose it.
+                    text: sentText,
+                    insightXp: 0,
+                    itemType: item.itemType,
+                    itemId: item.itemId,
+                    questionId: asked.id,
+                    choice: sentText.length > 0 ? FREE_TEXT_CHOICE : chipId,
+                },
                 { role: "pippin", text: result.feedback, insightXp: result.insightXp, itemType: item.itemType, itemId: item.itemId, questionId: asked.id },
             ];
             setHistory((prev) => [...prev, ...newEntries]);
@@ -368,6 +419,9 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
         if (question < totalQuestions) {
             setQuestion((q) => q + 1);
             setChoice("");
+            // The box belongs to the question it was written for. Carrying it forward would answer the
+            // next question with the previous one's words.
+            setFreeText("");
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
@@ -385,6 +439,7 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
             setItemIndex((i) => i + 1);
             setQuestion(1);
             setChoice("");
+            setFreeText("");
             setFeedback("");
             setNextStep("");
             setEarnedInsight(0);
@@ -532,17 +587,13 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                         {/* The chips ARE the answer, so they sit where the answer goes and carry the
                             "your turn" label themselves. They used to be a row of pills BELOW a text box,
                             deliberately labelled "quick answer" so they would not read as the expected
-                            answer to a reflection the student was meant to write in their own words. There
-                            is nothing to write on those questions, so that framing is gone with the box:
-                            this is the answer, and the label says so.
+                            answer to a reflection the student was meant to write in their own words.
 
-                            The end-of-session reflection is the one question with no chips, and there the
-                            box comes back: nothing about it is graded, so there is nothing to tap. */}
+                            A box is back UNDER the menu rather than above it, and open rather than hidden:
+                            the menu is what makes an answer gradeable against the record, and writing is
+                            for the student whose experience the menu does not contain. */}
                         <span className="buddy-turn__label">{t("reflection-your-turn")}</span>
-                        {/* Every question is a menu, so the chips are the answer and there is nothing to
-                            write. The end-of-session reflection used to be a text box; the pilot has no
-                            consent for collecting children's writing, so it is a menu of true statements
-                            about their session now, with the day's own counts in them. */}
+                        {/* The menu is the answer, and it is what the record can grade. */}
                         <div
                             className="reflection-modal__chips reflection-modal__chips--answer"
                             role="group"
@@ -555,12 +606,45 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
                                     className={`reflection-modal__chip${choice === chip.id ? " reflection-modal__chip--on" : ""}`}
                                     aria-pressed={choice === chip.id}
                                     disabled={loading}
-                                    onClick={() => setChoice(choice === chip.id ? "" : chip.id)}
+                                    onClick={() => {
+                                        setChoice(choice === chip.id ? "" : chip.id);
+                                        // A chip and a sentence are two answers to one question, so
+                                        // tapping one puts the other away rather than leaving both.
+                                        setFreeText("");
+                                    }}
                                 >
                                     {chip.label}
                                 </button>
                             ))}
                         </div>
+
+                        {/* THE BOX IS ALWAYS OPEN, AND THAT IS THE POINT.
+                            A menu can only offer the answers someone thought of in advance, and the
+                            reflection is about an experience only the student had. Behind a button the
+                            box went unopened; open, it says at a glance that writing is allowed.
+                            What they write is judged on its meaning against the same record the chips
+                            are graded against, never on how it is written. */}
+                        <label className="reflection-modal__own-words">
+                            <span className="reflection-modal__own-words-label">{t("reflection-write-own")}</span>
+                            <textarea
+                                className="reflection-modal__own-words-input"
+                                value={freeText}
+                                onChange={(event) => {
+                                    const next = event.target.value.slice(0, MAX_FREE_TEXT);
+                                    setFreeText(next);
+                                    // One answer at a time: writing clears any chip, so the submit
+                                    // button can never carry two answers.
+                                    if (next.trim().length > 0) setChoice("");
+                                }}
+                                placeholder={t("reflection-write-own-placeholder", { buddy: buddyName })}
+                                rows={3}
+                                maxLength={MAX_FREE_TEXT}
+                                disabled={loading}
+                            />
+                            <span className="reflection-modal__own-words-hint">
+                                {t("reflection-write-own-hint")}
+                            </span>
+                        </label>
 
                         {/* Two actions, and they are different things: send the answer the student chose,
                             or have the companion answer this question for them. A chip selects and the

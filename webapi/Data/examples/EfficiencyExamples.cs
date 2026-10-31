@@ -756,7 +756,532 @@ namespace webapi.Data.Examples
                 AgentMessageForSecondSolutionEN = "Calculators and computers are not always available. If you can calculate by hand, you are well prepared in any situation."
             };
 
-            return [substitution1, elimination1, elimination2, substitution2, substitution3, elimination3, elimination4, substitution4, elimination5, substitution5];
+            ExtendedEfficiencyExercise substitution6 = new()
+            {
+                Id = 11,
+                Ordering = 11,
+                TransformationRequired = false,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(4), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(25) }]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-2) }
+                    ]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.None,
+                SecondEquationIsIsolatedIn = IsolatedIn.Second,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(3) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(4) },
+                EfficientMethods = [Method.Substitution],
+                SelfExplanationTasks = [
+                    new()
+                    {
+                        Method = Method.Substitution,
+                        IsSingleChoice = true,
+                        Options = new List<ExtendedOption> {
+                            new()
+                            {
+                                TextDE = "Die zweite Gleichung ist bereits nach y aufgelöst, also kann der Term 2x-2 direkt in die erste Gleichung eingesetzt werden.",
+                                TextEN = "The second equation is already solved for y, so the term 2x-2 can be substituted directly into the first equation.",
+                                IsSolution = true
+                            },
+                            new()
+                            {
+                                TextDE = "Beide Gleichungen müssen zunächst in die Normalform gebracht werden.",
+                                TextEN = "Both equations must first be brought into standard form.",
+                                ReasonDE = "Die zweite Gleichung ist bereits nach y aufgelöst; eine Umformung ist nicht nötig.",
+                                ReasonEN = "The second equation is already solved for y; no transformation is needed.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Die erste Gleichung muss zunächst nach x aufgelöst werden, bevor man einsetzen kann.",
+                                TextEN = "The first equation must first be solved for x before substituting.",
+                                ReasonDE = "Die zweite Gleichung ist bereits nach y aufgelöst und kann so eingesetzt werden, wie sie dasteht.",
+                                ReasonEN = "The second equation is already solved for y and can be substituted exactly as it stands.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Das Gleichsetzungsverfahren ist hier am direktesten, weil y schon freigestellt ist.",
+                                TextEN = "The equalization method is the most direct here because y is already on its own.",
+                                ReasonDE = "Die erste Gleichung ist nicht nach y aufgelöst, sie müsste erst umgeformt werden.",
+                                ReasonEN = "The first equation is not solved for y and would have to be rearranged.",
+                                IsSolution = false
+                            }
+                        }
+                    }
+                ],
+                AgentMessageForSelfExplanationDE = "Erkennst du, dass eine Variable schon freigestellt ist, sparst du dir eine ganze Umformung.",
+                AgentMessageForSelfExplanationEN = "Recognising that a variable is already on its own saves you a whole rearrangement.",
+                AgentMessageForFirstSolutionDE = "Gleichungen geschickt umzustellen ist oft der halbe Weg zum Ziel.",
+                AgentMessageForFirstSolutionEN = "Rearranging an equation cleverly is often half the way to the answer.",
+                AgentMessageForSecondSolutionDE = "In Prüfungen musst du oft verschiedene Ansätze kennen. Der Vergleich bereitet dich darauf vor.",
+                AgentMessageForSecondSolutionEN = "In exams you often need to know different approaches. Comparing them prepares you."
+            };
+
+            ExtendedEfficiencyExercise elimination6 = new()
+            {
+                Id = 12,
+                Ordering = 12,
+                TransformationRequired = false,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(5), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(25) }]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(-5), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(4), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(10) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.None,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(2) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(5) },
+                EfficientMethods = [Method.Elimination],
+                SelfExplanationTasks = [
+                    new()
+                    {
+                        Method = Method.Elimination,
+                        IsSingleChoice = true,
+                        Options = new List<ExtendedOption> {
+                            new()
+                            {
+                                TextDE = "Addiert man beide Gleichungen, fällt x weg, weil 5 und -5 sich aufheben.",
+                                TextEN = "Adding both equations removes x, because 5 and -5 cancel each other out.",
+                                IsSolution = true
+                            },
+                            new()
+                            {
+                                TextDE = "Die zweite Gleichung muss zunächst nach x aufgelöst werden, bevor man einsetzen kann.",
+                                TextEN = "The second equation must first be solved for x before substituting.",
+                                ReasonDE = "Das Additionsverfahren ist ohne jede Umformung anwendbar.",
+                                ReasonEN = "The addition method can be applied without any transformation.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Beide Gleichungen sind bereits nach y aufgelöst und können gleichgesetzt werden.",
+                                TextEN = "Both equations are already solved for y and can be equated.",
+                                ReasonDE = "In der ersten steht 3y, in der zweiten 4y; keine ist nach y aufgelöst.",
+                                ReasonEN = "The first has 3y and the second 4y; neither is solved for y.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Die erste Gleichung muss mit 2 multipliziert werden, um y zu entfernen.",
+                                TextEN = "The first equation must be multiplied by 2 to remove y.",
+                                ReasonDE = "Addieren entfernt bereits x; eine Multiplikation ist nicht nötig.",
+                                ReasonEN = "Adding already removes x; no multiplication is needed.",
+                                IsSolution = false
+                            }
+                        }
+                    }
+                ],
+                AgentMessageForSelfExplanationDE = "Gleiche Koeffizienten mit verschiedenem Vorzeichen sind das klarste Signal für das Additionsverfahren.",
+                AgentMessageForSelfExplanationEN = "Equal coefficients with opposite signs are the clearest signal for the addition method.",
+                AgentMessageForFirstSolutionDE = "Erkennst du das Muster, brauchst du keinen einzigen Zwischenschritt.",
+                AgentMessageForFirstSolutionEN = "Once you spot the pattern you need not a single intermediate step.",
+                AgentMessageForSecondSolutionDE = "Manuelles Rechnen macht dich schneller und sicherer im Erkennen solcher Muster.",
+                AgentMessageForSecondSolutionEN = "Working by hand makes you faster and surer at spotting patterns like this."
+            };
+
+            ExtendedEfficiencyExercise equalization1 = new()
+            {
+                Id = 13,
+                Ordering = 13,
+                TransformationRequired = false,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-10) }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(-1), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(6) }
+                    ]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.Second,
+                SecondEquationIsIsolatedIn = IsolatedIn.Second,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(4) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(2) },
+                EfficientMethods = [Method.Equalization],
+                SelfExplanationTasks = [
+                    new()
+                    {
+                        Method = Method.Equalization,
+                        IsSingleChoice = true,
+                        Options = new List<ExtendedOption> {
+                            new()
+                            {
+                                TextDE = "Beide Gleichungen sind bereits nach y aufgelöst, also können die Terme direkt gleichgesetzt werden.",
+                                TextEN = "Both equations are already solved for y, so the terms can be equated directly.",
+                                IsSolution = true
+                            },
+                            new()
+                            {
+                                TextDE = "Die zweite Gleichung muss zunächst nach y aufgelöst werden.",
+                                TextEN = "The second equation must first be solved for y.",
+                                ReasonDE = "Die zweite Gleichung ist bereits nach y aufgelöst.",
+                                ReasonEN = "The second equation is already solved for y.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Das Subtrahieren der ersten von der zweiten Gleichung entfernt y.",
+                                TextEN = "Subtracting the first equation from the second removes y.",
+                                ReasonDE = "Beim Subtrahieren bleibt -4x + 16 stehen; y fällt zwar weg, dafür war aber keine Umformung nötig.",
+                                ReasonEN = "Subtracting leaves -4x + 16; y does drop out, but no transformation was needed for that.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Die erste Gleichung muss zunächst nach x aufgelöst werden, bevor das Verfahren angewendet werden kann.",
+                                TextEN = "The first equation must first be solved for x before the method can be applied.",
+                                ReasonDE = "Sie ist nach y aufgelöst, und genau das braucht das Gleichsetzen.",
+                                ReasonEN = "It is solved for y, which is exactly what equating needs.",
+                                IsSolution = false
+                            }
+                        }
+                    }
+                ],
+                AgentMessageForSelfExplanationDE = "Stehen beide Gleichungen schon nach derselben Variablen da, ist Gleichsetzen der kürzeste Weg.",
+                AgentMessageForSelfExplanationEN = "When both equations already stand solved for the same variable, equating them is the shortest route.",
+                AgentMessageForFirstSolutionDE = "Ein Blick auf die Form spart dir oft mehrere Rechenschritte.",
+                AgentMessageForFirstSolutionEN = "A glance at the shape often saves you several steps of working.",
+                AgentMessageForSecondSolutionDE = "Verschiedene Wege zu kennen macht dich beim Lösen von Aufgaben flexibler.",
+                AgentMessageForSecondSolutionEN = "Knowing several routes makes you more flexible at solving problems."
+            };
+
+            ExtendedEfficiencyExercise elimination7 = new()
+            {
+                Id = 14,
+                Ordering = 14,
+                TransformationRequired = true,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(5), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(17) }]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(6), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-2), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(0) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.None,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(1) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(3) },
+                EfficientMethods = [Method.Elimination],
+                SelfExplanationTasks = [
+                    new()
+                    {
+                        Method = Method.Elimination,
+                        IsSingleChoice = true,
+                        Options = new List<ExtendedOption> {
+                            new()
+                            {
+                                TextDE = "Multipliziert man die erste Gleichung mit 3, steht in beiden 6x; durch Subtrahieren wird x entfernt.",
+                                TextEN = "Multiplying the first equation by 3 gives 6x in both; subtracting removes x.",
+                                IsSolution = true
+                            },
+                            new()
+                            {
+                                TextDE = "Das Einsetzungsverfahren geht hier ohne jede Umformung.",
+                                TextEN = "The substitution method works here without any transformation.",
+                                ReasonDE = "Keine der beiden Gleichungen ist nach einer Variablen aufgelöst.",
+                                ReasonEN = "Neither equation is solved for a variable.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Addiert man beide Gleichungen, fällt y weg.",
+                                TextEN = "Adding both equations removes y.",
+                                ReasonDE = "Addiert erhält man 8x + 3y = 17; keine Variable fällt weg.",
+                                ReasonEN = "Adding gives 8x + 3y = 17; no variable drops out.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Eine einzige Multiplikation genügt nicht, es müssen beide Gleichungen multipliziert werden.",
+                                TextEN = "A single multiplication is not enough; both equations must be multiplied.",
+                                ReasonDE = "Multipliziert man nur die erste Gleichung mit 3, sind die Koeffizienten von x bereits gleich.",
+                                ReasonEN = "Multiplying only the first equation by 3 already lines up the coefficients of x.",
+                                IsSolution = false
+                            }
+                        }
+                    }
+                ],
+                AgentMessageForSelfExplanationDE = "Eine einzige Multiplikation macht aus zwei Gleichungen ein direkt lösbares Additionsverfahren.",
+                AgentMessageForSelfExplanationEN = "A single multiplication turns the two equations into an addition step you can solve directly.",
+                AgentMessageForFirstSolutionDE = "Erst schauen, welcher Faktor die Koeffizienten angleicht, dann rechnen.",
+                AgentMessageForFirstSolutionEN = "First see which factor lines the coefficients up, then calculate.",
+                AgentMessageForSecondSolutionDE = "Wer die Struktur erkennt, spart Zeit und vermeidet Flüchtigkeitsfehler.",
+                AgentMessageForSecondSolutionEN = "Seeing the structure saves time and avoids careless mistakes."
+            };
+
+            ExtendedEfficiencyExercise substitution7 = new()
+            {
+                Id = 15,
+                Ordering = 15,
+                TransformationRequired = false,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(1), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-1) }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(19) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.SecondMultiple,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(5) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(2) },
+                EfficientMethods = [Method.Substitution],
+                SelfExplanationTasks = [
+                    new()
+                    {
+                        Method = Method.Substitution,
+                        IsSingleChoice = true,
+                        Options = new List<ExtendedOption> {
+                            new()
+                            {
+                                TextDE = "Der Term x-1 steht bereits für 2y und passt deshalb direkt auf die 2y in der zweiten Gleichung.",
+                                TextEN = "The term x-1 already stands for 2y and therefore matches the 2y in the second equation directly.",
+                                IsSolution = true
+                            },
+                            new()
+                            {
+                                TextDE = "Die erste Gleichung muss erst nach y aufgelöst werden, weil dort 2y steht.",
+                                TextEN = "The first equation must first be solved for y because it contains 2y.",
+                                ReasonDE = "Der Term x-1 steht für 2y und passt genau auf die 2y in der zweiten Gleichung.",
+                                ReasonEN = "The term x-1 stands for 2y and matches the 2y in the second equation exactly.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Durch Addieren der beiden Gleichungen lässt sich y direkt entfernen.",
+                                TextEN = "Adding the two equations removes y directly.",
+                                ReasonDE = "In beiden Gleichungen steht 2y; addiert bleibt 4y stehen.",
+                                ReasonEN = "Both equations contain 2y; adding leaves 4y in place.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Beide Gleichungen sind nach x aufgelöst und können gleichgesetzt werden.",
+                                TextEN = "Both equations are solved for x and can be equated.",
+                                ReasonDE = "Nur die erste Gleichung stellt einen Term für sich allein; die zweite ist das nicht.",
+                                ReasonEN = "Only the first equation isolates a term; the second does not.",
+                                IsSolution = false
+                            }
+                        }
+                    }
+                ],
+                AgentMessageForSelfExplanationDE = "Steht auf beiden Seiten dasselbe Vielfache einer Variablen, kannst du den ganzen Term austauschen.",
+                AgentMessageForSelfExplanationEN = "When the same multiple of a variable appears on both sides, you can swap the whole term.",
+                AgentMessageForFirstSolutionDE = "Auch ein Koeffizient ungleich 1 ist kein Hindernis, wenn der passende Term schon dasteht.",
+                AgentMessageForFirstSolutionEN = "A coefficient other than 1 is no obstacle when the matching term is already there.",
+                AgentMessageForSecondSolutionDE = "Genau hinzuschauen lohnt sich: oft passt der Term, ohne dass du umformen musst.",
+                AgentMessageForSecondSolutionEN = "It pays to look closely: often the term fits without any rearrangement."
+            };
+
+            ExtendedEfficiencyExercise elimination8 = new()
+            {
+                Id = 16,
+                Ordering = 16,
+                TransformationRequired = true,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(4), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(18) }]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(5), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(19) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.None,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(3) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(2) },
+                EfficientMethods = [Method.Elimination],
+                SelfExplanationTasks = [
+                    new()
+                    {
+                        Method = Method.Elimination,
+                        IsSingleChoice = true,
+                        Options = new List<ExtendedOption> {
+                            new()
+                            {
+                                TextDE = "Multipliziert man die erste mit 3 und die zweite mit 4, steht in beiden 12x; Subtrahieren entfernt x.",
+                                TextEN = "Multiplying the first by 3 and the second by 4 gives 12x in both; subtracting removes x.",
+                                IsSolution = true
+                            },
+                            new()
+                            {
+                                TextDE = "Addiert man beide Gleichungen, fällt eine Variable weg.",
+                                TextEN = "Adding both equations removes one variable.",
+                                ReasonDE = "Addiert erhält man 7x + 8y = 37; keine Variable fällt weg.",
+                                ReasonEN = "Adding gives 7x + 8y = 37; no variable drops out.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Das Einsetzungsverfahren ist hier ohne Umformung anwendbar.",
+                                TextEN = "The substitution method can be applied here without any transformation.",
+                                ReasonDE = "Keine Gleichung ist nach einer Variablen aufgelöst.",
+                                ReasonEN = "No equation is solved for a variable.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Eine einzige Multiplikation genügt, um die Koeffizienten anzugleichen.",
+                                TextEN = "A single multiplication is enough to line up the coefficients.",
+                                ReasonDE = "Die Koeffizienten sind 4 und 3 sowie 3 und 5; es braucht zwei Multiplikationen.",
+                                ReasonEN = "The coefficients are 4 and 3, and 3 and 5; two multiplications are needed.",
+                                IsSolution = false
+                            }
+                        }
+                    }
+                ],
+                AgentMessageForSelfExplanationDE = "Zwei Multiplikationen sind kein Umweg, sondern der schnellste Weg zu einer Gleichung mit einer Variablen.",
+                AgentMessageForSelfExplanationEN = "Two multiplications are not a detour, they are the fastest way to an equation with one variable.",
+                AgentMessageForFirstSolutionDE = "Systematisch den kleinsten gemeinsamen Faktor suchen, dann geht es zügig.",
+                AgentMessageForFirstSolutionEN = "Look systematically for the smallest common factor and it goes quickly.",
+                AgentMessageForSecondSolutionDE = "Solche Aufgaben schulen den Blick für Strukturen, die in Prüfungen Zeit sparen.",
+                AgentMessageForSecondSolutionEN = "Tasks like this train your eye for structure, which saves time in exams."
+            };
+
+            ExtendedEfficiencyExercise substitution8 = new()
+            {
+                Id = 17,
+                Ordering = 17,
+                TransformationRequired = false,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3) },
+                        new() { Coefficient = new Coefficient(-1), Variable = Identifier.Y }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(4), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(8) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.First,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(-1) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(4) },
+                EfficientMethods = [Method.Substitution],
+                SelfExplanationTasks = [
+                    new()
+                    {
+                        Method = Method.Substitution,
+                        IsSingleChoice = true,
+                        Options = new List<ExtendedOption> {
+                            new()
+                            {
+                                TextDE = "Die erste Gleichung ist bereits nach x aufgelöst, also kann der Term 3-y direkt in die zweite Gleichung eingesetzt werden.",
+                                TextEN = "The first equation is already solved for x, so the term 3-y can be substituted directly into the second equation.",
+                                IsSolution = true
+                            },
+                            new()
+                            {
+                                TextDE = "Die erste Gleichung muss zuerst nach y aufgelöst werden.",
+                                TextEN = "The first equation must first be solved for y.",
+                                ReasonDE = "Sie ist nach x aufgelöst, und genau das braucht das Einsetzen.",
+                                ReasonEN = "It is solved for x, which is exactly what substituting needs.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Subtrahiert man die zweite von der ersten Gleichung, fällt eine Variable weg.",
+                                TextEN = "Subtracting the second equation from the first removes a variable.",
+                                ReasonDE = "Subtrahiert erhält man -3x - 2y = -5; keine Variable fällt weg.",
+                                ReasonEN = "Subtracting gives -3x - 2y = -5; no variable drops out.",
+                                IsSolution = false
+                            },
+                            new()
+                            {
+                                TextDE = "Ein negatives Ergebnis kann bei dieser Aufgabe nicht herauskommen.",
+                                TextEN = "A negative result cannot come out of this task.",
+                                ReasonDE = "Setzt man ein, erhält man y = 4 und x = -1; ein negatives Ergebnis ist also möglich.",
+                                ReasonEN = "Substituting gives y = 4 and x = -1, so a negative result is possible.",
+                                IsSolution = false
+                            }
+                        }
+                    }
+                ],
+                AgentMessageForSelfExplanationDE = "Ein negatives Ergebnis ist kein Fehler. Es zeigt nur, wo der Punkt auf der Zahlengeraden liegt.",
+                AgentMessageForSelfExplanationEN = "A negative result is not a mistake. It only shows where the point sits on the number line.",
+                AgentMessageForFirstSolutionDE = "Ein freigestellter Term ist immer eine Einladung zum Einsetzen, auch mit Minus.",
+                AgentMessageForFirstSolutionEN = "A term on its own is always an invitation to substitute, minus sign or not.",
+                AgentMessageForSecondSolutionDE = "Wer mit negativen Zahlen sicher umgeht, lässt sich davon nicht aus dem Konzept bringen.",
+                AgentMessageForSecondSolutionEN = "Being confident with negative numbers keeps you from losing your thread."
+            };
+
+            return [substitution1, elimination1, elimination2, substitution2, substitution3, elimination3, elimination4, substitution4, elimination5, substitution5, substitution6, elimination6, equalization1, elimination7, substitution7, elimination8, substitution8];
         }
     }
 }

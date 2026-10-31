@@ -111,11 +111,26 @@ namespace webapi.Controllers
             // /proc lookup on Linux and nothing about it changes while the process lives.
             var started = ProcessStartUtc;
 
+            // How the accounts are split between the two arms. A condition that was never assigned reads
+            // as treatment, so this is the one number that says whether a study is about to run with a
+            // control group or with nobody in it.
+            //
+            // The column is ensured first so that a deployment whose database predates it reports the
+            // treatment count rather than an empty list — the answer to "is anything in the control arm"
+            // must not be a shape that also means "this database is too old to say".
+            StudentCondition.EnsureColumn(conn);
+            var conditions = conn.Query<(string Condition, long Accounts)>(
+                    $"SELECT COALESCE(NULLIF(TRIM({StudentCondition.ColumnName}), ''), '{StudentCondition.Treatment}') AS Condition, " +
+                    $"COUNT(*) AS Accounts FROM {StudentDBSettings.TableName} GROUP BY 1 ORDER BY 1")
+                .Select(row => (object)new { condition = StudentCondition.Normalize(row.Condition), accounts = row.Accounts })
+                .ToList();
+
             return Ok(new
             {
                 database = DBSettings.GetDBLocation(DBSettings.StudentsDB),
                 totalRows = counts.Sum(entry => entry.rows),
                 tables = counts,
+                conditions,
                 walBytes,
                 downloadIsCurrent = walBytes == 0,
                 startedAtUtc = started.ToString("yyyy-MM-ddTHH:mm:ssZ"),
@@ -317,6 +332,100 @@ namespace webapi.Controllers
         }
 
         /// <summary>
+        /// Assigns the study arm to accounts, by username prefix or by name.
+        ///
+        /// WHY THIS IS SEPARATE FROM CREATING THEM. The accounts are made first and the split is decided
+        /// afterwards — that is the order the study actually runs in, and a prefix in the username would
+        /// freeze the decision at creation time into something that cannot be changed without renaming
+        /// everybody. Reversible on purpose: assigning again is how a mistake is undone.
+        ///
+        /// DRY BY DEFAULT, like the delete next door, and for the same reason: this route can move a whole
+        /// class from one arm to the other in one call, and the call that was meant to be a rehearsal
+        /// should not be the one that did it.
+        /// </summary>
+        [HttpPost("students/condition")]
+        public ActionResult SetCondition([FromBody] AdminConditionRequest request)
+        {
+            if (ResetKey is null) return NotFound();
+            if (!Authorized()) return Unauthorized();
+
+            var requested = (request.Condition ?? "").Trim();
+            if (!string.Equals(requested, StudentCondition.Control, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(requested, StudentCondition.Treatment, StringComparison.OrdinalIgnoreCase))
+                return BadRequest($"condition must be \"{StudentCondition.Control}\" or \"{StudentCondition.Treatment}\". Nothing was changed.");
+
+            var condition = StudentCondition.Normalize(requested);
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            StudentCondition.EnsureColumn(conn);
+
+            var matched = ResolveAccounts(conn, request);
+            if (matched is null)
+                return BadRequest("Give usernames, or a usernamePrefix of at least 2 characters. Nothing was changed.");
+
+            if (matched.Count == 0)
+                return BadRequest("No account matched. Nothing was changed.");
+
+            var ids = matched.Select(entry => entry.Id).ToList();
+            var accounts = matched.Select(entry => new { id = entry.Id, username = entry.Username }).ToList();
+
+            if (request.DryRun)
+                return Ok(new { dryRun = true, condition, accounts, changed = 0 });
+
+            var changed = conn.Execute(
+                $"UPDATE {StudentDBSettings.TableName} SET {StudentCondition.ColumnName} = @Condition WHERE Id IN @Ids",
+                new { Condition = condition, Ids = ids });
+
+            // The assignment is a write like any other, so a copy of the file that skips the write-ahead log
+            // would still show the old arm — and the arm is the one column an analysis depends on.
+            conn.Query("PRAGMA wal_checkpoint(TRUNCATE)");
+
+            logger.LogWarning(
+                "[Admin] Set condition '{Condition}' on {Changed} account(s).", condition, changed);
+
+            return Ok(new { dryRun = false, condition, accounts, changed });
+        }
+
+        /// <summary>
+        /// The accounts a condition request names, or null when it names none.
+        ///
+        /// By prefix for the same reason the delete uses one — the accounts belong to a family
+        /// (`jpstudent01` … `jpstudent60`) — and by explicit name so a handful can be corrected without
+        /// matching a pattern. `%` and `_` are escaped, because LIKE would otherwise read them as wildcards
+        /// and a prefix containing one would match far more than it says.
+        /// </summary>
+        private static List<(long Id, string Username)>? ResolveAccounts(
+            Microsoft.Data.Sqlite.SqliteConnection conn, AdminConditionRequest request)
+        {
+            var names = (request.Usernames ?? [])
+                .Select(name => (name ?? "").Trim())
+                .Where(name => name.Length > 0)
+                .ToList();
+
+            if (names.Count > 0)
+            {
+                return conn.Query<(long Id, string Username)>(
+                        $"SELECT Id, Username FROM {StudentDBSettings.TableName} WHERE Username IN @Names COLLATE NOCASE ORDER BY Username",
+                        new { Names = names })
+                    .ToList();
+            }
+
+            var prefix = (request.UsernamePrefix ?? "").Trim();
+            if (prefix.Length < 2) return null;
+
+            var pattern = prefix
+                .Replace("\\", "\\\\")
+                .Replace("%", "\\%")
+                .Replace("_", "\\_") + "%";
+
+            return conn.Query<(long Id, string Username)>(
+                    $"SELECT Id, Username FROM {StudentDBSettings.TableName} WHERE Username LIKE @Pattern ESCAPE '\\' ORDER BY Username",
+                    new { Pattern = pattern })
+                .ToList();
+        }
+
+        /// <summary>
         /// Every table that holds something about a student, found rather than listed.
         ///
         /// Found, because a hardcoded list is wrong the moment a table is added, and being wrong here
@@ -360,6 +469,28 @@ namespace webapi.Controllers
         /// wants before its first session; false is a full reset.
         /// </summary>
         public bool KeepAccounts { get; set; } = true;
+    }
+
+    /// <summary>
+    /// The body of a study-arm assignment. `Condition` must be "control" or "treatment", and the accounts
+    /// are named either by <see cref="Usernames"/> or by <see cref="UsernamePrefix"/>.
+    /// </summary>
+    public class AdminConditionRequest
+    {
+        /// <summary>"control" or "treatment".</summary>
+        public string Condition { get; set; } = "";
+
+        /// <summary>Accounts named outright. Wins over the prefix when both are given.</summary>
+        public string[]? Usernames { get; set; }
+
+        /// <summary>Usernames starting with this are assigned. At least 2 characters.</summary>
+        public string UsernamePrefix { get; set; } = "";
+
+        /// <summary>
+        /// True unless the caller says otherwise, so a call that forgets this flag reports which accounts
+        /// it would move rather than moving a whole class between arms.
+        /// </summary>
+        public bool DryRun { get; set; } = true;
     }
 
     /// <summary>

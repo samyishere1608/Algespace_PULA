@@ -271,7 +271,16 @@ export async function evaluateReflection(
     questionId?: string,
     choice?: string,
     subjectTerms?: string[],
-    choiceLabel?: string
+    choiceLabel?: string,
+    /**
+     * The student's own words, when they answered by writing instead of tapping.
+     *
+     * A menu can only offer the answers someone thought of in advance, so every question also allows
+     * this. `choice` is then empty, which the server reads as "nothing was claimed from the menu", and
+     * the sentence is judged on its meaning against the question's own record before anything is
+     * awarded — it is never weighed for how well it was written.
+     */
+    freeText?: string
 ): Promise<ReflectionEvaluateResult> {
     const { data } = await axios.post<ReflectionEvaluateResult>(`${BACKEND}/student-progress/reflection/evaluate`, {
         studentId,
@@ -287,7 +296,10 @@ export async function evaluateReflection(
         // because a reply that says "step-solve" is a reply about our data structure, not about
         // their work.
         choiceLabel: choiceLabel ?? "",
-        subjectTerms: subjectTerms ?? [],    });
+        // What they wrote, when they wrote instead of choosing.
+        freeText: freeText ?? "",
+        subjectTerms: subjectTerms ?? [],
+    });
     return data;
 }
 

@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { NudgeContext, type AskNudge, type NudgeContextValue } from "@/contexts/nudgeContext.ts";
 import { getAvoidanceProfile } from "@utils/avoidanceProfile.ts";
 import { getNudgeMemory, setNudgeMemory, shouldRaiseNudge, type NudgeResponse } from "@utils/nudges.ts";
+import { isControlStudent } from "@utils/studyCondition.ts";
 
 /**
  * The one chance to change a decline.
@@ -49,6 +50,13 @@ export function NudgeProvider({ children }: { children: ReactNode }): ReactEleme
 
     const ask = useCallback<AskNudge>((offer) => {
         if (!student) return Promise.resolve(false);
+
+        // NO NUDGE IN THE CONTROL ARM. The nudge is the treatment's most explicit piece of teaching —
+        // it names a pattern the student has been avoiding and offers to undo a decline — so a control
+        // student must never see it. Gated here rather than at the six call sites: every dialog reaches
+        // the nudge through this one function, and a seventh added later gets the gate for free.
+        if (isControlStudent(student)) return Promise.resolve(false);
+
         if (inFlight.current.has(offer.element)) return Promise.resolve(false);
 
         inFlight.current.add(offer.element);

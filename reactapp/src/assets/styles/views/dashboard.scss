@@ -3660,6 +3660,57 @@
     }
 }
 
+/* The own-words box under the menu.
+
+   Always open rather than hidden behind an option, so a student sees at a glance that writing is
+   allowed: a box behind a button is a box most of them never open. The caption is a peer of "Your
+   turn" rather than a heading, and the box is styled like the chips it sits under. */
+.reflection-modal__own-words {
+    display: block;
+    margin-top: 0.7rem;
+}
+
+.reflection-modal__own-words-label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.reflection-modal__own-words-input {
+    display: block;
+    width: 100%;
+    padding: 0.7rem 0.85rem;
+    border-radius: 0.6rem;
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    background: rgba(1, 38, 56, 0.55);
+    color: #eaf6fb;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    resize: vertical;
+
+    &::placeholder {
+        color: rgba(255, 255, 255, 0.38);
+    }
+
+    &:focus {
+        outline: 2px solid #8ecae6;
+        outline-offset: 1px;
+        border-style: solid;
+    }
+}
+
+.reflection-modal__own-words-hint {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.5);
+}
+
 /* ─── Reflection modal ───────────────────────────────────────── */
 .reflection-modal {
     // An explicit width, not just a max-width. `.modal-content` has no width of its own, so as a

@@ -262,6 +262,55 @@ because a retry that finds the account already created comes back 409 and is rep
 existed" rather than inventing a second row. If it still fails, the reported reason now includes the
 transport cause (`ECONNRESET`, `ENOTFOUND`), not just "fetch failed".
 
+#### Assigning the control and treatment arms
+
+Every account carries a `Condition` column on `Students`, set to `treatment` when the account is
+created. Treatment is the app as it has been: dashboard, goals, reflection, nudges, the companion.
+**Control** is the plain flexibility module — signing in lands on the exercise list, the dashboard
+redirects there, and the exercise runs with no nudge and no companion. The exercise data is recorded
+identically for both arms; that is the measurement, so it is never what differs.
+
+Assignment is a separate step on purpose: accounts are created first and the split is decided after,
+so the arm is a column rather than a rule about the username and can be changed without renaming
+anybody.
+
+```sh
+# What is the split right now?
+node tools/set-condition.mjs --status
+
+# Put jpstudent01..60 in the control arm. Dry run: nothing is written until --apply.
+node tools/set-condition.mjs --condition control --from 1 --to 60
+node tools/set-condition.mjs --condition control --from 1 --to 60 --apply
+
+# Correct a handful by name, or put them back
+node tools/set-condition.mjs --names jpstudent07,jpstudent12 --condition control --apply
+node tools/set-condition.mjs --names jpstudent07,jpstudent12 --condition treatment --apply
+```
+
+`--base` and `--admin-key` default to the local API; on the deployment pass
+`--base https://YOUR-API-HOST --admin-key THE_ADMIN_KEY`, or set `ALGESPACE_ADMIN_KEY`. The tool prints
+the names it matched, refuses to send an empty list, and then re-reads `/admin/status` so the split you
+see is the database's, not a summary of the request.
+
+The route behind it is `POST /admin/students/condition`, if it is ever needed without the tool. It
+takes `usernames` (which wins) or a `usernamePrefix` of at least two characters, and is a dry run
+unless `dryRun` is false:
+
+```sh
+curl -X POST https://YOUR-API-HOST/admin/students/condition \
+     -H "X-Admin-Key: $ADMIN_KEY" -H "Content-Type: application/json" \
+     -d '{"usernames":["jpstudent01","jpstudent02"],"condition":"control","dryRun":false}'
+```
+
+`/admin/status` reports `conditions`, the count per arm, which is the one number that says whether a
+study is about to run with a control group or with nobody in it. An account whose value cannot be read
+counts as treatment everywhere, so a mistake is biased towards the arm that gets more, never the other
+way.
+
+**A control student must sign in again after being assigned.** The arm travels with the sign-in
+response and is stored with the session, so a browser that is already signed in keeps the arm it
+signed in with.
+
 #### Emptying the student database before a study
 
 ```sh

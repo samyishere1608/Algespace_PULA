@@ -15,6 +15,14 @@ namespace webapi.Models.Student
 
         public string CreatedAt { get; set; }
 
+        /// <summary>
+        /// "treatment" or "control" — see <see cref="StudentCondition"/>.
+        ///
+        /// Mapped from the column Dapper reads, and normalised on the way out so a value that predates this
+        /// property, or one written by hand with different casing, arrives as the treatment arm.
+        /// </summary>
+        public string Condition { get; set; } = StudentCondition.Treatment;
+
         // Parameterless constructor for Dapper property mapping
         public SerializedStudent() { }
 
@@ -33,7 +41,8 @@ namespace webapi.Models.Student
             {
                 Id = Id,
                 Username = Username,
-                CreatedAt = CreatedAt
+                CreatedAt = CreatedAt,
+                Condition = StudentCondition.Normalize(Condition)
             };
         }
 
@@ -58,8 +67,11 @@ namespace webapi.Models.Student
     {
         public const string TableName = "Students";
 
-        public const string TableScheme = "Id INTEGER PRIMARY KEY AUTOINCREMENT, Username TEXT UNIQUE NOT NULL, Salt TEXT NOT NULL, Password TEXT NOT NULL, CreatedAt TEXT NOT NULL";
+        public const string TableScheme = "Id INTEGER PRIMARY KEY AUTOINCREMENT, Username TEXT UNIQUE NOT NULL, Salt TEXT NOT NULL, Password TEXT NOT NULL, CreatedAt TEXT NOT NULL, Condition TEXT NOT NULL DEFAULT 'treatment'";
 
+        // Condition is deliberately NOT in the column list: every account this app creates is treatment,
+        // and letting the DEFAULT decide is what makes that true without the insert having to know the
+        // column exists. The admin route is the only thing that writes it.
         public const string TableColumns = "(Username, Salt, Password, CreatedAt)";
 
         public const string TableValues = "(@Username, @Salt, @Password, @CreatedAt)";

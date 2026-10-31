@@ -28,7 +28,7 @@ namespace webapi.Models.Flexibility
 
         public SolutionStep(ExtendedSolutionStep extendedStep, Language language)
         {
-            Description = language == Language.de ? extendedStep.DescriptionDE : extendedStep.DescriptionEN;
+            Description = ExerciseContentJapanese.Pick(language, extendedStep.DescriptionDE, extendedStep.DescriptionEN);
             Equations = extendedStep.Equations;
         }
     }

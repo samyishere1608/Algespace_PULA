@@ -1157,7 +1157,805 @@ namespace webapi.Data.Examples
                 AgentMessageForSecondSolutionEN = "If you regularly calculate by hand, you will learn to work more accurately and pay attention to details."
             };
 
-            return [equalization1, elimination1, substitution1, equalization2, substitution2, elimination2, equalization3, substitution3, elimination3, equalization4];
+            ExtendedMatchingExercise equalization5 = new()
+            {
+                Id = 11,
+                Ordering = 11,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(1) }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(-1), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(7) }
+                    ]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.Second,
+                SecondEquationIsIsolatedIn = IsolatedIn.Second,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(2) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(5) },
+                Method = Method.Equalization,
+                AlternativeSystems = [
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(13) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(1), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-1), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(-1) }]
+                        }
+                    },
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(1), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(8) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-2), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(4) }]
+                        }
+                    }
+                ],
+                SelfExplanationTask = new ExtendedSelfExplanation()
+                {
+                    Method = Method.Equalization,
+                    IsSingleChoice = false,
+                    Options = new List<ExtendedOption> {
+                        new()
+                        {
+                            TextDE = "Beide Gleichungen sind bereits nach y aufgelöst, daher können die Ausdrücke direkt gleichgesetzt werden.",
+                            TextEN = "Both equations are already solved for y, so the expressions can be equated directly.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Die beiden anderen Systeme müssten zunächst nach derselben Variablen aufgelöst werden.",
+                            TextEN = "The other two systems would first have to be solved for the same variable.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Beide Gleichungen müssen erst in die Normalform gebracht werden.",
+                            TextEN = "Both equations must first be brought into standard form.",
+                            ReasonDE = "Beide liegen schon in der Form y = ... vor.",
+                            ReasonEN = "Both are already in the form y = ...",
+                            IsSolution = false
+                        },
+                        new()
+                        {
+                            TextDE = "Gleichsetzen funktioniert nur, wenn beide Gleichungen nach verschiedenen Variablen aufgelöst sind.",
+                            TextEN = "Equating only works when the two equations are solved for different variables.",
+                            ReasonDE = "Es funktioniert genau dann, wenn beide nach derselben Variablen aufgelöst sind.",
+                            ReasonEN = "It works precisely when both are solved for the same variable.",
+                            IsSolution = false
+                        }
+                    }
+                },
+                AgentMessageForSelfExplanationDE = "Sind beide Gleichungen nach derselben Variablen aufgelöst, kannst du die rechten Seiten gleichsetzen.",
+                AgentMessageForSelfExplanationEN = "When both equations are solved for the same variable, you can equate the right-hand sides.",
+                AgentMessageForFirstSolutionDE = "Erkennst du die Form, brauchst du keinen Zwischenschritt.",
+                AgentMessageForFirstSolutionEN = "Once you recognise the form you need no intermediate step.",
+                AgentMessageForSecondSolutionDE = "Verschiedene Systeme zu vergleichen schärft deinen Blick für die passende Methode.",
+                AgentMessageForSecondSolutionEN = "Comparing different systems sharpens your eye for the right method."
+            };
+
+            ExtendedMatchingExercise elimination4 = new()
+            {
+                Id = 12,
+                Ordering = 12,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(12) }]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-5), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(-9) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.None,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(2) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(3) },
+                Method = Method.Elimination,
+                AlternativeSystems = [
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(5), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(19) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(4), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-3), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(6) }]
+                        }
+                    },
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(1), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(8) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-1), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(1) }]
+                        }
+                    }
+                ],
+                SelfExplanationTask = new ExtendedSelfExplanation()
+                {
+                    Method = Method.Elimination,
+                    IsSingleChoice = false,
+                    Options = new List<ExtendedOption> {
+                        new()
+                        {
+                            TextDE = "In beiden Gleichungen steht 3x; durch Subtrahieren fällt x weg und y bleibt allein übrig.",
+                            TextEN = "Both equations contain 3x; subtracting removes x and leaves y on its own.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "In den beiden anderen Systemen lässt sich ohne vorherige Multiplikation keine Variable entfernen.",
+                            TextEN = "In the other two systems no variable can be removed without multiplying first.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Beide Gleichungen müssen zuerst mit einem Faktor multipliziert werden.",
+                            TextEN = "Both equations must first be multiplied by a factor.",
+                            ReasonDE = "Die Koeffizienten von x sind in beiden Gleichungen bereits gleich.",
+                            ReasonEN = "The coefficients of x are already equal in both equations.",
+                            IsSolution = false
+                        },
+                        new()
+                        {
+                            TextDE = "Durch Addieren der beiden Gleichungen fällt x weg.",
+                            TextEN = "Adding the two equations removes x.",
+                            ReasonDE = "Addiert erhält man 6x - 3y = 3; x bleibt stehen.",
+                            ReasonEN = "Adding gives 6x - 3y = 3; x stays in place.",
+                            IsSolution = false
+                        }
+                    }
+                },
+                AgentMessageForSelfExplanationDE = "Gleiche Koeffizienten heißen: einmal subtrahieren und eine Variable ist weg.",
+                AgentMessageForSelfExplanationEN = "Equal coefficients mean one subtraction and a variable is gone.",
+                AgentMessageForFirstSolutionDE = "Vergleiche die Koeffizienten, bevor du rechnest. Das spart Arbeit.",
+                AgentMessageForFirstSolutionEN = "Compare the coefficients before you calculate. It saves work.",
+                AgentMessageForSecondSolutionDE = "Übung im Kopfrechnen hilft dir, solche Muster schneller zu sehen.",
+                AgentMessageForSecondSolutionEN = "Practising mental arithmetic helps you see patterns like this faster."
+            };
+
+            ExtendedMatchingExercise substitution4 = new()
+            {
+                Id = 13,
+                Ordering = 13,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(4), Variable = Identifier.Y },
+                        new() { Coefficient = new Coefficient(-3) }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(16) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.First,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(5) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(2) },
+                Method = Method.Substitution,
+                AlternativeSystems = [
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(12) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-5), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(-9) }]
+                        }
+                    },
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(5), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(19) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(4), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-3), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(6) }]
+                        }
+                    }
+                ],
+                SelfExplanationTask = new ExtendedSelfExplanation()
+                {
+                    Method = Method.Substitution,
+                    IsSingleChoice = false,
+                    Options = new List<ExtendedOption> {
+                        new()
+                        {
+                            TextDE = "Die erste Gleichung ist bereits nach x aufgelöst, also kann der Term 4y-3 direkt in die zweite Gleichung eingesetzt werden.",
+                            TextEN = "The first equation is already solved for x, so the term 4y-3 can be substituted directly into the second equation.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Die beiden anderen Systeme müssten zunächst nach einer Variablen aufgelöst werden.",
+                            TextEN = "The other two systems would first have to be solved for a variable.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Die erste Gleichung muss zuerst nach y aufgelöst werden.",
+                            TextEN = "The first equation must first be solved for y.",
+                            ReasonDE = "Sie ist nach x aufgelöst, und genau das braucht das Einsetzen.",
+                            ReasonEN = "It is solved for x, which is exactly what substituting needs.",
+                            IsSolution = false
+                        },
+                        new()
+                        {
+                            TextDE = "Subtrahiert man die zweite von der ersten Gleichung, fällt x weg.",
+                            TextEN = "Subtracting the second equation from the first removes x.",
+                            ReasonDE = "Subtrahiert erhält man -x - 3y = 4y - 19; x bleibt stehen.",
+                            ReasonEN = "Subtracting gives -x - 3y = 4y - 19; x stays in place.",
+                            IsSolution = false
+                        }
+                    }
+                },
+                AgentMessageForSelfExplanationDE = "Ein freigestellter Term ist der schnellste Startpunkt: einmal einsetzen und eine Variable ist weg.",
+                AgentMessageForSelfExplanationEN = "A term on its own is the fastest starting point: one substitution and a variable is gone.",
+                AgentMessageForFirstSolutionDE = "Ein Blick genügt, wenn du auf die Form der Gleichungen achtest.",
+                AgentMessageForFirstSolutionEN = "One look is enough when you watch the shape of the equations.",
+                AgentMessageForSecondSolutionDE = "Verschiedene Methoden zu kennen macht dich beim Lösen flexibler.",
+                AgentMessageForSecondSolutionEN = "Knowing several methods makes you more flexible at solving."
+            };
+
+            ExtendedMatchingExercise equalization6 = new()
+            {
+                Id = 14,
+                Ordering = 14,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.Y },
+                        new() { Coefficient = new Coefficient(-4) }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(-1), Variable = Identifier.Y },
+                        new() { Coefficient = new Coefficient(8) }
+                    ]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.First,
+                SecondEquationIsIsolatedIn = IsolatedIn.First,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(5) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(3) },
+                Method = Method.Equalization,
+                AlternativeSystems = [
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(11) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(1), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(13) }]
+                        }
+                    },
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(4), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-1), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(6) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(16) }]
+                        }
+                    }
+                ],
+                SelfExplanationTask = new ExtendedSelfExplanation()
+                {
+                    Method = Method.Equalization,
+                    IsSingleChoice = false,
+                    Options = new List<ExtendedOption> {
+                        new()
+                        {
+                            TextDE = "Beide Gleichungen sind bereits nach x aufgelöst, daher können die Terme direkt gleichgesetzt werden.",
+                            TextEN = "Both equations are already solved for x, so the terms can be equated directly.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Die beiden anderen Systeme müssten zunächst nach derselben Variablen aufgelöst werden.",
+                            TextEN = "The other two systems would first have to be solved for the same variable.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Beide Gleichungen müssen erst nach x aufgelöst werden.",
+                            TextEN = "Both equations must first be solved for x.",
+                            ReasonDE = "Beide sind schon nach x aufgelöst.",
+                            ReasonEN = "Both are already solved for x.",
+                            IsSolution = false
+                        },
+                        new()
+                        {
+                            TextDE = "Gleichsetzen funktioniert nur bei Systemen in der Form y = ...",
+                            TextEN = "Equating only works for systems in the form y = ...",
+                            ReasonDE = "Es funktioniert mit jeder Variablen, solange beide nach derselben aufgelöst sind.",
+                            ReasonEN = "It works with any variable, as long as both are solved for the same one.",
+                            IsSolution = false
+                        }
+                    }
+                },
+                AgentMessageForSelfExplanationDE = "Die Variable ist egal. Entscheidend ist, dass beide Gleichungen nach derselben aufgelöst sind.",
+                AgentMessageForSelfExplanationEN = "The variable does not matter. What matters is that both are solved for the same one.",
+                AgentMessageForFirstSolutionDE = "Achte auf die Form, nicht auf den Buchstaben.",
+                AgentMessageForFirstSolutionEN = "Watch the shape, not the letter.",
+                AgentMessageForSecondSolutionDE = "Erst prüfen, dann rechnen: Das spart viele Schritte.",
+                AgentMessageForSecondSolutionEN = "Check first, then calculate: it saves many steps."
+            };
+
+            ExtendedMatchingExercise elimination5 = new()
+            {
+                Id = 15,
+                Ordering = 15,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(5), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(24) }]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(5), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-3), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(-11) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.None,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(2) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(7) },
+                Method = Method.Elimination,
+                AlternativeSystems = [
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                            RightTerms =
+                            [
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.Y },
+                                new() { Coefficient = new Coefficient(-1) }
+                            ]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(11) }]
+                        }
+                    },
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(5), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(19) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(4), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-3), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(6) }]
+                        }
+                    }
+                ],
+                SelfExplanationTask = new ExtendedSelfExplanation()
+                {
+                    Method = Method.Elimination,
+                    IsSingleChoice = false,
+                    Options = new List<ExtendedOption> {
+                        new()
+                        {
+                            TextDE = "In beiden Gleichungen steht 5x; subtrahiert man sie, fällt x weg und y bleibt allein.",
+                            TextEN = "Both equations contain 5x; subtracting them removes x and leaves y on its own.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Die beiden anderen Systeme müssten zuerst mit einem Faktor multipliziert werden.",
+                            TextEN = "The other two systems would first have to be multiplied by a factor.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Addiert man die Gleichungen, fällt eine Variable weg.",
+                            TextEN = "Adding the equations removes one variable.",
+                            ReasonDE = "Addiert erhält man 10x - y = 13; keine Variable fällt weg.",
+                            ReasonEN = "Adding gives 10x - y = 13; no variable drops out.",
+                            IsSolution = false
+                        },
+                        new()
+                        {
+                            TextDE = "Beide Gleichungen müssen zuerst mit einem Faktor multipliziert werden.",
+                            TextEN = "Both equations must first be multiplied by a factor.",
+                            ReasonDE = "Die Koeffizienten von x sind bereits gleich; ein Subtrahieren genügt.",
+                            ReasonEN = "The coefficients of x are already equal; one subtraction is enough.",
+                            IsSolution = false
+                        }
+                    }
+                },
+                AgentMessageForSelfExplanationDE = "Gleiche Koeffizienten mit gleichem Vorzeichen heißen subtrahieren, mit verschiedenem addieren.",
+                AgentMessageForSelfExplanationEN = "Equal coefficients with the same sign mean subtract; with opposite signs, add.",
+                AgentMessageForFirstSolutionDE = "Ein kurzer Blick auf die Vorzeichen sagt dir, ob du addieren oder subtrahieren musst.",
+                AgentMessageForFirstSolutionEN = "A quick look at the signs tells you whether to add or subtract.",
+                AgentMessageForSecondSolutionDE = "Wer beide Fälle unterscheiden kann, ist beim Additionsverfahren sicher.",
+                AgentMessageForSecondSolutionEN = "Telling the two cases apart is what makes you sure with the addition method."
+            };
+
+            ExtendedMatchingExercise substitution5 = new()
+            {
+                Id = 16,
+                Ordering = 16,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-4) }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(5), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(12) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.SecondMultiple,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(2) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(1) },
+                Method = Method.Substitution,
+                AlternativeSystems = [
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(12) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-5), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(-9) }]
+                        }
+                    },
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(1), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(9) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-1), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(8) }]
+                        }
+                    }
+                ],
+                SelfExplanationTask = new ExtendedSelfExplanation()
+                {
+                    Method = Method.Substitution,
+                    IsSingleChoice = false,
+                    Options = new List<ExtendedOption> {
+                        new()
+                        {
+                            TextDE = "Der Term 3x-4 steht bereits für 2y und passt direkt auf die 2y in der zweiten Gleichung.",
+                            TextEN = "The term 3x-4 already stands for 2y and matches the 2y in the second equation directly.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Die beiden anderen Systeme müssten zunächst nach einer Variablen aufgelöst werden.",
+                            TextEN = "The other two systems would first have to be solved for a variable.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Die erste Gleichung muss erst nach y aufgelöst werden.",
+                            TextEN = "The first equation must first be solved for y.",
+                            ReasonDE = "Der Term 3x-4 steht für 2y und passt ohne Umformung.",
+                            ReasonEN = "The term 3x-4 stands for 2y and fits without a transformation.",
+                            IsSolution = false
+                        },
+                        new()
+                        {
+                            TextDE = "Addiert man die Gleichungen, fällt y weg.",
+                            TextEN = "Adding the equations removes y.",
+                            ReasonDE = "In beiden steht 2y; addiert bleibt 4y stehen.",
+                            ReasonEN = "Both contain 2y; adding leaves 4y in place.",
+                            IsSolution = false
+                        }
+                    }
+                },
+                AgentMessageForSelfExplanationDE = "Steht links schon das Vielfache, das rechts gebraucht wird, kannst du den ganzen Term austauschen.",
+                AgentMessageForSelfExplanationEN = "When the multiple you need already stands on the left, you can swap the whole term.",
+                AgentMessageForFirstSolutionDE = "Du musst nicht umformen, wenn der passende Term schon dasteht.",
+                AgentMessageForFirstSolutionEN = "You do not have to rearrange when the matching term is already there.",
+                AgentMessageForSecondSolutionDE = "Genaues Hinschauen spart dir hier einen ganzen Rechenschritt.",
+                AgentMessageForSecondSolutionEN = "Looking closely saves you a whole step of working here."
+            };
+
+            ExtendedMatchingExercise equalization7 = new()
+            {
+                Id = 17,
+                Ordering = 17,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(-3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(11) }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-4) }
+                    ]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.Second,
+                SecondEquationIsIsolatedIn = IsolatedIn.Second,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(3) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(2) },
+                Method = Method.Equalization,
+                AlternativeSystems = [
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(4), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(18) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(5), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(19) }]
+                        }
+                    },
+                    new()
+                    {
+                        FirstEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(1), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(-2), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(1) }]
+                        },
+                        SecondEquation = new LinearEquation
+                        {
+                            LeftTerms =
+                            [
+                                new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }
+                            ],
+                            RightTerms = [new() { Coefficient = new Coefficient(16) }]
+                        }
+                    }
+                ],
+                SelfExplanationTask = new ExtendedSelfExplanation()
+                {
+                    Method = Method.Equalization,
+                    IsSingleChoice = false,
+                    Options = new List<ExtendedOption> {
+                        new()
+                        {
+                            TextDE = "Beide Gleichungen sind nach y aufgelöst, also können die Terme gleichgesetzt werden, auch wenn ein Minus davorsteht.",
+                            TextEN = "Both equations are solved for y, so the terms can be equated even with a minus sign in front.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Die beiden anderen Systeme müssten zunächst nach derselben Variablen aufgelöst werden.",
+                            TextEN = "The other two systems would first have to be solved for the same variable.",
+                            IsSolution = true
+                        },
+                        new()
+                        {
+                            TextDE = "Gleichsetzen funktioniert nicht, wenn ein negativer Koeffizient vorkommt.",
+                            TextEN = "Equating does not work when a negative coefficient appears.",
+                            ReasonDE = "Es funktioniert unabhängig vom Vorzeichen, solange beide nach derselben Variablen aufgelöst sind.",
+                            ReasonEN = "It works regardless of sign, as long as both are solved for the same variable.",
+                            IsSolution = false
+                        },
+                        new()
+                        {
+                            TextDE = "Beide Gleichungen müssen erst in die Normalform gebracht werden.",
+                            TextEN = "Both equations must first be brought into standard form.",
+                            ReasonDE = "Beide liegen bereits in der Form y = ... vor.",
+                            ReasonEN = "Both are already in the form y = ...",
+                            IsSolution = false
+                        }
+                    }
+                },
+                AgentMessageForSelfExplanationDE = "Ein Minus vor dem x ändert nichts am Vorgehen. Gleichsetzen funktioniert trotzdem.",
+                AgentMessageForSelfExplanationEN = "A minus in front of the x changes nothing about the procedure. Equating still works.",
+                AgentMessageForFirstSolutionDE = "Lass dich von Vorzeichen nicht irritieren: Die Form entscheidet, nicht das Minus.",
+                AgentMessageForFirstSolutionEN = "Do not let signs put you off: the shape decides, not the minus.",
+                AgentMessageForSecondSolutionDE = "Sicherheit mit negativen Zahlen macht dich in vielen Aufgaben schneller.",
+                AgentMessageForSecondSolutionEN = "Confidence with negative numbers makes you faster in many tasks."
+            };
+
+            return [equalization1, elimination1, substitution1, equalization2, substitution2, elimination2, equalization3, substitution3, elimination3, equalization4, equalization5, elimination4, substitution4, equalization6, elimination5, substitution5, equalization7];
         }
     }
 }

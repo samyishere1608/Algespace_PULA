@@ -36,6 +36,11 @@ namespace webapi.Services
             // Ensure Students table exists
             DBUtils.CreateOrClearTable(connection, StudentDBSettings.TableName, StudentDBSettings.TableScheme, clearTable: false);
 
+            // The study arm column, which a database created before this feature does not have. Here as
+            // well as on sign-in because registering is the moment an account is created, and an account
+            // that cannot be read on the next request is worse than a column added twice.
+            StudentCondition.EnsureColumn(connection);
+
             // Check username uniqueness
             //
             // COLLATE NOCASE, because the column's own UNIQUE is case-sensitive: without it "Pula-01"
@@ -58,6 +63,10 @@ namespace webapi.Services
         {
             using var connection = DBSettings.GetSQLiteConnectionForStudentsDB();
             connection.Open();
+
+            // Before the read, because the row this is looking for cannot be mapped without the column on
+            // a database that predates it. Idempotent, and a no-op on every request after the first.
+            StudentCondition.EnsureColumn(connection);
 
             // Case-insensitive, and trimmed: a tablet keyboard capitalises the first letter of a
             // username as readily as of a sentence, and a student typing "Jp-test-student-001" means the

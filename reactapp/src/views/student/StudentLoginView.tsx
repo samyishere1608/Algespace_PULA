@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { Paths } from "@routes/paths.ts";
 import { TranslationNamespaces } from "@/i18n.ts";
 import { getOnboardingStep, setOnboardingStep, startOnboardingDemos, syncProgressFromBackend } from "@utils/storageUtils.ts";
+import { isControlStudent } from "@utils/studyCondition.ts";
 import Logo from "@images/home/logo640.png";
 import "@styles/views/login.scss";
 
@@ -118,6 +119,17 @@ export default function StudentLoginView(): ReactElement {
 
             // Restore cross-device progress from the backend before reading onboarding
             await syncProgressFromBackend(student.id);
+
+            // CONTROL ARM: NO DASHBOARD, NO TOUR, STRAIGHT TO THE PLAIN MODULE.
+            //
+            // Checked before the onboarding step is read, because none of it applies: a control student
+            // has no dashboard for the step to lead into, and the tour teaches a system they are not
+            // being given. The exercise list they land on is the one anybody can open, and it is where
+            // every later visit goes too — the dashboard route redirects them back here.
+            if (isControlStudent(student)) {
+                navigate(Paths.FlexibilityPath);
+                return;
+            }
 
             const step = getOnboardingStep(student.id);
 

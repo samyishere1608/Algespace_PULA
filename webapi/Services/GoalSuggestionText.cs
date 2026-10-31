@@ -88,27 +88,29 @@ namespace webapi.Services
             (false, _) => "Balance Your Practice"
         };
 
-        public static string Narrative(bool avoided, int exercises, string leastType, Lang lang)
+        public static string Narrative(bool avoided, int exercises, string leastMethod, Lang lang)
         {
-            var type = DisplayName(leastType, lang);
+            var method = DisplayName(leastMethod, lang);
 
             return (avoided, lang) switch
             {
                 (true, Lang.De) => "Eine Sache lässt du konsequent aus — und das lohnt einen Blick. "
                                  + $"Diese Ziele setzen dort an und runden dein Üben ab: bisher {exercises} Aufgaben, "
-                                 + $"am seltensten {type}.",
+                                 + $"am seltensten mit {method} gelöst.",
                 (true, Lang.Ja) => "いつも見送っていることが一つあります。そこが第一の提案です。"
                                  + $"そこから始めて、練習全体を整えましょう — これまで{exercises}問、"
-                                 + $"最も少ないのは{type}です。",
+                                 + $"最も少ないのは{method}です。",
                 (true, _) => "You consistently pass on one thing, and that is worth a look. These goals start there, "
-                           + $"then round out how you practise — {exercises} exercises in so far, with the least time "
-                           + $"spent on {type}.",
+                           + $"then round out how you practise — {exercises} exercises in so far, with {method} "
+                           + $"the method you have used least.",
                 (false, Lang.De) => "Du lässt dich auf alles ein, was dir begegnet — diese Ziele erweitern dein Üben, "
-                                  + $"statt eine Lücke zu schließen. {type} ist bisher dein seltenster Typ, bei {exercises} Aufgaben.",
+                                  + $"statt eine Lücke zu schließen. {method} hast du bisher am seltensten genutzt, "
+                                  + $"bei {exercises} Aufgaben.",
                 (false, Lang.Ja) => "出されたものにきちんと取り組めています。そこで、穴を埋めるのではなく"
-                                  + $"練習の幅を広げる目標にしました。{exercises}問の中で最も少ないのは{type}です。",
+                                  + $"練習の幅を広げる目標にしました。{exercises}問の中で最も少ないのは{method}です。",
                 (false, _) => "You engage with whatever is put in front of you, so these goals widen what you practise "
-                            + $"rather than fix a gap. {type} is your least-used type so far, out of {exercises} exercises."
+                            + $"rather than fix a gap. {method} is the method you have used least so far, out of "
+                            + $"{exercises} exercises."
             };
         }
 
@@ -141,21 +143,6 @@ namespace webapi.Services
             _ => $"You've passed on comparing methods {declined} of the last {opportunities} times. "
                + "Five tries is enough to find out what happens."
         };
-
-        public static string LeastPractisedReason(int count, int total, string typeValue, Lang lang)
-        {
-            var type = DisplayName(typeValue, lang);
-
-            return lang switch
-            {
-                Lang.De when total == 0 => $"Fang mit {type} an — ein guter Einstieg.",
-                Lang.De => $"{count} von {total} Aufgaben waren {type} — der seltenste der drei Typen.",
-                Lang.Ja when total == 0 => $"{type}から始めてみましょう — 良いスタートです。",
-                Lang.Ja => $"{total}問中{count}問が{type}でした — 3タイプの中で最も少ないです。",
-                _ when total == 0 => $"Start with {type} — a good place to begin.",
-                _ => $"{count} of your {total} exercises were {type} — the fewest of the three types."
-            };
-        }
 
         public static string HintsReason(double average, Lang lang) => lang switch
         {

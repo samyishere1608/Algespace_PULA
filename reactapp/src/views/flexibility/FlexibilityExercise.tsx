@@ -44,6 +44,7 @@ import { getActiveGoals } from "@utils/activeGoals.ts";
 import { GOAL_RESOLVE_XP, asTranslate, describeGoal } from "@utils/goalCatalog.ts";
 import { claimCompletedGoals, earliestGoalStart, fetchGoalEventsAfterExercise } from "@utils/goalProgress.ts";
 import { forgetAvoidanceProfile } from "@utils/avoidanceProfile.ts";
+import { isControlStudent } from "@utils/studyCondition.ts";
 import { AgencyXpToast, showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
 
 export default function FlexibilityExercise({ isStudyExample }: { isStudyExample: boolean }): ReactElement {
@@ -63,6 +64,21 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
     } | null>(null);
 
     const { student } = useAuth();
+
+    /**
+     * WHICH ARM OF THE STUDY THIS STUDENT IS IN.
+     *
+     * A control student works through the same exercises, and every number is recorded exactly as it is
+     * for a treatment student, because the exercise data is the measurement. What differs is only what
+     * they are shown: no dashboard to return to, no nudge, and no companion.
+     *
+     * The companion comes off through the switch the exercise components already have —
+     * `AgentCondition.None` is the "no agent" arm the studies module was built with, and every exercise
+     * reads it to drop the portrait, the popover chrome and the extra agent messages. That is why this
+     * file hardcoded `MotivationalAgent` in six places: it was the only arm the pilot used.
+     */
+    const isControl = isControlStudent(student);
+    const condition: AgentCondition = isControl ? AgentCondition.None : AgentCondition.MotivationalAgent;
 
     // The Solo/Pippin choice screen was removed along with the free-text chat. Every student now
     // goes straight into the exercise. Agency is exercised through the in-exercise decision anchors
@@ -87,12 +103,15 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
      * The flexibility module is also used ON ITS OWN, by students with no account and therefore no
      * dashboard to return to. For them nothing changes: they get the list, exactly as before.
      *
+     * A CONTROL student has an account but no dashboard, so they get the list as well. Sending them to
+     * the dashboard would land them on a redirect back here anyway.
+     *
      * Studies keep the screen they have always had. A study participant must not be handed off to
      * the dashboard mid-sequence, so `isStudyExample` is checked first and wins.
      */
     const leaveTo: string = isStudyExample
         ? Paths.FlexibilityPath
-        : student ? Paths.StudentDashboardPath : Paths.FlexibilityPath;
+        : student && !isControl ? Paths.StudentDashboardPath : Paths.FlexibilityPath;
 
     /**
      * Called by each exercise component when the student finishes.
@@ -102,7 +121,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
      */
     function buildHandleEnd(moduleHome: string, exerciseTypeName: string): (attemptId?: number) => void {
         return function (attemptId?: number) {
-            const navigateTo = student ? Paths.StudentDashboardPath : moduleHome;
+            const navigateTo = student && !isControl ? Paths.StudentDashboardPath : moduleHome;
             const errors = getExerciseErrorCount();
             const hints = getExerciseHintCount();
             const decisions = getExerciseDecisions();
@@ -116,6 +135,22 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
             // and the completion log has nowhere to go.
             if (!student) {
                 window.location.href = navigateTo;
+                return;
+            }
+
+            // CONTROL ARM: THE EXERCISE IS LOGGED, AND THAT IS ALL.
+            //
+            // The completion goes in exactly as it does for everyone else — it is the measurement. What
+            // does not happen is everything that comes after it: there are no goals to check, nothing to
+            // celebrate, and no dashboard to return to. The log is awaited before leaving, because the
+            // post below is otherwise still in flight when the navigation cancels it, and a control row
+            // that never lands is a lost measurement rather than a lost flourish.
+            if (isControl) {
+                void (async () => {
+                    await logExerciseCompletion(student.id, exerciseTypeName, errors, hints, decisions, attemptId);
+                    addAccuracyEntry(student.id, errors, hints);
+                    window.location.href = navigateTo;
+                })();
                 return;
             }
 
@@ -186,7 +221,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                             <ExampleExercise concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId}
                                              flexibilityId={id} navigateBackTo={Paths.FlexibilityStudyExamplesPath} /> :
                             <ExerciseRouter concreteExerciseType={concreteExerciseType as FlexibilityStudyExerciseType} concreteExerciseId={concreteExerciseId} flexibilityId={id}
-                                      navigateBackTo={Paths.FlexibilityPath} buildHandleEnd={buildHandleEnd} />                        }
+                                      navigateBackTo={Paths.FlexibilityPath} buildHandleEnd={buildHandleEnd} condition={condition} />                        }
                     </div>
                 </div>
             </div>
@@ -215,23 +250,30 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
  * route, with a no-op `buildHandleEnd` and with tracking switched off by `PreviewContext`. Sharing
  * this switch is what keeps the two from drifting apart.
  */
-export function ExerciseRouter({ concreteExerciseType, concreteExerciseId, flexibilityId, navigateBackTo, buildHandleEnd }: {
+export function ExerciseRouter({ concreteExerciseType, concreteExerciseId, flexibilityId, navigateBackTo, buildHandleEnd, condition }: {
     concreteExerciseType: FlexibilityStudyExerciseType,
     concreteExerciseId: number;
     flexibilityId: number;
     navigateBackTo: string;
     buildHandleEnd: (navigateTo: string, exerciseTypeName: string) => (attemptId?: number) => void;
+    /**
+     * Which agent arm to run this exercise in. `AgentCondition.None` is the control arm: the exercise is
+     * identical, and only the companion and its messages are dropped.
+     */
+    condition?: AgentCondition;
 }): ReactElement {
+    const arm = condition ?? AgentCondition.MotivationalAgent;
+
     switch (concreteExerciseType) {
         case FlexibilityStudyExerciseType.Suitability:
             return <ExerciseForSuitability concreteExerciseId={concreteExerciseId} flexibilityId={flexibilityId}
-                        handleEnd={buildHandleEnd(navigateBackTo, "Suitability")} />;
+                        handleEnd={buildHandleEnd(navigateBackTo, "Suitability")} condition={arm} />;
         case FlexibilityStudyExerciseType.Efficiency:
             return <ExerciseForEfficiency concreteExerciseId={concreteExerciseId} flexibilityId={flexibilityId}
-                        handleEnd={buildHandleEnd(navigateBackTo, "Efficiency")} />;
+                        handleEnd={buildHandleEnd(navigateBackTo, "Efficiency")} condition={arm} />;
         case FlexibilityStudyExerciseType.Matching:
             return <ExerciseForMatching concreteExerciseId={concreteExerciseId} flexibilityId={flexibilityId}
-                        handleEnd={buildHandleEnd(navigateBackTo, "Matching")} />;
+                        handleEnd={buildHandleEnd(navigateBackTo, "Matching")} condition={arm} />;
         default:
             return <ErrorScreen text={ErrorTranslations.ERROR_EXERCISE_ID} routeToReturn={navigateBackTo} showFrownIcon={true} />;
     }
@@ -265,10 +307,15 @@ function ExampleExercise({ concreteExerciseType, concreteExerciseId, flexibility
     }
 }
 
-function ExerciseForSuitability({ concreteExerciseId, flexibilityId, handleEnd }: {
+function ExerciseForSuitability({ concreteExerciseId, flexibilityId, handleEnd, condition = AgentCondition.MotivationalAgent }: {
     concreteExerciseId: number,
     flexibilityId: number,
     handleEnd: () => void;
+    /**
+     * The arm to run in. Optional because the study-example screens share this wrapper and have always
+     * run the treatment arm; anything that names an arm gets the one it named.
+     */
+    condition?: AgentCondition;
 }): ReactElement {
     const [{ data, loading, error }] = useAxios({
         url: `/flexibility-training/${getCurrentLanguage()}/getSuitabilityExercise/${concreteExerciseId}`
@@ -282,14 +329,15 @@ function ExerciseForSuitability({ concreteExerciseId, flexibilityId, handleEnd }
 
     const exercise: SuitabilityExerciseProps = plainToClass(SuitabilityExerciseProps, data as SuitabilityExerciseProps);
 
-    return <SuitabilityExercise flexibilityExerciseId={flexibilityId} exercise={exercise} condition={AgentCondition.MotivationalAgent}
+    return <SuitabilityExercise flexibilityExerciseId={flexibilityId} exercise={exercise} condition={condition}
                                 handleEnd={handleEnd} />;
 }
 
-function ExerciseForEfficiency({ concreteExerciseId, flexibilityId, handleEnd }: {
+function ExerciseForEfficiency({ concreteExerciseId, flexibilityId, handleEnd, condition = AgentCondition.MotivationalAgent }: {
     concreteExerciseId: number,
     flexibilityId: number,
     handleEnd: () => void;
+    condition?: AgentCondition;
 }): ReactElement {
     const [{ data, loading, error }] = useAxios({
         url: `/flexibility-training/${getCurrentLanguage()}/getEfficiencyExercise/${concreteExerciseId}`
@@ -303,14 +351,15 @@ function ExerciseForEfficiency({ concreteExerciseId, flexibilityId, handleEnd }:
 
     const exercise: EfficiencyExerciseProps = plainToClass(EfficiencyExerciseProps, data as EfficiencyExerciseProps);
 
-    return <EfficiencyExercise flexibilityExerciseId={flexibilityId} exercise={exercise} condition={AgentCondition.MotivationalAgent}
+    return <EfficiencyExercise flexibilityExerciseId={flexibilityId} exercise={exercise} condition={condition}
                                handleEnd={handleEnd} />;
 }
 
-function ExerciseForMatching({ concreteExerciseId, flexibilityId, handleEnd }: {
+function ExerciseForMatching({ concreteExerciseId, flexibilityId, handleEnd, condition = AgentCondition.MotivationalAgent }: {
     concreteExerciseId: number,
     flexibilityId: number,
     handleEnd: () => void;
+    condition?: AgentCondition;
 }): ReactElement {
     const [{ data, loading, error }] = useAxios({
         url: `/flexibility-training/${getCurrentLanguage()}/getMatchingExercise/${concreteExerciseId}`
@@ -324,7 +373,7 @@ function ExerciseForMatching({ concreteExerciseId, flexibilityId, handleEnd }: {
 
     const exercise: MatchingExerciseProps = plainToClass(MatchingExerciseProps, data as MatchingExerciseProps);
 
-    return <MatchingExercise flexibilityExerciseId={flexibilityId} exercise={exercise} condition={AgentCondition.MotivationalAgent}
+    return <MatchingExercise flexibilityExerciseId={flexibilityId} exercise={exercise} condition={condition}
                              handleEnd={handleEnd} isStudy={false} studyId={1} />;
 }
 

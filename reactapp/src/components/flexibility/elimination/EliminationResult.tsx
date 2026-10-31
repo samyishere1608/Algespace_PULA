@@ -215,11 +215,23 @@ export function EliminationResult(
             {t(FlexibilityTranslations.SAMPLE_SOLUTION)}
                 </p>
             )}
-            <button className={"button primary-button help-button flexibility-hint-button"} disabled={true}>
-                <span className={"flexibility-hint-button__avatar"} aria-hidden={true}>
-                    <img src={buddyAvatarSrc} alt={""}/>
+            <button
+                className={`button primary-button help-button flexibility-hint-button${agentType !== undefined ? "" : " flexibility-hint-button--plain"}`}
+                disabled={true}
+            >
+                {/* No companion, no face and no name — see FlexibilityHint for the same rule. This one
+                    is disabled, and it is disabled in both arms: it is a placeholder that keeps the
+                    layout steady while the sample solution is on screen. */}
+                {agentType !== undefined && (
+                    <span className={"flexibility-hint-button__avatar"} aria-hidden={true}>
+                        <img src={buddyAvatarSrc} alt={""}/>
+                    </span>
+                )}
+                <span className={"flexibility-hint-button__label"}>
+                    {agentType !== undefined
+                        ? t(FlexibilityTranslations.HINT_BUTTON_ASK, { buddy: buddyName })
+                        : t(FlexibilityTranslations.HINT_BUTTON_HELP)}
                 </span>
-                <span className={"flexibility-hint-button__label"}>{t(FlexibilityTranslations.HINT_BUTTON_ASK, { buddy: buddyName })}</span>
             </button>
             <div style={{ minHeight: "9rem", minWidth: "1rem" }}></div>
         </React.Fragment>

@@ -23,7 +23,7 @@ Every row below was checked against the live database, not read off the code.
 | Opens the app | Picks his plan for the day - **Practice / Goal / Review** | **No** | Only in his own browser. The XP log shows *that* a plan was made, never *what* he chose. |
 | Sets a goal | Chooses one, e.g. "3 exercises with no hints" | **Partly** | Stored while he is working on it, then **erased when the goal ends**, so its details are gone. If he completes it, a summary line survives; if he just abandons it, nothing does. |
 | Removes a goal | Deletes a goal he had set | **No** | Nothing at all. The row is simply deleted. |
-| Starts an exercise | Opens one of the 33 exercises | **Yes** | An attempt row, with the start time and which exercise it was. |
+| Starts an exercise | Opens one of the 51 exercises | **Yes** | An attempt row, with the start time and which exercise it was. |
 | Makes the decisions inside it | Says **Yes** or **No** to working it out himself, to explaining his reasoning, to comparing two methods | **Yes, in detail** | One row per decision: which decision it was, what he chose, and when. This part is the strongest of the lot - see the counts below. |
 | Makes mistakes, takes hints | Each error, each hint | **Yes** | Counted per exercise, per attempt. |
 | Finishes the exercise | Completes it | **Yes** | The same attempt row, now with the end time, total time, total errors, total hints. |

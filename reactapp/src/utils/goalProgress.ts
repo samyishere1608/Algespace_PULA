@@ -74,9 +74,6 @@ function matches(goal: StudyGoal, event: GoalEvent): boolean {
             // recorded — a student who opened an exercise and closed it still spent the time.
             return goal.focus === null || event.method === goal.focus;
 
-        case "exerciseType":
-            return goal.focus === null || event.exerciseType === goal.focus;
-
         case "selfExplanation":
             return event.selfExplanation;
 

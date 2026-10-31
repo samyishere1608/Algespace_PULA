@@ -11,6 +11,7 @@
   "button-subtract": "Subtrahiere",
   "button-try-again": "Neuer Versuch",
   "hint-button-ask": "{{buddy}} fragen",
+  "hint-button-help": "Hilfe",
   "system-introduction": "Betrachte das folgende lineare Gleichungssystem (LGS):",
   "solving-system-instruction": "Löse das folgende lineare Gleichungssystem (LGS) mit dem <strong>{{method}}</strong>:",
   "solving-system-instruction-past": "In dieser Aufgabe löst du das folgende lineare Gleichungssystem (LGS) mit dem <strong>{{method}}</strong>:",

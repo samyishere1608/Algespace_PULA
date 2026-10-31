@@ -21,6 +21,15 @@ export class FlexibilityTranslations {
      */
     static readonly HINT_BUTTON_ASK: string = "hint-button-ask";
 
+    /**
+     * The same button with nobody to name.
+     *
+     * The control arm runs the exercises without a companion, so there is no name to put on the button
+     * and no face to put beside it — but the hints themselves are part of the exercise and stay. "Help"
+     * says what the button does without promising a character will answer.
+     */
+    static readonly HINT_BUTTON_HELP: string = "hint-button-help";
+
     static readonly INTRO_SYSTEM: string = "system-introduction";
 
     static readonly SINGLE_EFFICIENT_INSTR: string = "single-efficient-method-instruction";

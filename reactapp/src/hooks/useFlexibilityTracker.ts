@@ -16,6 +16,7 @@ import { decisionOutcome, declinedElement, engagedElement } from "@utils/anchorD
 import { ANCHOR_ELEMENT } from "@/types/student/goal.ts";
 import { nudgeBenefitKey, nudgeNameFor, type NudgeResponse } from "@utils/nudges.ts";
 import { awardInsightForFacingGap } from "@utils/insightAwards.ts";
+import { isControlStudent } from "@utils/studyCondition.ts";
 
 /**
  * Destination for the study module. Our own store lives at "/anchor-tracking".
@@ -48,6 +49,15 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
      * assumes.
      */
     const useLogger = logging && user !== undefined;
+
+    /**
+     * Whether this student is in the control arm.
+     *
+     * Used only to withhold the DISPLAY of things the treatment shows. Nothing about what gets written
+     * changes: every choice, every action and every award is recorded for both arms, because that is
+     * what the two arms are being compared on.
+     */
+    const isControl = isControlStudent(student);
 
     // Two attempts can exist for the same exercise: one in our store, one in the study's. They are
     // separate databases, so every write has to name the attempt the destination it is going to
@@ -234,7 +244,12 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
         // Claimed before the async lookup, so a second engagement in the same exercise cannot slip
         // through while the server is still deciding.
         insightPaidFor.current.add(engaged.element);
-        void awardInsightForFacingGap(user.id, engaged.element, ourEntryId);
+
+        // A control student is still credited — the award is recorded, because "they faced the thing
+        // they had been avoiding" is a fact about the attempt — but nothing is shown for it. The toast
+        // is part of the treatment, and points appearing over the exercise would be the treatment
+        // leaking into the arm that is meant to be measured without it.
+        void awardInsightForFacingGap(user.id, engaged.element, ourEntryId, isControl);
     }
 
     /**

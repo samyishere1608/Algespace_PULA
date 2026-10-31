@@ -50,7 +50,7 @@ export async function seedDemoData(studentId: number): Promise<void> {
     // goalId is the category, so the dashboard can map a completion back to a goal type.
     const goals: Array<{ goalId: string; goalLabel: string; xpEarned: number; exerciseType: string }> = [
         { goalId: "method",         goalLabel: "5 Elimination exercises",         xpEarned: 5, exerciseType: "Suitability" },
-        { goalId: "exerciseType",   goalLabel: "3 Suitability exercises",         xpEarned: 5, exerciseType: "Suitability" },
+        { goalId: "method",         goalLabel: "5 Substitution exercises",        xpEarned: 5, exerciseType: "Suitability" },
         { goalId: "solveOnOwn",     goalLabel: "Work out 3 solutions yourself",  xpEarned: 5, exerciseType: "Efficiency" },
         { goalId: "selfExplanation", goalLabel: "Explain your own reasoning 3 times", xpEarned: 5, exerciseType: "Efficiency" },
         { goalId: "methodComparison", goalLabel: "Compare methods 3 times",       xpEarned: 5, exerciseType: "Matching" },

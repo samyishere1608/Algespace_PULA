@@ -30,8 +30,18 @@ const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
  * Callers are expected to have de-duplicated per exercise: the two solution points both map to the
  * same element, and being paid twice in one exercise for one act would be wrong. The server also
  * refuses a second award for the same attempt.
+ *
+ * `silent` pays and records exactly as usual but shows no toast. The control arm uses it: the award is
+ * still written down — it is a fact about the attempt, and the analysis wants every fact — while the
+ * celebration is withheld, because a "+3 Insight XP" floating over the exercise is a piece of the
+ * treatment. A control student who sees their points go up is no longer a control student.
  */
-export async function awardInsightForFacingGap(studentId: number, element: string, attemptId: number): Promise<number> {
+export async function awardInsightForFacingGap(
+    studentId: number,
+    element: string,
+    attemptId: number,
+    silent = false
+): Promise<number> {
     try {
         const { data } = await axios.post<{ amount: number }>(`${BACKEND}/student-progress/insight-gap-award`, {
             studentId,
@@ -45,7 +55,7 @@ export async function awardInsightForFacingGap(studentId: number, element: strin
         if (amount <= 0) return 0;
 
         addInsightXP(studentId, amount, `faced-a-gap:${element}`);
-        showAgencyToast("insight", amount);
+        if (!silent) showAgencyToast("insight", amount);
         return amount;
     } catch {
         return 0;

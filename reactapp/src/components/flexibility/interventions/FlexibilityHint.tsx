@@ -82,11 +82,27 @@ export function FlexibilityHint({ hints, disabled, agentType, agentExpression, t
                     </div>
                 </div>
             )}
-            <button className={"button primary-button help-button flexibility-hint-button"} onClick={handleClick} ref={hintButtonRef} disabled={disabled}>
-                <span className={"flexibility-hint-button__avatar"} aria-hidden={true}>
-                    <img src={buddyAvatarSrc} alt={""} />
+            <button
+                className={`button primary-button help-button flexibility-hint-button${useAgent ? "" : " flexibility-hint-button--plain"}`}
+                onClick={handleClick}
+                ref={hintButtonRef}
+                disabled={disabled}
+            >
+                {/* THE FACE AND THE NAME ARE PART OF THE TREATMENT.
+                    With a companion, the button wears their portrait and names them, because the hint
+                    they are about to give is theirs. In the control arm nobody gives it: there is no
+                    companion to ask, so the button says "Help" and shows no face. The hint content is
+                    untouched — the hints are part of the exercise, not of the companion. */}
+                {useAgent && (
+                    <span className={"flexibility-hint-button__avatar"} aria-hidden={true}>
+                        <img src={buddyAvatarSrc} alt={""} />
+                    </span>
+                )}
+                <span className={"flexibility-hint-button__label"}>
+                    {useAgent
+                        ? t(FlexibilityTranslations.HINT_BUTTON_ASK, { buddy: buddyName })
+                        : t(FlexibilityTranslations.HINT_BUTTON_HELP)}
                 </span>
-                <span className={"flexibility-hint-button__label"}>{t(FlexibilityTranslations.HINT_BUTTON_ASK, { buddy: buddyName })}</span>
             </button>
         </React.Fragment>
     );

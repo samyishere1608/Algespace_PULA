@@ -44,8 +44,6 @@ const FIT_LABEL = {
  * options in hand.
  */
 function fitsFor(goal: StudyGoal, type: FlexibilityStudyExerciseType, method?: string | null): GoalFit | null {
-    const name = FlexibilityStudyExerciseType[type];
-
     switch (goal.category) {
         case "method": {
             // "Any method" is reachable everywhere, and so is any method in a Suitability exercise,
@@ -64,10 +62,6 @@ function fitsFor(goal: StudyGoal, type: FlexibilityStudyExerciseType, method?: s
 
             return null;
         }
-
-        case "exerciseType":
-            if (goal.focus === null) return "fits";
-            return name === goal.focus ? "fits" : null;
 
         case "selfExplanation":
             // Only the two kinds that ask the student to explain a decision.

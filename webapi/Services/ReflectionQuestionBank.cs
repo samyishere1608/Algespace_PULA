@@ -1766,6 +1766,35 @@ namespace webapi.Services
         }
 
         /// <summary>
+        /// The verdict for an answer the student WROTE, given what the judge made of it.
+        ///
+        /// The judge is only ever asked which of three things the sentence is — it is never asked what it
+        /// is worth. The money is decided here, from the same table a chip is paid from, so a written
+        /// answer can never be worth more than the chip it stands in for and a talkative sentence cannot
+        /// out-earn a precise one. That split is the whole reason this is a separate method: the model's
+        /// reach stops at a word.
+        /// </summary>
+        public static ReflectionVerdict GradeWritten(ReflectionQuestion question, string judged)
+        {
+            // An answer to a promise or to a session question is still not a claim, however it was given.
+            if (question.Kind is NextAction or Session)
+                return new ReflectionVerdict { Status = "no-award", InsightXp = 0 };
+
+            return judged switch
+            {
+                "aligned" => new ReflectionVerdict
+                {
+                    Status = "aligned",
+                    InsightXp = question.Kind == Judgement ? PartialXp : AlignedXp,
+                },
+                "partial" => new ReflectionVerdict { Status = "partial", InsightXp = PartialXp },
+                // "none", an unreadable reply, or no judge reached at all. All three are the same thing to
+                // the student — the sentence was read and answered, and nothing here was confirmed.
+                _ => new ReflectionVerdict { Status = "unjudged", InsightXp = 0 },
+            };
+        }
+
+        /// <summary>
         /// What the record says the student actually did, in plain sentences, for the model to check a
         /// claim against.
         ///

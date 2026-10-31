@@ -1602,7 +1602,549 @@ namespace webapi.Data.Examples
                 AgentMessageForResolvingEN = "Trying out different methods shows you that there are often several ways to solve a problem."
             };
 
-            return [equalization1, elimination1, substitution1, equalization2, elimination2, substitution2, elimination3, equalization3, elimination4, substitution3, elimination5, equalization4, elimination6];
+            ExtendedSuitabilityExercise equalization6 = new()
+            {
+                Id = 14,
+                Ordering = 14,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-1) }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(-2), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(9) }
+                    ]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.Second,
+                SecondEquationIsIsolatedIn = IsolatedIn.Second,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(2) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(5) },
+                SuitableMethods = [Method.Equalization, Method.Substitution],
+                ComparisonMethods = [new() {
+                    Method = Method.Elimination,
+                    Steps = [
+                        new()
+                        {
+                            DescriptionDE = "Dein*e Mitschüler*in hat die erste Gleichung von der zweiten abgezogen, um y zu entfernen.",
+                            DescriptionEN = "Your classmate subtracted the first equation from the second to remove y.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(0) }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(-2), Variable = Identifier.X },
+                                        new() { Coefficient = new Coefficient(9) },
+                                        new() { Coefficient = new Coefficient(-1), Parenthesis = Parenthesis.LeftSmall },
+                                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                        new() { Coefficient = new Coefficient(-1), Parenthesis = Parenthesis.RightSmall }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(0) }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(-2), Variable = Identifier.X },
+                                        new() { Coefficient = new Coefficient(9) },
+                                        new() { Coefficient = new Coefficient(-3), Variable = Identifier.X },
+                                        new() { Coefficient = new Coefficient(1) }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(0) }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(-5), Variable = Identifier.X },
+                                        new() { Coefficient = new Coefficient(10) }
+                                    ]
+                                }
+                            ]
+                        },
+                        new()
+                        {
+                            DescriptionDE = "Danach hat er* sie durch -5 geteilt und so x berechnet.",
+                            DescriptionEN = "Then they divided by -5 and so calculated x.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(-5), Variable = Identifier.X }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(-10) }]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(2) }]
+                                }
+                            ]
+                        },
+                        new()
+                        {
+                            DescriptionDE = "Um y zu berechnen, hat er* sie die Lösung für x in die erste Gleichung eingesetzt.",
+                            DescriptionEN = "To calculate y, they substituted the solution for x into the first equation.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                                        new() { Coefficient = new Coefficient(-1) }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(3) },
+                                        new() { Coefficient = new Coefficient(2), IsMultiplication = true },
+                                        new() { Coefficient = new Coefficient(-1) }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(5) }]
+                                }
+                            ]
+                        }
+                    ]
+                }],
+                AgentMessageForFirstSolutionDE = "Wenn du Gleichungen nach einer Variablen auflöst, siehst du sofort, welche Methode sich anbietet.",
+                AgentMessageForFirstSolutionEN = "Solving equations for a variable shows you straight away which method suggests itself.",
+                AgentMessageForSecondSolutionDE = "Wer beide Gleichungen geschickt umstellt, spart Rechenzeit. Regelmäßiges Üben macht dich darin sicher.",
+                AgentMessageForSecondSolutionEN = "Rearranging both equations cleverly saves time. Regular practice makes you confident at it.",
+                AgentMessageForComparisonDE = "Zwei Gleichungen nach derselben Variablen aufzulösen ist genau die Vorbereitung, die das Gleichsetzungsverfahren braucht.",
+                AgentMessageForComparisonEN = "Solving two equations for the same variable is exactly the preparation the equalization method needs.",
+                AgentMessageForResolvingDE = "Verschiedene Methoden auszuprobieren zeigt dir, dass es oft mehrere Wege gibt, ein Problem zu lösen.",
+                AgentMessageForResolvingEN = "Trying out different methods shows you that there are often several ways to solve a problem."
+            };
+
+            ExtendedSuitabilityExercise elimination7 = new()
+            {
+                Id = 15,
+                Ordering = 15,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(4), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(5), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(17) }]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(4), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(-5), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(7) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.None,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(3) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(1) },
+                SuitableMethods = [Method.Elimination],
+                ComparisonMethods = [new() {
+                    Method = Method.Equalization,
+                    Steps = [
+                        new()
+                        {
+                            DescriptionDE = "Dein*e Mitschüler*in hat beide Gleichungen nach x aufgelöst, um sie gleichsetzen zu können.",
+                            DescriptionEN = "Your classmate solved both equations for x so that they could be equated.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(4), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(17) },
+                                        new() { Coefficient = new Coefficient(-5), Variable = Identifier.Y }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(4), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(7) },
+                                        new() { Coefficient = new Coefficient(5), Variable = Identifier.Y }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient("17/4") },
+                                        new() { Coefficient = new Coefficient("-5/4"), Variable = Identifier.Y }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient("7/4") },
+                                        new() { Coefficient = new Coefficient("5/4"), Variable = Identifier.Y }
+                                    ]
+                                }
+                            ]
+                        },
+                        new()
+                        {
+                            DescriptionDE = "Durch Gleichsetzen der beiden Ausdrücke bleibt eine Gleichung mit nur noch y.",
+                            DescriptionEN = "Equating the two expressions leaves an equation containing only y.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient("17/4") },
+                                        new() { Coefficient = new Coefficient("-5/4"), Variable = Identifier.Y }
+                                    ],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient("7/4") },
+                                        new() { Coefficient = new Coefficient("5/4"), Variable = Identifier.Y }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient("-5/2"), Variable = Identifier.Y }],
+                                    RightTerms = [new() { Coefficient = new Coefficient("-5/2") }]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(1) }]
+                                }
+                            ]
+                        },
+                        new()
+                        {
+                            DescriptionDE = "Zum Schluss hat er* sie y in eine der umgestellten Gleichungen eingesetzt.",
+                            DescriptionEN = "Finally they substituted y into one of the rearranged equations.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient("17/4") },
+                                        new() { Coefficient = new Coefficient("-5/4"), Variable = Identifier.Y }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient("17/4") },
+                                        new() { Coefficient = new Coefficient("-5/4") }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(3) }]
+                                }
+                            ]
+                        }
+                    ]
+                }],
+                AgentMessageForFirstSolutionDE = "Addierst du die Gleichungen geschickt, fällt eine Variable weg und du rechnest nur noch mit einer.",
+                AgentMessageForFirstSolutionEN = "Adding the equations cleverly removes one variable, so you only work with one.",
+                AgentMessageForSecondSolutionDE = "Erst umformen, dann lösen: ein Schritt mehr, der aber immer zum Ziel führt.",
+                AgentMessageForSecondSolutionEN = "Rearrange first, solve second: one step more, but it always gets you there.",
+                AgentMessageForComparisonDE = "Gleiche Koeffizienten mit verschiedenem Vorzeichen sind das Signal für das Additionsverfahren.",
+                AgentMessageForComparisonEN = "Matching coefficients with opposite signs are the signal for the addition method.",
+                AgentMessageForResolvingDE = "Verschiedene Methoden auszuprobieren zeigt dir, dass es oft mehrere Wege gibt, ein Problem zu lösen.",
+                AgentMessageForResolvingEN = "Trying out different methods shows you that there are often several ways to solve a problem."
+            };
+
+            ExtendedSuitabilityExercise substitution4 = new()
+            {
+                Id = 16,
+                Ordering = 16,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                    RightTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.Y },
+                        new() { Coefficient = new Coefficient(7) }
+                    ]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(5), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(3) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.First,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(4) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(-1) },
+                SuitableMethods = [Method.Substitution],
+                ComparisonMethods = [new() {
+                    Method = Method.Elimination,
+                    Steps = [
+                        new()
+                        {
+                            DescriptionDE = "Dein*e Mitschüler*in hat die erste Gleichung mit 2 multipliziert, damit x in beiden Gleichungen dieselbe Zahl davor hat.",
+                            DescriptionEN = "Your classmate multiplied the first equation by 2 so that x has the same number in front of it in both equations.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(3), Variable = Identifier.Y },
+                                        new() { Coefficient = new Coefficient(7) }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(2), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(6), Variable = Identifier.Y },
+                                        new() { Coefficient = new Coefficient(14) }
+                                    ]
+                                }
+                            ]
+                        },
+                        new()
+                        {
+                            DescriptionDE = "Dann hat er* sie die neue erste Gleichung von der zweiten abgezogen und so x entfernt.",
+                            DescriptionEN = "Then they subtracted the new first equation from the second, removing x.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(0) }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(-11), Variable = Identifier.Y },
+                                        new() { Coefficient = new Coefficient(-11) }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(-11), Variable = Identifier.Y }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(11) }]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(-1) }]
+                                }
+                            ]
+                        },
+                        new()
+                        {
+                            DescriptionDE = "Zuletzt hat er* sie y in die erste Gleichung eingesetzt und x berechnet.",
+                            DescriptionEN = "Last they substituted y into the first equation and calculated x.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(3), Variable = Identifier.Y },
+                                        new() { Coefficient = new Coefficient(7) }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(3) },
+                                        new() { Coefficient = new Coefficient(-1), IsMultiplication = true },
+                                        new() { Coefficient = new Coefficient(7) }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(4) }]
+                                }
+                            ]
+                        }
+                    ]
+                }],
+                AgentMessageForFirstSolutionDE = "Ist eine Variable schon freigestellt, kannst du ihren Term direkt einsetzen und sparst dir eine Umformung.",
+                AgentMessageForFirstSolutionEN = "When a variable is already on its own you can substitute its term directly and save a rearrangement.",
+                AgentMessageForSecondSolutionDE = "Ein zweiter Weg über das Additionsverfahren zeigt dir, dass beide Methoden zum selben Ergebnis führen.",
+                AgentMessageForSecondSolutionEN = "A second route through the addition method shows both methods reach the same result.",
+                AgentMessageForComparisonDE = "Ein bereits freigestellter Term ist die Einladung zum Einsetzungsverfahren.",
+                AgentMessageForComparisonEN = "A term that is already on its own is an invitation to substitute.",
+                AgentMessageForResolvingDE = "Verschiedene Methoden auszuprobieren zeigt dir, dass es oft mehrere Wege gibt, ein Problem zu lösen.",
+                AgentMessageForResolvingEN = "Trying out different methods shows you that there are often several ways to solve a problem."
+            };
+
+            ExtendedSuitabilityExercise elimination8 = new()
+            {
+                Id = 17,
+                Ordering = 17,
+                FirstEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(3), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(4), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(18) }]
+                },
+                SecondEquation = new LinearEquation
+                {
+                    LeftTerms =
+                    [
+                        new() { Coefficient = new Coefficient(5), Variable = Identifier.X },
+                        new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                    ],
+                    RightTerms = [new() { Coefficient = new Coefficient(16) }]
+                },
+                FirstEquationIsIsolatedIn = IsolatedIn.None,
+                SecondEquationIsIsolatedIn = IsolatedIn.None,
+                FirstVariable = new() { Name = Identifier.X, Value = new Coefficient(2) },
+                SecondVariable = new() { Name = Identifier.Y, Value = new Coefficient(3) },
+                SuitableMethods = [Method.Elimination],
+                ComparisonMethods = [new() {
+                    Method = Method.Substitution,
+                    Steps = [
+                        new()
+                        {
+                            DescriptionDE = "Dein*e Mitschüler*in hat die erste Gleichung nach x aufgelöst.",
+                            DescriptionEN = "Your classmate solved the first equation for x.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(3), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(18) },
+                                        new() { Coefficient = new Coefficient(-4), Variable = Identifier.Y }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(6) },
+                                        new() { Coefficient = new Coefficient("-4/3"), Variable = Identifier.Y }
+                                    ]
+                                }
+                            ]
+                        },
+                        new()
+                        {
+                            DescriptionDE = "Diesen Term hat er* sie in die zweite Gleichung eingesetzt.",
+                            DescriptionEN = "They substituted this term into the second equation.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(5), Variable = Identifier.X },
+                                        new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                                    ],
+                                    RightTerms = [new() { Coefficient = new Coefficient(16) }]
+                                },
+                                new()
+                                {
+                                    LeftTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(5), Parenthesis = Parenthesis.LeftSmall },
+                                        new() { Coefficient = new Coefficient(6) },
+                                        new() { Coefficient = new Coefficient("-4/3"), Variable = Identifier.Y, Parenthesis = Parenthesis.RightSmall },
+                                        new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                                    ],
+                                    RightTerms = [new() { Coefficient = new Coefficient(16) }]
+                                },
+                                new()
+                                {
+                                    LeftTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(30) },
+                                        new() { Coefficient = new Coefficient("-20/3"), Variable = Identifier.Y },
+                                        new() { Coefficient = new Coefficient(2), Variable = Identifier.Y }
+                                    ],
+                                    RightTerms = [new() { Coefficient = new Coefficient(16) }]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient("-14/3"), Variable = Identifier.Y }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(-14) }]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.Y }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(3) }]
+                                }
+                            ]
+                        },
+                        new()
+                        {
+                            DescriptionDE = "Zum Schluss hat er* sie y in die umgestellte erste Gleichung eingesetzt.",
+                            DescriptionEN = "Finally they substituted y into the rearranged first equation.",
+                            Equations = [
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(6) },
+                                        new() { Coefficient = new Coefficient("-4/3"), Variable = Identifier.Y }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms =
+                                    [
+                                        new() { Coefficient = new Coefficient(6) },
+                                        new() { Coefficient = new Coefficient(-4) }
+                                    ]
+                                },
+                                new()
+                                {
+                                    LeftTerms = [new() { Coefficient = new Coefficient(1), Variable = Identifier.X }],
+                                    RightTerms = [new() { Coefficient = new Coefficient(2) }]
+                                }
+                            ]
+                        }
+                    ]
+                }],
+                AgentMessageForFirstSolutionDE = "Wenn keine Variable freigestellt ist, formst du zuerst um. Das ist der Preis für einen sauberen Rechenweg.",
+                AgentMessageForFirstSolutionEN = "When no variable is on its own you rearrange first. That is the price for a clean route through.",
+                AgentMessageForSecondSolutionDE = "Das Additionsverfahren mit vorheriger Multiplikation ist hier kürzer, verlangt aber mehr Überblick.",
+                AgentMessageForSecondSolutionEN = "The addition method with prior multiplication is shorter here, but demands more of an overview.",
+                AgentMessageForComparisonDE = "Müssen beide Gleichungen umgeformt werden, wähle die Methode mit den wenigsten Zwischenschritten.",
+                AgentMessageForComparisonEN = "When both equations need rearranging, pick the method with the fewest intermediate steps.",
+                AgentMessageForResolvingDE = "Verschiedene Methoden auszuprobieren zeigt dir, dass es oft mehrere Wege gibt, ein Problem zu lösen.",
+                AgentMessageForResolvingEN = "Trying out different methods shows you that there are often several ways to solve a problem."
+            };
+
+            return [equalization1, elimination1, substitution1, equalization2, elimination2, substitution2, elimination3, equalization3, elimination4, substitution3, elimination5, equalization4, elimination6, equalization6, elimination7, substitution4, elimination8];
         }
     }
 }

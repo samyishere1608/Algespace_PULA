@@ -862,6 +862,26 @@ Green light from the researcher: no more typing in a reflection, chips only. Eve
 bank already shipped chips, so this was checked branch by branch before anything was touched - all 15
 builders assign `Chips` on every path, and the smallest menu is 2. No question became unanswerable.
 
+> **Since then, free text came back** — as a box under every menu rather than as the first input, with
+> "none of these fit, here is mine" as its meaning. `reflection.answered` carries `value = "free-text"`
+> with the words in `data.freeText` and `data.label`, and the reply prompt is given the answer as a
+> quotation instead of as "the option they chose".
+>
+> **One of the four checkpoints did come back, in a much narrower form.** A written answer now earns
+> Insight, so something has to say whether it is true, and only a reader can do that. The new
+> `JudgeWrittenAnswer` is a single call whose entire output is one word — `aligned`, `partial` or
+> `none` — decided against the same record the chips are built from. It is never asked what the answer
+> is worth: `ReflectionQuestionBank.GradeWritten` maps that word through the same table a chip is paid
+> from, so a sentence can never out-earn the option it stands in for. What did NOT come back is the
+> off-topic gate, the feature extraction, the "write it again" loop and the per-answer second opinion
+> on the verdict that used to disagree with the dashboard. Two model calls per answer, as before.
+>
+> The judge is given the whole record account, not only the question's headline fact. Handing it the
+> fact alone made it stricter than the chips: on a clean run the fact names one best part, so "no
+> mistakes anywhere" — which every part backs, and which the matching chip pays 3 for — came back
+> unconfirmed. Verdicts are recorded with `judgedFrom = "written-answer"` so an analysis can tell the
+> two routes apart.
+
 **What went, and why it was more than a text box.** Four checkpoints existed only because a typed
 answer had to be judged, and all four are gone:
 

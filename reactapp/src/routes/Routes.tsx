@@ -2,7 +2,7 @@ import { useAuth } from "@/contexts/AuthProvider.tsx";
 import Home from "@/views/Home";
 import { ReactElement, useMemo } from "react";
 import { ErrorBoundary } from "react-error-boundary";
-import { Outlet, RouterProvider, createBrowserRouter } from "react-router-dom";
+import { Navigate, Outlet, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { ErrorTranslations } from "@/types/shared/errorTranslations.ts";
 import About from "@views/About.tsx";
 import EliminationExercise from "@views/elimination/EliminationExercise.tsx";
@@ -45,6 +45,27 @@ import { FlexibilityStudyEnd } from "@views/studies/flexibility/FlexibilityStudy
 import { EqualizationDemoExercise } from "@views/studies/flexibility/EqualizationDemoExercise.tsx";
 import { SubstitutionDemoExercise } from "@views/studies/flexibility/SubstitutionDemoExercise.tsx";
 import { EliminationDemoExercise } from "@views/studies/flexibility/EliminationDemoExercise.tsx";
+import { isControlStudent } from "@utils/studyCondition.ts";
+
+/**
+ * The dashboard, for the treatment arm only.
+ *
+ * A control student has no dashboard — they work through the plain flexibility module — so every way
+ * into this page has to end up on the exercise list instead: a bookmark, the browser's back button, a
+ * typed URL. Guarded as a route rather than inside the dashboard because that view starts several
+ * reads the moment it mounts, and a control account should not be fetching analytics for a page it is
+ * never going to be shown.
+ */
+function TreatmentDashboardRoute(): ReactElement {
+    const { student } = useAuth();
+
+    if (isControlStudent(student)) {
+        return <Navigate to={Paths.FlexibilityPath} replace />;
+    }
+
+    return <StudentDashboard />;
+}
+
 
 export default function Routes(): ReactElement {
     const { user } = useAuth();
@@ -157,7 +178,7 @@ export default function Routes(): ReactElement {
                 },
                 {
                     path: Paths.StudentDashboardPath,
-                    element: <StudentDashboard />
+                    element: <TreatmentDashboardRoute />
                 },
                 // Developer only. Compiled out of a production build rather than merely hidden, so the
                 // route cannot be reached on a deployed copy at all.
