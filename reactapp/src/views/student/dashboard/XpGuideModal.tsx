@@ -52,6 +52,10 @@ export default function XpGuideModal({ onClose }: { onClose: () => void }): Reac
                         </div>
                     ))}
                 </div>
+
+                {/* How the badge moves, stated here because this is where a student looks when they
+                    want to know what the numbers are for. */}
+                <p className={"xp-guide__level"}>{t("agency-info-level")}</p>
             </div>
         </div>
     );

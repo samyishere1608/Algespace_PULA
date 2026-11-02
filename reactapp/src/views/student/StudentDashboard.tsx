@@ -51,6 +51,7 @@ import CharacterUnlockModal from "./dashboard/CharacterUnlockModal.tsx";
 import { DailyIntentionModal, type DailyIntentionChoice } from "./dashboard/DailyIntentionModal.tsx";
 import XpGuideModal from "./dashboard/XpGuideModal.tsx";
 import { EndSessionModal } from "./dashboard/EndSessionModal.tsx";
+import { GoalRemoveDialog } from "./dashboard/GoalRemoveDialog.tsx";
 import { ReflectionModal } from "./dashboard/ReflectionModal.tsx";
 import { getEquippedOutfitId, persistEquippedOutfitId, getActiveBuddyId, persistActiveBuddyId, getAgencyLevel, getWalletXp, getAnnouncedUnlocks, markUnlockAnnounced } from "@utils/wardrobeUtils.ts";
 import { fetchStudentProgress, fetchLeaderboard, getAccuracyLast5, getAccuracyStats } from "@utils/progressUtils.ts";
@@ -59,11 +60,13 @@ import type { GoalProgress, StudyGoal } from "@/types/student/goal.ts";
 import { addGoal, getActiveGoals, removeGoal } from "@utils/activeGoals.ts";
 import { GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef } from "@utils/goalCatalog.ts";
 import { claimCompletedGoals, computeProgress, earliestGoalStart, fetchGoalEvents } from "@utils/goalProgress.ts";
-import { awardChoiceForSettingAGoal } from "@utils/choiceAwards.ts";
-import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, addChoiceXP, getInsightXP, creditAwardAlreadyRecorded } from "@utils/agencyUtils.ts";
+import { awardChoiceForReflection, awardChoiceForSettingAGoal, revokeChoiceForDeletedGoal, revokeChoiceForReflection } from "@utils/choiceAwards.ts";
+import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, getInsightXP, creditAwardAlreadyRecorded } from "@utils/agencyUtils.ts";
+import { getBadgeLevel, TIER_NAMES } from "@utils/agencyLevels.ts";
 import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 import { endOnboardingDemos, getOnboardingStep } from "@utils/storageUtils.ts";
 import { startSession, endSession, currentSessionId, recordIntention } from "@utils/sessionLog.ts";
+import { logScreenView, type TrackedScreen } from "@utils/screenLog.ts";
 import { OnboardingTour } from "@components/shared/OnboardingTour.tsx";
 import { TourOffer } from "@components/shared/TourOffer.tsx";
 import { ShowSectionTourButton } from "@components/shared/ShowSectionTourButton.tsx";
@@ -90,9 +93,6 @@ const PLACEHOLDER_STATS = {
     exercisesCompleted: 0,
     exercisesToday: 0,
     currentXP: 0,
-    xpForNextLevel: 500,
-    level: 1,
-    levelName: "Beginner",
     streakDays: 0,
 };
 
@@ -106,22 +106,9 @@ const PLACEHOLDER_STATS = {
  */
 const TOUR_SAMPLE_GOAL_ID = "tour-sample-goal";
 
-// Every 500 XP = one level. Tier names change every 2 levels.
-const TIER_NAMES = [
-    "Beginner",    // levels 1–2   (0 – 999 XP)
-    "Apprentice",  // levels 3–4   (1000 – 1999 XP)
-    "Explorer",    // levels 5–6   (2000 – 2999 XP)
-    "Solver",      // levels 7–8   (3000 – 3999 XP)
-    "Expert",      // levels 9–10  (4000 – 4999 XP)
-    "Master",      // levels 11+   (5000+ XP)
-];
-
-function getLevelInfo(xp: number): { level: number; levelName: string } {
-    const level = Math.floor(xp / 500) + 1;
-    const tierIndex = Math.min(Math.floor((level - 1) / 2), TIER_NAMES.length - 1);
-    const levelInTier = ((level - 1) % 2) + 1;
-    return { level: levelInTier, levelName: TIER_NAMES[tierIndex] };
-}
+// The badge's numbers live in `utils/agencyLevels.ts`, shared with the tree so the two cannot
+// disagree. TIER_NAMES is re-exported for the modules that already import it from here.
+export { TIER_NAMES } from "@utils/agencyLevels.ts";
 
 export default function StudentDashboard(): ReactElement {
     const { student, logoutStudent } = useAuth();
@@ -312,7 +299,9 @@ export default function StudentDashboard(): ReactElement {
     // ── Legacy level info (derived from total agency XP for now) ─────────────
     const totalAgency = agency.totalXP;
     const agencyWallets = { choiceXP: agency.choiceXP, insightXP: agency.insightXP, resolveXP: agency.resolveXP };
-    const stats = { ...PLACEHOLDER_STATS, currentXP: totalAgency, exercisesCompleted, exercisesToday, streakDays, ...getLevelInfo(totalAgency) };
+    // The badge is the weakest of the three wallets, not their total: see `utils/agencyLevels.ts`.
+    const level = getBadgeLevel(agency.choiceXP, agency.insightXP, agency.resolveXP);
+    const stats = { ...PLACEHOLDER_STATS, currentXP: totalAgency, exercisesCompleted, exercisesToday, streakDays, ...level };
 
     // ── Leaderboard ─────────────────────────────────────────────────────────
     //
@@ -456,6 +445,15 @@ export default function StudentDashboard(): ReactElement {
     // ── Modals ────────────────────────────────────────────────────────────────
     const [showBuddyPopup, setShowBuddyPopup] = useState(false);
     const [showGoals, setShowGoals] = useState(false);
+
+    /**
+     * The goal a student asked to delete without having started it.
+     *
+     * Held as state rather than as a `confirm()` because the dialog has to explain what deleting
+     * costs and offer the alternative, and because the Choice XP is only taken back from THIS path —
+     * a goal with work behind it is deleted straight away and keeps its points.
+     */
+    const [pendingGoalRemoval, setPendingGoalRemoval] = useState<{ id: string; label: string } | null>(null);
     const [showBuddyChooser, setShowBuddyChooser] = useState(false);
     const [showShop, setShowShop] = useState(false);
     const [showXpInfo, setShowXpInfo] = useState(false);
@@ -641,12 +639,14 @@ export default function StudentDashboard(): ReactElement {
             if (insightGained > 0) showAgencyToast("insight", insightGained);
 
             // Picking your own direction is a Choice act, and Choice does not require having done
-            // anything yet — deciding is itself the skill. Bounded to once a day because goals can
-            // be added and removed in a loop, which would otherwise pay per click.
+            // anything yet — deciding is itself the skill. Paid per GOAL, not per day: the daily cap
+            // this used to have punished a student who set a second genuine goal in the afternoon,
+            // and the farm it guarded against is now handled by reversing the award if the goal is
+            // deleted (see `revokeChoiceForDeletedGoal`).
             //
             // A goal taken from a suggestion earns nothing: the reward is for deciding, and
             // accepting the system's proposal is not deciding.
-            awardChoiceForSettingAGoal(student.id);
+            awardChoiceForSettingAGoal(student.id, goal.id);
             setAgency(getAgencyProgress(student.id));
         }
 
@@ -657,7 +657,23 @@ export default function StudentDashboard(): ReactElement {
         void refreshGoals(student.id);
     }
 
-    async function handleRemoveGoal(goalId: string): Promise<void> {
+    async function handleRemoveGoal(goalId: string, progressSoFar: number): Promise<void> {
+        if (!student) return;
+
+        // Nothing done towards it yet: ask before taking anything away. A goal that has been worked
+        // on is different — deleting it is a decision about where to spend time, not a click to farm,
+        // so it goes without a question and keeps its Choice XP. See `GoalRemoveDialog`.
+        if (progressSoFar <= 0) {
+            const goal = activeGoals.find((entry) => entry.id === goalId);
+            setPendingGoalRemoval({ id: goalId, label: goal ? describeGoal(goal, translate) : "" });
+            return;
+        }
+
+        await deleteGoal(goalId, false);
+    }
+
+    /** Removes the goal for real. `revokeChoice` is true only for a goal that was never started. */
+    async function deleteGoal(goalId: string, revokeChoice: boolean): Promise<void> {
         if (!student) return;
 
         setActiveGoals(await removeGoal(student.id, goalId));
@@ -666,6 +682,14 @@ export default function StudentDashboard(): ReactElement {
             delete next[goalId];
             return next;
         });
+
+        // Only the never-started goal gives its Choice back: adding and deleting in a loop has to earn
+        // nothing, while a goal with work behind it keeps what it paid for. The server reverses its own
+        // ledger row for the same goal id, using the amount it recorded at the time.
+        if (revokeChoice) {
+            revokeChoiceForDeletedGoal(student.id, goalId);
+            setAgency(getAgencyProgress(student.id));
+        }
     }
 
     function handleSelectBuddy(id: string): void {
@@ -779,13 +803,46 @@ export default function StudentDashboard(): ReactElement {
             });
     }
 
-    // ── Reflection handlers ───────────────────────────────────────────────
+    // ── Which screen is the student looking at, and for how long ─────────
+    //
+    // One effect for the whole map: the tab on screen, or whichever dialog is open over it. A visit is
+    // flushed when that changes and when the dashboard unmounts, which are the only two ways a screen
+    // can stop being the visible one.
+    //
+    // The dialogs win over the tab because they are what the student is actually looking at: time spent
+    // setting a goal is time on goals, and time in the companion shop is time in the shop, not on the
+    // dashboard behind either. Opening an exercise leaves the dashboard entirely, and ending the session
+    // unmounts it, so both close the visit through the cleanup below.
+    //
+    // The order matters only if two could be open at once, which they cannot — but goals is checked
+    // first so that a goal dialog opened from inside the shop still reads as goals.
+    useEffect(() => {
+        if (!student) return;
+
+        const screen: TrackedScreen = showGoals ? "goals" : showShop ? "shop" : activeTab;
+        const startedAt = Date.now();
+
+        return () => {
+            logScreenView(student.id, screen, (Date.now() - startedAt) / 1000, i18n.language);
+        };
+        // `showGoals`, `showShop` and `activeTab` are the whole of "which screen"; the student and the
+        // language are read at write time and would only restart the timer.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showGoals, showShop, activeTab, student?.id]);
+
+    // ── Reflection handlers ───────────────────────���───────────────────────
     function handleReflectionYes(): void {
         if (!student) return;
         setShowReflectionPrompt(false);
-        addChoiceXP(student.id, 5, "reflection-opted-in");
-        showAgencyToast("choice", 5);
-        setAgency(getAgencyProgress(student.id));
+
+        // The yes pays straight away, so the choice visibly counts. It is KEPT only if the reflection
+        // is finished: closing it marks the item skipped and takes the points back. Paying nothing
+        // until the last question instead made agreeing to reflect look like it did nothing at all.
+        for (const item of reflectionQueue) {
+            awardChoiceForReflection(student.id, item.id);
+        }
+        if (reflectionQueue.length > 0) setAgency(getAgencyProgress(student.id));
+
         setShowReflectionModal(true);
     }
 
@@ -815,6 +872,18 @@ export default function StudentDashboard(): ReactElement {
     }
 
     /**
+     * The Choice the server just paid for a finished reflection, when the browser had not already
+     * credited it. Nothing to do here beyond letting the wallet catch up: the award on the finished
+     * item is the server's, and this only refreshes what the header shows.
+     */
+    function handleReflectionAbandoned(queueItemId: number): void {
+        if (!student) return;
+        // Closing the reflection is a no, so the points for having said yes go back.
+        revokeChoiceForReflection(student.id, queueItemId);
+        setAgency(getAgencyProgress(student.id));
+    }
+
+    /**
      * Opens the end-of-session reflection from the end-session dialog.
      *
      * The dialog closes first: the reflection replaces it rather than stacking on top of it. When the
@@ -826,7 +895,14 @@ export default function StudentDashboard(): ReactElement {
         const label = t("reflection-session-item-label");
         setShowEndSession(false);
         void startSessionReflection(student.id, label).then((item) => {
-            if (item) setSessionReflectionItem(item);
+            if (!item) return;
+
+            // Choosing to answer the session reflection on your own is the same Choice act as saying
+            // yes to an exercise reflection, so it pays the same way: now, and kept only if they finish.
+            awardChoiceForReflection(student.id, item.id);
+            setAgency(getAgencyProgress(student.id));
+
+            setSessionReflectionItem(item);
         });
     }
 
@@ -904,7 +980,17 @@ export default function StudentDashboard(): ReactElement {
                     <div className={"dashboard__nav-user"}>
                         <div className={"dashboard__nav-user-info"}>
                             <span className={"dashboard__nav-user-name"}>{student?.username ?? "Student"}</span>
-                            <span className={"dashboard__nav-user-level"}>
+                            <span
+                                className={"dashboard__nav-user-level"}
+                                title={stats.nextLevelAt === null
+                                    ? t("dashboard-level-top")
+                                    : t("dashboard-level-next", {
+                                        tier: t(`dashboard-tier-${TIER_NAMES[stats.level]?.toLowerCase() ?? ""}`, TIER_NAMES[stats.level] ?? ""),
+                                        amount: stats.nextLevelAt - stats.weakestXP,
+                                        wallet: t(`dashboard-level-wallet-${stats.weakestWallet}`, stats.weakestWallet),
+                                        total: stats.nextLevelAt
+                                    })}
+                            >
                                 {t(`dashboard-tier-${stats.levelName.toLowerCase()}`, stats.levelName)} {stats.level}
                             </span>
                         </div>
@@ -1116,7 +1202,7 @@ export default function StudentDashboard(): ReactElement {
                                         className={"goal-card__remove"}
                                         title={t("goals-remove")}
                                         aria-label={t("goals-remove")}
-                                        onClick={() => handleRemoveGoal(goal.id)}
+                                        onClick={() => handleRemoveGoal(goal.id, current)}
                                     >
                                         <FontAwesomeIcon icon={faTimes} />
                                     </button>
@@ -1506,6 +1592,19 @@ export default function StudentDashboard(): ReactElement {
                 />
             )}
             {showXpInfo && <XpGuideModal onClose={() => setShowXpInfo(false)} />}
+
+            {/* Deleting a goal that was never started asks first, and says what it costs. */}
+            {pendingGoalRemoval && (
+                <GoalRemoveDialog
+                    goalLabel={pendingGoalRemoval.label}
+                    onKeep={() => setPendingGoalRemoval(null)}
+                    onDelete={() => {
+                        const goalId = pendingGoalRemoval.id;
+                        setPendingGoalRemoval(null);
+                        void deleteGoal(goalId, true);
+                    }}
+                />
+            )}
             {pendingMilestone !== null && (
                 <MilestoneCelebrationOverlay
                     milestone={pendingMilestone}
@@ -1530,6 +1629,7 @@ export default function StudentDashboard(): ReactElement {
                     onAwardInsight={handleReflectionInsight}
                     onGoalAdded={() => void refreshGoals(student.id)}
                     onClose={() => setSessionReflectionItem(null)}
+                    onAbandoned={handleReflectionAbandoned}
                     // This reflection IS the end of the session: it was opened from "End today's
                     // session", and answering it was the last thing of the day. Finishing it closes the
                     // session and signs the student out, rather than dropping them back on a dashboard
@@ -1546,6 +1646,7 @@ export default function StudentDashboard(): ReactElement {
                     buddyImgSrc={buddyImgSrc}
                     onAwardInsight={handleReflectionInsight}
                     onGoalAdded={() => void refreshGoals(student.id)}
+                    onAbandoned={handleReflectionAbandoned}
                     onClose={() => {
                         setShowReflectionModal(false);
                         setReflectionQueue([]);

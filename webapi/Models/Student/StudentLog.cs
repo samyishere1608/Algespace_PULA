@@ -40,6 +40,16 @@ namespace webapi.Models.Student
         public const string ReflectionVerdict = "reflection.verdict";
         public const string ReflectionCompleted = "reflection.completed";
         public const string XpAwarded = "xp.awarded";
+        /// <summary>
+        /// A dashboard screen was open for a stretch of time. `value` is the screen, `amount` is the
+        /// seconds spent on it.
+        ///
+        /// Written when the student LEAVES a screen rather than when they arrive, because the question
+        /// this answers is "how long did they sit here", not "what did they click". A screen entered and
+        /// left inside a second is not written at all — that is a misclick, and logging it would make a
+        /// student who flicked through four tabs look like they had studied four screens.
+        /// </summary>
+        public const string ScreenViewed = "screen.viewed";
 
         /// <summary>The labels written into LogVocabulary, so a chart can name a value without reading code.</summary>
         public static readonly (string Value, string Label)[] All =
@@ -59,6 +69,7 @@ namespace webapi.Models.Student
             (ReflectionVerdict, "the record's verdict on that answer, and who wrote the reply"),
             (ReflectionCompleted, "the student finished or skipped a reflection item"),
             (XpAwarded, "the student was awarded XP"),
+            (ScreenViewed, "a dashboard screen was open, and for how many seconds"),
         ];
     }
 
@@ -73,10 +84,21 @@ namespace webapi.Models.Student
     {
         public const string GoalSet = "goal-set";
         public const string GoalCompleted = "goal-completed";
+        /// <summary>
+        /// Takes back the Choice paid for setting a goal, when that goal is deleted again.
+        ///
+        /// The Choice for setting a goal is the one award a student can both earn and un-earn: the
+        /// goal can be removed, so paying on the click alone would let a goal be added and deleted in
+        /// a loop for points. This row is the reversal, in the same wallet, carrying the goal id that
+        /// makes it idempotent.
+        /// </summary>
+        public const string GoalSetRevoked = "goal-set-revoked";
         public const string SelfPickedGoal = "self-picked-goal";
         public const string AiSuggestedGoal = "ai-suggested-goal";
         public const string TargetedWeakArea = "targeted-weak-area";
         public const string ReflectionOptedIn = "reflection-opted-in";
+        /// <summary>Takes that Choice back when the reflection is closed unfinished. Keyed on the item id.</summary>
+        public const string ReflectionOptedOut = "reflection-opted-out";
         public const string ReflectionAligned = "reflection-aligned";
         public const string ReflectionFollowThrough = "reflection-follow-through";
         /// <summary>The Choice paid for committing to a next step. Its idempotency key is RefId, not this.</summary>
@@ -95,10 +117,12 @@ namespace webapi.Models.Student
         [
             (GoalSet, "XP for setting a goal"),
             (GoalCompleted, "XP for finishing a goal"),
+            (GoalSetRevoked, "Choice taken back when that goal was deleted"),
             (SelfPickedGoal, "XP for choosing your own goal"),
             (AiSuggestedGoal, "XP for taking a suggested goal"),
             (TargetedWeakArea, "XP for working on a named weak area"),
             (ReflectionOptedIn, "Choice for agreeing to reflect"),
+            (ReflectionOptedOut, "Choice taken back when that reflection was closed"),
             (ReflectionAligned, "Insight for an answer the record confirms"),
             (ReflectionFollowThrough, "Resolve for keeping a reflection promise"),
             (ReflectionCommit, "Choice for committing to a next step"),

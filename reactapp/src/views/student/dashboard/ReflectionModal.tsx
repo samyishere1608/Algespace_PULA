@@ -37,6 +37,13 @@ interface Props {
      * them back on the dashboard afterwards leaves a finished session open behind them.
      */
     onFinished?: () => void;
+    /**
+     * Told when the student closes the reflection without finishing it.
+     *
+     * A close is a skip: the item leaves the queue as declined. That is also the moment the Choice for
+     * agreeing to reflect is taken back, which is why the modal reports it rather than just hiding.
+     */
+    onAbandoned?: (queueItemId: number) => void;
     /** Told when the student accepts a suggested goal, so the dashboard can show it at once. */
     onGoalAdded?: (goals: StudyGoal[]) => void;
 }
@@ -168,7 +175,7 @@ function BuddyBubble({ text, buddyName, buddyEmoji, buddyImgSrc, variant = "ask"
     );
 }
 
-export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddyImgSrc, onAwardInsight, onClose, onFinished, onGoalAdded }: Props): ReactElement {
+export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddyImgSrc, onAwardInsight, onClose, onFinished, onGoalAdded, onAbandoned }: Props): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
 
     const [itemIndex, setItemIndex] = useState(0);
@@ -485,6 +492,9 @@ export function ReflectionModal({ studentId, items, buddyName, buddyEmoji, buddy
 
     async function closeAndSkip(): Promise<void> {
         await completeReflection(studentId, item.id, [], true);
+        // Closing is a no, and a no does not keep the points for having said yes. Told after the skip
+        // lands, so the item is already out of the queue whatever happens next.
+        onAbandoned?.(item.id);
         onClose();
     }
 

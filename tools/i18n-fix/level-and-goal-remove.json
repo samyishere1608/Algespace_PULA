@@ -1,0 +1,38 @@
+{
+  "en": {
+    "dashboard-level-next": "{{amount}} more {{wallet}} XP in every category reaches {{tier}} — {{total}} XP needed in each.",
+    "dashboard-level-top": "Top level reached — all three categories are at Master.",
+    "dashboard-level-wallet-choice": "Choice",
+    "dashboard-level-wallet-insight": "Insight",
+    "dashboard-level-wallet-resolve": "Resolve",
+    "agency-info-level": "Your level badge rises when all three reach the next step: 50, then 150, then 400, 800 and 1500 XP in each.",
+    "goal-remove-title": "Not started yet",
+    "goal-remove-body": "You haven't tried this one yet. Giving it an attempt first might help — but if you'd rather drop it, deleting now also gives back the Choice XP for setting it.",
+    "goal-remove-keep": "Give it a try",
+    "goal-remove-delete": "Delete anyway"
+  },
+  "de": {
+    "dashboard-level-next": "Noch {{amount}} {{wallet}}-XP in jeder Kategorie, dann erreichst du {{tier}} — je {{total}} XP nötig.",
+    "dashboard-level-top": "Höchste Stufe erreicht — alle drei Kategorien sind auf Meister.",
+    "dashboard-level-wallet-choice": "Wahl",
+    "dashboard-level-wallet-insight": "Einsicht",
+    "dashboard-level-wallet-resolve": "Ausdauer",
+    "agency-info-level": "Deine Stufe steigt, wenn alle drei den nächsten Schritt erreichen: 50, dann 150, dann 400, 800 und 1500 XP in jeder.",
+    "goal-remove-title": "Noch nicht begonnen",
+    "goal-remove-body": "Dieses Ziel hast du noch nicht ausprobiert. Ein Versuch könnte sich lohnen — wenn du es lieber weglässt, geht beim Löschen auch das Wahl-XP fürs Setzen zurück.",
+    "goal-remove-keep": "Ich probiere es",
+    "goal-remove-delete": "Trotzdem löschen"
+  },
+  "ja": {
+    "dashboard-level-next": "各カテゴリーであと{{amount}}の{{wallet}}XPで{{tier}}に上がります（各{{total}}XP必要）。",
+    "dashboard-level-top": "最高レベルに到達しました — 3つのカテゴリーすべてがマスターです。",
+    "dashboard-level-wallet-choice": "選択",
+    "dashboard-level-wallet-insight": "気づき",
+    "dashboard-level-wallet-resolve": "やり抜く力",
+    "agency-info-level": "3つすべてが次の段階に届くとレベルが上がります：各50、150、400、800、1500XP。",
+    "goal-remove-title": "まだ始めていません",
+    "goal-remove-body": "この目標にはまだ取り組んでいません。一度試してみると役立つかもしれません。やめたい場合は、削除すると設定したときの選択XPも戻ります。",
+    "goal-remove-keep": "試してみる",
+    "goal-remove-delete": "それでも削除"
+  }
+}

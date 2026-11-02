@@ -22,12 +22,31 @@ export function getChoiceXP(studentId: number | string): number {
     return parseInt(localStorage.getItem(choiceKey(studentId)) ?? "0", 10) || 0;
 }
 
-export function addChoiceXP(studentId: number | string, amount: number, source: string = ""): number {
+export function addChoiceXP(
+    studentId: number | string,
+    amount: number,
+    source: string = "",
+    refId: string = ""
+): number {
     const next = getChoiceXP(studentId) + amount;
     localStorage.setItem(choiceKey(studentId), String(next));
     addLifetimeAgency(studentId, amount);
     // Sync to backend (fire-and-forget)
-    syncToBackend(studentId, "choice", amount, source);
+    syncToBackend(studentId, "choice", amount, source, refId);
+    return next;
+}
+
+/**
+ * Takes Choice back, for an award that the app can prove was not earned.
+ *
+ * The only caller is a goal being deleted: the award for setting a goal is reversible by design, and
+ * the reversal is what stops goals being added and deleted in a loop for points. The server does the
+ * same subtraction and clamps at zero; this moves the browser's own copy so the number the student is
+ * watching follows, and the next `syncAgencyFromBackend` reconciles the two.
+ */
+export function revokeChoiceXP(studentId: number | string, amount: number): number {
+    const next = Math.max(0, getChoiceXP(studentId) - amount);
+    localStorage.setItem(choiceKey(studentId), String(next));
     return next;
 }
 
@@ -271,7 +290,7 @@ export function getAgencyProgress(studentId: number | string): AgencyProgress {
 
 // ── Backend sync (fire-and-forget) ───────────────────────────────────────────
 
-function syncToBackend(studentId: number | string, xpType: string, amount: number, source: string): void {
+function syncToBackend(studentId: number | string, xpType: string, amount: number, source: string, refId: string = ""): void {
     if (typeof studentId !== "number" || studentId <= 0) return;
     try {
         axios.post(`${BACKEND}/student-progress/log-agency-xp`, {
@@ -279,6 +298,10 @@ function syncToBackend(studentId: number | string, xpType: string, amount: numbe
             xpType,
             amount,
             source,
+            // What the award was for, when it can be named. The source column is a category and must
+            // never carry an id; this is where a goal id travels so the award can be found and
+            // reversed when the goal is deleted.
+            refId,
         }).catch(() => {
             // Non-critical — localStorage is source of truth for UI
         });

@@ -4,7 +4,6 @@ import { ReactElement, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import i18n from "@/i18n.ts";
-import { awardChoiceForDayReflection } from "@utils/choiceAwards.ts";
 import axios from "axios";
 
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
@@ -71,7 +70,11 @@ export function EndSessionModal({ studentId, onEndSession, onClose, onStartSessi
                     <div className="end-session-modal__choice">
                         <h3 className="end-session-modal__choice-title">{t("end-session-what-next")}</h3>
                         <div className="end-session-modal__choice-cards">
-                            <button className="ess-choice-card" onClick={() => { awardChoiceForDayReflection(studentId); setShowReflection(true); }}>
+                            {/* No Choice XP here any more. It used to pay on picking this card, which
+                                meant the points arrived before a single question was answered — and a
+                                student who picked it and then closed the window kept them. The award is
+                                now paid server-side when the reflection is actually completed. */}
+                            <button className="ess-choice-card" onClick={() => setShowReflection(true)}>
                                 <span className="ess-choice-card__icon ess-choice-card__icon--cyan"><FontAwesomeIcon icon={faMagic} /></span>
                                 <span className="ess-choice-card__title">{t("end-session-reflect-session")}</span>
                                 <span className="ess-choice-card__desc">{t("end-session-reflect-session-desc")}</span>

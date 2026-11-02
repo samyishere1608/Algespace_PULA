@@ -39,3 +39,6 @@ tools/reflection-audit/obj
 # Byte-code from the content generator in tools/flexibility-content.
 __pycache__/
 *.pyc
+
+# Console captures from local runs; they are never part of a change.
+*.log

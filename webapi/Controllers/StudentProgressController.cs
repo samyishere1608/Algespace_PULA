@@ -626,6 +626,7 @@ namespace webapi.Controllers
                 new { request.StudentId, Ids = request.GoalIds });
 
             foreach (var goal in removed)
+            {
                 StudentEventLog.Write(conn, request.StudentId, LogEventType.GoalDeleted, refId: goal.Id,
                     value: goal.Category,
                     data: new
@@ -638,7 +639,203 @@ namespace webapi.Controllers
                         setAt = goal.CreatedAt,
                     });
 
+                RevokeChoiceForDeletedGoal(conn, request.StudentId, goal.Id);
+            }
+
             return Ok(ReadActiveGoals(conn, request.StudentId));
+        }
+
+        /// <summary>Choice for choosing to reflect, paid on the yes and kept only if they finish.</summary>
+        private const int ChoiceForCompletedReflectionXp = 5;
+
+        /// <summary>
+        /// Makes sure the Choice for a finished reflection has been paid, once per queue item.
+        ///
+        /// THE CLIENT USUALLY GOT THERE FIRST. Agreeing to reflect pays this immediately, so the student
+        /// sees something for the yes; this call is the safety net for the paths that do not go through
+        /// that offer — a reflection opened from the dashboard's own list — and the second half of the
+        /// idempotency: the row is keyed on the source and the queue item id, so a re-finish cannot pay
+        /// twice and an award already made here does nothing.
+        /// </summary>
+        private static void AwardChoiceForCompletedReflection(
+            Microsoft.Data.Sqlite.SqliteConnection conn, long studentId, long queueItemId)
+        {
+            var already = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(1) FROM {StudentProgressDBSettings.AgencyLogTable} " +
+                "WHERE StudentId = @StudentId AND XpType = 'choice' AND Source = @Source AND RefId = @RefId",
+                new { StudentId = studentId, Source = LogAgencySource.ReflectionOptedIn, RefId = queueItemId.ToString() });
+
+            if (already > 0) return;
+
+            conn.Execute(
+                $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, Amount, Source, RefId, LoggedAt) " +
+                "VALUES (@StudentId, 'choice', @Amount, @Source, @RefId, @Now)",
+                new
+                {
+                    StudentId = studentId,
+                    Amount = ChoiceForCompletedReflectionXp,
+                    Source = LogAgencySource.ReflectionOptedIn,
+                    RefId = queueItemId.ToString(),
+                    Now = LogStamp.Now()
+                });
+
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ProgressTable} " +
+                "SET ChoiceXP = ChoiceXP + @Amount, LifetimeAgencyXP = LifetimeAgencyXP + @Amount " +
+                "WHERE StudentId = @StudentId",
+                new { StudentId = studentId, Amount = ChoiceForCompletedReflectionXp });
+
+            StudentEventLog.Write(conn, studentId, LogEventType.XpAwarded, refId: queueItemId.ToString(),
+                value: "choice", amount: ChoiceForCompletedReflectionXp,
+                data: new { source = LogAgencySource.ReflectionOptedIn });
+
+            Console.WriteLine($"[Reflection] Choice +{ChoiceForCompletedReflectionXp} for completing item {queueItemId}");
+        }
+
+        /// <summary>
+        /// Takes back the Choice for setting a goal, called when that goal is deleted.
+        ///
+        /// A separate route rather than a negative amount on `log-agency-xp`: that endpoint is the
+        /// general "I earned this" write and allowing negative amounts there would let any client
+        /// drain any wallet. Here the amount is not in the request at all — it is what the ledger says
+        /// was paid for this goal id, and only that.
+        /// </summary>
+        [HttpPost("goal-choice-revoke")]
+        public ActionResult<object> RevokeGoalChoice([FromBody] RevokeGoalChoiceRequest request)
+        {
+            if (request.StudentId <= 0 || string.IsNullOrWhiteSpace(request.GoalId))
+                return BadRequest("Invalid request.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            RevokeChoiceForDeletedGoal(conn, request.StudentId, request.GoalId);
+
+            var choiceXP = conn.ExecuteScalar<int>(
+                $"SELECT ChoiceXP FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId = @StudentId",
+                new { request.StudentId });
+
+            return Ok(new { choiceXP });
+        }
+
+        /// <summary>
+        /// Takes back the Choice for choosing to reflect, when the reflection is closed unfinished.
+        ///
+        /// The counterpart of paying on the yes: a skipped item is one the student declined, so the
+        /// points for agreeing go with it. Nothing is taken back that was never paid — a reflection
+        /// opened from the dashboard's own list never paid on the yes.
+        /// </summary>
+        [HttpPost("reflection-choice-revoke")]
+        public ActionResult<object> RevokeReflectionChoice([FromBody] RevokeReflectionChoiceRequest request)
+        {
+            if (request.StudentId <= 0 || request.QueueItemId <= 0)
+                return BadRequest("Invalid request.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            var paid = conn.ExecuteScalar<int>(
+                $"SELECT COALESCE(SUM(Amount), 0) FROM {StudentProgressDBSettings.AgencyLogTable} " +
+                "WHERE StudentId = @StudentId AND XpType = 'choice' AND Source = @Source AND RefId = @RefId",
+                new { StudentId = request.StudentId, Source = LogAgencySource.ReflectionOptedIn, RefId = request.QueueItemId.ToString() });
+
+            if (paid > 0)
+            {
+                var alreadyRevoked = conn.ExecuteScalar<int>(
+                    $"SELECT COUNT(1) FROM {StudentProgressDBSettings.AgencyLogTable} " +
+                    "WHERE StudentId = @StudentId AND Source = @Source AND RefId = @RefId",
+                    new { StudentId = request.StudentId, Source = LogAgencySource.ReflectionOptedOut, RefId = request.QueueItemId.ToString() });
+
+                if (alreadyRevoked == 0)
+                {
+                    conn.Execute(
+                        $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, Amount, Source, RefId, LoggedAt) " +
+                        "VALUES (@StudentId, 'choice', @Amount, @Source, @RefId, @Now)",
+                        new
+                        {
+                            StudentId = request.StudentId,
+                            Amount = -paid,
+                            Source = LogAgencySource.ReflectionOptedOut,
+                            RefId = request.QueueItemId.ToString(),
+                            Now = LogStamp.Now()
+                        });
+
+                    conn.Execute(
+                        $"UPDATE {StudentProgressDBSettings.ProgressTable} " +
+                        "SET ChoiceXP = MAX(0, ChoiceXP - @Amount), LifetimeAgencyXP = MAX(0, LifetimeAgencyXP - @Amount) " +
+                        "WHERE StudentId = @StudentId",
+                        new { StudentId = request.StudentId, Amount = paid });
+
+                    StudentEventLog.Write(conn, request.StudentId, LogEventType.XpAwarded,
+                        refId: request.QueueItemId.ToString(), value: "choice", amount: -paid,
+                        data: new { source = LogAgencySource.ReflectionOptedOut });
+                }
+            }
+
+            var choiceXP = conn.ExecuteScalar<int>(
+                $"SELECT ChoiceXP FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId = @StudentId",
+                new { request.StudentId });
+
+            return Ok(new { choiceXP });
+        }
+
+        /// <summary>
+        /// Takes the Choice for setting a goal back when the goal is deleted.
+        ///
+        /// WHY THE AWARD AND ITS REVERSAL SIT HERE RATHER THAN A DAILY CAP. A goal can be set and
+        /// removed in a loop, so paying for the click alone would make Choice a measure of clicking.
+        /// The alternative tried first was "pay at most once a day", which stops the farm but also
+        /// charges a student their whole day for one genuine goal. Reversing the award is the version
+        /// that keeps both properties: adding and deleting nets to zero however often it is repeated,
+        /// and a goal that is kept keeps its points.
+        ///
+        /// Nothing is taken back that was never paid. Goals set before the award carried a RefId have
+        /// no row to find, so they revoke nothing — the same reason the award is keyed on the goal id
+        /// and not on the source alone.
+        /// </summary>
+        private static void RevokeChoiceForDeletedGoal(
+            Microsoft.Data.Sqlite.SqliteConnection conn, long studentId, string goalId)
+        {
+            var paid = conn.ExecuteScalar<int>(
+                $"SELECT COALESCE(SUM(Amount), 0) FROM {StudentProgressDBSettings.AgencyLogTable} " +
+                "WHERE StudentId = @StudentId AND XpType = 'choice' AND Source = @Source AND RefId = @RefId",
+                new { StudentId = studentId, Source = LogAgencySource.GoalSet, RefId = goalId });
+
+            if (paid <= 0) return;
+
+            var alreadyRevoked = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(1) FROM {StudentProgressDBSettings.AgencyLogTable} " +
+                "WHERE StudentId = @StudentId AND Source = @Source AND RefId = @RefId",
+                new { StudentId = studentId, Source = LogAgencySource.GoalSetRevoked, RefId = goalId });
+
+            if (alreadyRevoked > 0) return;
+
+            conn.Execute(
+                $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} (StudentId, XpType, Amount, Source, RefId, LoggedAt) " +
+                "VALUES (@StudentId, 'choice', @Amount, @Source, @RefId, @Now)",
+                new
+                {
+                    StudentId = studentId,
+                    Amount = -paid,
+                    Source = LogAgencySource.GoalSetRevoked,
+                    RefId = goalId,
+                    Now = LogStamp.Now()
+                });
+
+            // MAX(0, ...) rather than a plain subtraction: the wallet is a running total a student is
+            // watching, and a negative one would be a bug they can see. Lifetime is clamped for the
+            // same reason, since it is the ranking figure.
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ProgressTable} " +
+                "SET ChoiceXP = MAX(0, ChoiceXP - @Amount), LifetimeAgencyXP = MAX(0, LifetimeAgencyXP - @Amount) " +
+                "WHERE StudentId = @StudentId",
+                new { StudentId = studentId, Amount = paid });
+
+            StudentEventLog.Write(conn, studentId, LogEventType.XpAwarded, refId: goalId,
+                value: "choice", amount: -paid,
+                data: new { source = LogAgencySource.GoalSetRevoked });
         }
 
         // ── POST /student-progress/log-goal ────────────────────────────────
@@ -691,6 +888,19 @@ namespace webapi.Controllers
             EnqueueReflection(conn, request.StudentId, "goal", request.GoalId, request.GoalLabel,
                 request.TotalErrors, request.TotalHints, 0, request.ExerciseType, "", request.Focus,
                 BuildGoalEvidence(conn, request.StudentId, request.GoalId, request.Since, request.Focus, request.Quality, request.MaxPerExercise));
+
+            // THE GOAL REFLECTION REPLACES THE EXERCISE ONE, whichever request arrived first.
+            //
+            // The exercise that completed this goal also queued a reflection of its own, in a request
+            // sent before this one. That question is about one exercise; this one is about the run of
+            // exercises that finished the goal, so it is the better question and the only one worth
+            // asking. Retiring the exercise row here covers the case where it landed second — the
+            // other half of the ordering is handled in `log-exercise`, which declines to queue at all
+            // while a goal reflection is waiting.
+            conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ReflectionQueueTable} SET Status = 'skipped' " +
+                "WHERE StudentId = @StudentId AND ItemType = 'exercise' AND Status = 'pending'",
+                new { StudentId = request.StudentId });
 
             var newTotal = conn.ExecuteScalar<int>(
                 $"SELECT TotalXP FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId = @StudentId",
@@ -773,7 +983,19 @@ namespace webapi.Controllers
             // queue that exists only for the treatment arm is exactly the difference the analysis is meant
             // to measure. Everything else above and below is written for both arms, because the exercise
             // data IS the measurement.
-            if (!string.IsNullOrWhiteSpace(request.ExerciseType) && !StudentCondition.IsControl(conn, request.StudentId))
+            //
+            // AND UNLESS A GOAL REFLECTION IS ALREADY WAITING. When this exercise is the one that finished
+            // a goal, the goal is the thing worth asking about: it covers this exercise and the ones
+            // before it, so asking about the exercise as well is asking twice about the same work. The
+            // goal reflection is queued by `log-goal`, which arrives after this call, so without this
+            // guard the order of two independent requests would decide which question the student saw.
+            var goalReflectionPending = conn.ExecuteScalar<int>(
+                $"SELECT COUNT(1) FROM {StudentProgressDBSettings.ReflectionQueueTable} " +
+                "WHERE StudentId = @StudentId AND ItemType = 'goal' AND Status = 'pending'",
+                new { StudentId = request.StudentId }) > 0;
+
+            if (!string.IsNullOrWhiteSpace(request.ExerciseType) && !StudentCondition.IsControl(conn, request.StudentId)
+                && !goalReflectionPending)
             {
                 EnqueueReflection(conn, request.StudentId, "exercise", request.ExerciseType, request.ExerciseType,
                     request.Errors, request.Hints, 0, request.ExerciseType, request.Decisions,
@@ -1141,14 +1363,15 @@ namespace webapi.Controllers
             // Log the event
             conn.Execute(
                 $"INSERT INTO {StudentProgressDBSettings.AgencyLogTable} " +
-                "(StudentId, XpType, Amount, Source, LoggedAt) " +
-                "VALUES (@StudentId, @XpType, @Amount, @Source, @LoggedAt)",
+                "(StudentId, XpType, Amount, Source, RefId, LoggedAt) " +
+                "VALUES (@StudentId, @XpType, @Amount, @Source, @RefId, @LoggedAt)",
                 new
                 {
                     request.StudentId,
                     request.XpType,
                     request.Amount,
                     Source = request.Source ?? "",
+                    RefId = request.RefId ?? "",
                     LoggedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss")
                 });
 
@@ -1162,6 +1385,41 @@ namespace webapi.Controllers
                 data: new { source = request.Source ?? "" });
 
             return Ok(newValue);
+        }
+
+        /// <summary>
+        /// Records how long a dashboard screen was open.
+        ///
+        /// Sent when the student LEAVES a screen, so one call is one completed visit. Deliberately cheap
+        /// and tolerant: anything under a second is dropped on both ends, an unknown screen name is
+        /// stored as-is (the client owns the list of screens, the same way it owns the goal catalogue),
+        /// and a negative or absurd duration is clamped rather than refused — a logging call must never
+        /// be the thing that breaks a dashboard.
+        /// </summary>
+        [HttpPost("screen-view")]
+        public ActionResult LogScreenView([FromBody] ScreenViewRequest request)
+        {
+            if (request.StudentId <= 0 || string.IsNullOrWhiteSpace(request.Screen))
+                return BadRequest("Invalid request.");
+
+            if (request.Seconds < 1) return Ok(new { logged = false });
+
+            // Ten minutes is longer than a screen is plausibly the front-most one without the student
+            // touching anything; beyond it the tab was probably left open. Clamped rather than dropped
+            // so a parked dashboard still shows up as "sat here", just not as an hour of study.
+            var seconds = Math.Clamp(request.Seconds, 1, 600);
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            StudentEventLog.Write(conn, request.StudentId, LogEventType.ScreenViewed,
+                value: request.Screen.Trim().ToLowerInvariant()[..Math.Min(request.Screen.Trim().Length, 40)],
+                amount: seconds,
+                data: new { language = request.Language ?? "" },
+                language: request.Language ?? "");
+
+            return Ok(new { logged = true });
         }
 
         // ── Sessions ─────────────────────────────────────────────────────────
@@ -3453,6 +3711,15 @@ RULES:
             if (request.Skip)
                 return Ok();
 
+            // CHOICE IS PAID FOR CHOOSING TO REFLECT, AND KEPT ONLY IF THE REFLECTION IS FINISHED.
+            //
+            // The award is made the moment the student says yes (the client posts it, so they see it at
+            // once), and taken back if the reflection is closed without being answered. This call is the
+            // half that guarantees the points are there for a finished reflection that never went through
+            // the yes prompt — it is idempotent on the queue item, so a reflection already paid gets
+            // nothing here.
+            AwardChoiceForCompletedReflection(conn, request.StudentId, request.QueueItemId);
+
             foreach (var h in request.History)
             {
                 conn.Execute(
@@ -4231,6 +4498,91 @@ RULES:
                 _ => "Respond in English."
             };
 
+            // JAPANESE IS WRITTEN, NOT TRANSLATED.
+            //
+            // Without this the model produced textbook-correct Japanese that read as a translation: the
+            // first run against these scenarios answered a mistake-report question with
+            // 「ヒントを使わなかったとおっしゃっていますね。…確認されています」 — honorific, passive and
+            // unmistakably a teacher's report — and praised a clean run with 「…取り組めた証で」, a calque
+            // of "evidence that". Both are correct Japanese and both sound nothing like a friend
+            // talking to a twelve-year-old.
+            //
+            // The rules below came from a native speaker and take precedence over the English tone
+            // guidance above, which is why they say so in their first line: two sets of instructions
+            // pulling in different directions is how a reply comes back half-formal.
+            //
+            // Only for `ja`. German and English were already written by someone fluent in them, and an
+            // override that fires for them would change replies nobody complained about.
+            var japaneseStyleGuide = request.Language == "ja"
+                ? """
+
+JAPANESE: WRITE IT NATIVELY. THIS SECTION OVERRIDES THE TONE GUIDANCE ABOVE WHEREVER THEY DIFFER.
+英語から翻訳しない。日本語として最初から自然に書く。
+
+【話し方】
+- ピピンは中学1年生の頼れる友だち。常体（話しことば）で書く。「〜ね」「〜よ」「〜かな」「〜てみよう」。
+- 「です・ます」を混ぜない。ぜんぶ同じ調子にそろえる。
+- 「あなた」は使わない。主語は省く。どうしても要るときだけ「きみ」。
+- 先生の報告口調にしない。友だちに話しかけるように書く。
+
+【文の長さ】
+- 1文はみじかく。1文に1つだけ。40字以内を目安にする。長くなったら文を分ける。
+
+【翻訳くさい言い回しを使わない】
+- つかわない: 「〜することができました」「〜という証拠です」「〜の証ですね」「〜の証だよ」「〜を証明する」
+  「〜について、何を〜」「〜が確認されています」「おっしゃっています」「〜を有効な手段として」
+- こう言う: 「〜できたね」「〜が身についてきたよ」「〜だね」「〜してみよう」「〜できるようになってきたね」
+- 「証」「証拠」という名詞は使わない。ほめるのは「身についてきた」「できるようになった」でじゅうぶん。
+- 受身形（〜されています・〜が確認されています）は使わない。自分の目で見たように書く。
+
+【書いてある事実と食いちがわない（とても大事）】
+- Did の行に書いてあることと反対のことを書かない。ヒントを1回使っていたなら「ヒントを使わずに」とは書かない。
+- ミスがあったなら「ミスなく」とは書かない。数字は書いてあるとおりに使う。
+- さいしょの文で言ったことを、あとの文で打ち消さない。ひとつの返事のなかで話を合わせる。
+- 生徒の答えと事実がちがうときは、生徒の答えを「思ったこと」として受けとめる。
+  「〜と思ったんだね」「〜と感じたんだね」の形にしてから、事実をやさしく言う。
+  生徒の答えを、そのまま事実のように書かない。
+  良い: 「ヒントを使わなかったと思ったんだね。このステップでは、1回ヒントを使っているよ。ヒントを使うのは、どこがわからないかを見つけるいいきっかけだね。」
+  悪い: 「ヒントを使わずに進めたね。ミスは2つあって、ヒントを1回使ったよ。」← 1文目が事実とちがう。じぶんで打ち消している。
+
+【nextStep】
+- nextStep には「つぎに やってみること」を一つだけ、具体的に書く。
+- 生徒が言った言葉をそのまま返さない。「〜してみよう」の形で、すぐできる行動にする。
+
+【漢字とことば】
+- 小学6年生までに習う漢字だけ使う。それ以外はひらがなで書く。（例: 異なる→ちがう、違う→ちがう、本質→いちばん大事なところ）
+- むずかしい言葉は、やさしい言葉に言いかえる。（例: 確実→しっかり、実施→やる、有効→いい、理解を深める→よくわかる）
+
+【ほめ方】
+- 数字や行動など、データにあることを具体的にほめる。（例:「ヒントなしで最後までいけたね！」）
+- 大げさにほめすぎない。あたたかく、自然に。
+- データにないことは言わない。さっき言ったことと食いちがうことも言わない。
+  （例:「よくできた」と言ったあとに「急ぎすぎた」と言わない）
+
+【問いかけ】
+- 問いかけるなら1回に1つだけ。みじかく、やわらかく（「〜かな？」「どうだった？」）。
+- ただし、この返事は生徒が返せないので、feedback の文を「？」で終わらない。nextStep で次の一歩をしめす。
+
+【ことばの対応】
+- steps / parts → ステップ
+- Choose the method → 解き方を選ぶこと
+- Apply the method → 解き方を当てはめること
+- Find the answer → 答えを求めること
+
+【良い例】
+- 「ヒントもミスもなしで、最後までスイスイ進めたね。やり方がしっかり身についてきてるよ！」
+- 「今日はこれで終わり。よくがんばったね！今日は何が特に良くできたかな？」
+
+【悪い例（ぜったいに使わない）】
+- 「あなたは最も速く、間違いもなく、ヒントも使わず、他の部分と比べて同じレベルでやり方を当てはめることができました。これは、自分の方法を確実に使えるようになっている証拠です。」
+  → 「あなた」「〜することができました」「〜の証拠です」、1文が長すぎる、かたい言葉。
+- 「次は急ぎすぎたことについて、何を変える？」
+  → 直前に「よくできた」と言ったのと食いちがう。言い回しもぎこちない。
+- 「いちばんヒントが少なくてすんだ」「いちばんまちがいが少なかった」
+  → 「いちばん」は英語の直訳くさい。「ヒントが少なくてすんだ」「まちがいが少なかった」でいい。
+"""
+                : "";
+
             // The same fact, said TO the student instead of about them.
             //
             // Q1 and Q2 are answered with this: the help button asks for it outright, and a chip answer is
@@ -4285,9 +4637,8 @@ The decision on their answer: {verdictLine}
 {answerLine}
 Mode: {mode}{helpVoice}
 Instructions:
-{langInstruction}
-TONE (very important): Be warm, brief and conversational — like a friend, not a report. Write as the companion who was there with them, in the second person (""you compared the two methods""), never as something that looked them up or checked them, and never list their exact error or hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.
-NEVER TALK ABOUT AWARDS OR SCORES (very important): the app's own scoreboard must not appear in the reply in any form — no name for it, no number, no abbreviation, and nothing about whether something counted, paid, was earned, or did not. That includes the empty-handed version of it: never tell them there is nothing here to earn, because a student who got little out of an exercise still did the exercise, and that line only lands as a mark against them. Whatever there is to show sits on the badge beside your reply, and talking about it turns a reflection into a scoreboard. The JSON at the end carries an award number and the machine's names for its fields: those are for the machine, and neither the number nor those names may appear in the feedback text.
+{langInstruction}{japaneseStyleGuide}
+TONE (very important): Be warm, brief and conversational — like a friend, not a report. Write as the companion who was there with them, in the second person (""you compared the two methods""), never as something that looked them up or checked them, and never list their exact error or hint numbers back at them. If their self-assessment matches their performance, just celebrate it and stop there — do NOT add any suggestion or correction.NEVER TALK ABOUT AWARDS OR SCORES (very important): the app's own scoreboard must not appear in the reply in any form — no name for it, no number, no abbreviation, and nothing about whether something counted, paid, was earned, or did not. That includes the empty-handed version of it: never tell them there is nothing here to earn, because a student who got little out of an exercise still did the exercise, and that line only lands as a mark against them. Whatever there is to show sits on the badge beside your reply, and talking about it turns a reflection into a scoreboard. The JSON at the end carries an award number and the machine's names for its fields: those are for the machine, and neither the number nor those names may appear in the feedback text.
 NEVER DESCRIBE THE CONTROLS OR THEIR GESTURES (very important): the reply is about their work, not about how the app was operated. Never write that they asked, tapped, pressed, clicked or selected anything, never mention a button, and never mention asking for help or for the answer. Say what they DID on the exercise itself. ""You asked to be shown the solution"" is exactly the sentence that is not allowed; ""you went on and let the system show you"" says the same fact about their work and is the shape to use instead.
 ANSWER THE QUESTION WITH SOMETHING REAL ABOUT IT (very important): every reply answers the ONE question above with something real about it — for a question about a decision, what they did at that step; for a counting question, the number; for a question about the next exercise, the one thing to do next. A remark that would fit any question at all (""that's interesting"", ""worth another look"", ""sometimes the tricky spots sneak up on us"") does not answer it, and must never be the whole reply. If their answer was too vague to tell you anything, do not comment on how vague it was: give them what the facts line states about this question, warmly, and stop.
 NEVER JUST HAND THEIR ANSWER BACK (very important): a reply that only repeats what they said or did (""you did exactly that"", ""that is exactly what happened"", ""you got through all three without hints"") tells them nothing new. Every reply for Q1 and Q2 has TWO parts: first, ONE short clause that states the fact, in different words from theirs; second, ONE sentence from the ""Why this matters"" line, put in your own words, saying what that thing is for. Do not stack praise on top (""great job"", ""wonderful"", ""it is great to see"") — the second part IS the substance. If there is no ""Why this matters"" line, add one true sentence about why that thing helps, drawn only from the subject of this question.

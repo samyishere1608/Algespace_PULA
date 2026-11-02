@@ -155,6 +155,43 @@ namespace webapi.Models.Student
         public List<string> GoalIds { get; set; } = [];
     }
 
+    /// <summary>Asks the server to take back the Choice paid for setting one goal.</summary>
+    public class RevokeGoalChoiceRequest
+    {
+        public long StudentId { get; set; }
+
+        /// <summary>The goal that was deleted. The amount is never sent: it is what the ledger says.</summary>
+        public string GoalId { get; set; } = "";
+    }
+
+    /// <summary>Asks the server to take back the Choice paid for choosing to reflect, when it was closed.</summary>
+    public class RevokeReflectionChoiceRequest
+    {
+        public long StudentId { get; set; }
+
+        /// <summary>The queue item that was closed unfinished. The amount is what the ledger says.</summary>
+        public long QueueItemId { get; set; }
+    }
+
+    /// <summary>
+    /// One completed visit to a dashboard screen.
+    ///
+    /// The seconds are measured by the browser, because the browser is the only thing that knows when
+    /// the screen stopped being the one on top.
+    /// </summary>
+    public class ScreenViewRequest
+    {
+        public long StudentId { get; set; }
+
+        /// <summary>"main" | "exercises" | "analytics" | "leaderboard" | "tree" | "goals" | "shop".</summary>
+        public string Screen { get; set; } = "";
+
+        /// <summary>How long the screen was open, in seconds.</summary>
+        public int Seconds { get; set; }
+
+        public string Language { get; set; } = "";
+    }
+
     public class LogExerciseRequest
     {
         public long StudentId { get; set; }
@@ -199,6 +236,16 @@ namespace webapi.Models.Student
         public string XpType { get; set; } = "";    // "choice" | "insight" | "resolve"
         public int Amount { get; set; }
         public string Source { get; set; } = "";     // e.g. "daily-intention", "solo-solve", "retry"
+
+        /// <summary>
+        /// What the award was for, when it can be named — a goal id, a queue item id, an attempt id.
+        ///
+        /// Empty for awards that are only ever paid once by construction. Where an award CAN be
+        /// reversed or repeated (Choice for setting a goal, which is taken back if the goal is
+        /// deleted again), this is the only way to find the original row afterwards: the source is a
+        /// category name and must never carry an id.
+        /// </summary>
+        public string RefId { get; set; } = "";
     }
 
     /// <summary>Asks whether engaging with an avoided element, in this attempt, earns Insight.</summary>

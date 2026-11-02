@@ -1,0 +1,35 @@
+[
+  {
+    "scenario": "clean-run",
+    "question": "q1-exercise-went-well",
+    "errors": 0,
+    "hints": 0,
+    "studentAnswer": "ヒントもミスもなしで、さいごまでできた",
+    "feedback": "ヒントもミスもなしで最後まで進められたね。それは、自分の力でしっかり取り組めた証で、とてもいい流れだったよ。",
+    "nextStep": "",
+    "aligned": true,
+    "insightXp": 3
+  },
+  {
+    "scenario": "hint-mismatch",
+    "question": "q1-exercise-went-well",
+    "errors": 2,
+    "hints": 1,
+    "studentAnswer": "ヒントはつかわなかった",
+    "feedback": "ヒントを使わなかったとおっしゃっていますね。この問題では2回のミスをして、1回のヒントを使っていることが確認されています。ヒントを使うのは、理解を深めるための有効な手段なので、その選択はとても自然なことです。",
+    "nextStep": "",
+    "aligned": false,
+    "insightXp": 0
+  },
+  {
+    "scenario": "next-step",
+    "question": "q3-next-action",
+    "errors": 1,
+    "hints": 0,
+    "studentAnswer": "つぎは解き方をくらべてみたい",
+    "feedback": "次は解き方を比べてみたいと決めたね。異なる解き方を比べることで、問題の本質がよりよく見えてきて、自分の理解が深まるよ。",
+    "nextStep": "次は異なる解き方を比べてみる",
+    "aligned": false,
+    "insightXp": 0
+  }
+]

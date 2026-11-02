@@ -1,0 +1,35 @@
+[
+  {
+    "scenario": "clean-run",
+    "question": "q1-exercise-went-well",
+    "errors": 0,
+    "hints": 0,
+    "studentAnswer": "ヒントもミスもなしで、さいごまでできた",
+    "feedback": "You made it all the way through without needing any hints or making mistakes, that shows you were fully engaged and confident in your understanding. That kind of focus helps build real mastery, not just getting the right answer.",
+    "nextStep": "",
+    "aligned": true,
+    "insightXp": 3
+  },
+  {
+    "scenario": "hint-mismatch",
+    "question": "q1-exercise-went-well",
+    "errors": 2,
+    "hints": 1,
+    "studentAnswer": "ヒントはつかわなかった",
+    "feedback": "Thank you for putting that into your own words. Stopping to write it down is the part that makes a session add up to something.",
+    "nextStep": "",
+    "aligned": false,
+    "insightXp": 0
+  },
+  {
+    "scenario": "next-step",
+    "question": "q3-next-action",
+    "errors": 1,
+    "hints": 0,
+    "studentAnswer": "つぎは解き方をくらべてみたい",
+    "feedback": "You're planning to compare the solution methods, which is a great way to deepen your understanding of how different approaches can lead to the same result. This kind of comparison helps you see what works best for you and builds flexibility in your thinking.",
+    "nextStep": "Try comparing two different solution methods side by side in your next exercise, focusing on what each one highlights or makes easier.",
+    "aligned": false,
+    "insightXp": 0
+  }
+]

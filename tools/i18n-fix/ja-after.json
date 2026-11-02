@@ -1,0 +1,35 @@
+[
+  {
+    "scenario": "clean-run",
+    "question": "q1-exercise-went-well",
+    "errors": 0,
+    "hints": 0,
+    "studentAnswer": "ヒントもミスもなしで、さいごまでできた",
+    "feedback": "ヒントもミスもなしで最後までできたね。やり方がしっかり身についてきてるよ。",
+    "nextStep": "",
+    "aligned": true,
+    "insightXp": 3
+  },
+  {
+    "scenario": "hint-mismatch",
+    "question": "q1-exercise-went-well",
+    "errors": 2,
+    "hints": 1,
+    "studentAnswer": "ヒントはつかわなかった",
+    "feedback": "ヒントを使わなかったね。このステップでミスは2回、ヒントは1回使ったよ。ヒントを使わずに進めたのは、自分の考えをしっかり働かせた証だよ。",
+    "nextStep": "",
+    "aligned": false,
+    "insightXp": 0
+  },
+  {
+    "scenario": "next-step",
+    "question": "q3-next-action",
+    "errors": 1,
+    "hints": 0,
+    "studentAnswer": "つぎは解き方をくらべてみたい",
+    "feedback": "解き方をくらべてみたいって、いいね。違うやり方を比べると、どうしてその方法がいいのかがよくわかるよ。",
+    "nextStep": "次は、2つの解き方を並べて、それぞれのちがいをノートに書いてみよう",
+    "aligned": false,
+    "insightXp": 0
+  }
+]
