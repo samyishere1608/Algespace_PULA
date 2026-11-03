@@ -1,4 +1,4 @@
-// ── Chatface art ──────────────────────────────────────────────────────────────
+﻿// ── Chatface art ──────────────────────────────────────────────────────────────
 //
 // "Chatface" art is a head-and-shoulders portrait of a character drawn once per outfit. It is the
 // art used when the character is *speaking to* the student — the intervention popover inside the
@@ -145,22 +145,55 @@ export function hasChatface(characterId: string): boolean {
 
 // ── Expression art ───────────────────────────────────────────────────────────
 //
-// A "mood" is the same character in the same outfit, drawn with a different face and prop, so the
-// picture itself says what kind of thing is being said — no caption needed, and readable by a
-// student who cannot or does not read the bubble first:
+// The five moods, and how a file path maps to one, live in `chatfaceExpressionMap.ts` — that module
+// has no imports, so the mapping can be checked against the real folders without a Vite build. What
+// stays here is the part that needs Vite: loading the images and choosing between them.
 //
-//   hint      pointing up at a lightbulb      -> here is a hint
-//   question  hand on chin, question mark     -> you are being asked to decide something
-//   solo      two fists up, cheering          -> try it yourself, you can do this
-//   approve   thumbs up, winking              -> yes, that was right
-//   celebrate both arms up, sparks            -> the exercise is finished
-//
-// The drawings exist for Pippin in the DEFAULT look only. `resolveChatfaceMoodSrc` therefore answers
-// only for a default look and returns undefined otherwise, so a student who has equipped an outfit
-// keeps their outfit and loses the prop. That is the right way round: the outfit is what they chose,
-// the prop is decoration.
-export type ChatfaceMood = "hint" | "question" | "solo" | "approve" | "celebrate";
+// EVERY OUTFIT HAS ALL FIVE MOODS NOW. The first version only had Pippin's default look, so a student
+// who equipped anything else kept the outfit and lost the expression.
+import {
+    describeOutfitExpressionPath,
+    normaliseOutfitId,
+    type ChatfaceMood,
+} from "@utils/chatfaceExpressionMap.ts";
 
+// Re-exported so every existing `import type { ChatfaceMood } from "@utils/chatfaceUtils.ts"` keeps
+// working — the mood vocabulary belongs to the whole feature, not to this file.
+export type { ChatfaceMood } from "@utils/chatfaceExpressionMap.ts";
+/**
+ * Every expression file, resolved at build time rather than through 100 hand-written imports.
+ *
+ * The folder layout is the index: `Chatfaces/<Character>/outfit <n>/<sheet>_Cropped_<m>.png` says
+ * which character, which look and which mood. These are emitted as separate assets rather than
+ * bundled, so a student downloads only the five files for the look they are wearing.
+ */
+const OUTFIT_EXPRESSION_FILES = import.meta.glob(
+    "../assets/images/Character/Chatfaces/*/outfit */*.png",
+    { eager: true, import: "default" }
+) as Record<string, string>;
+
+function buildOutfitExpressions(): Record<string, Partial<Record<ChatfaceMood, string>>> {
+    const expressions: Record<string, Partial<Record<ChatfaceMood, string>>> = {};
+
+    for (const [path, url] of Object.entries(OUTFIT_EXPRESSION_FILES)) {
+        const described = describeOutfitExpressionPath(path);
+        if (!described) continue;
+
+        (expressions[described.outfitId] ??= {})[described.mood] = url;
+    }
+
+    return expressions;
+}
+
+/** outfit id -> mood -> expression art, for every look that has art. */
+const OUTFIT_EXPRESSIONS = buildOutfitExpressions();
+
+/**
+ * Pippin's default look, drawn by hand before the per-outfit sets existed.
+ *
+ * Kept because it is the one look with no folder of its own — his five folders are his five outfits,
+ * and the look he wears with nothing equipped is drawn separately.
+ */
 const CHATFACE_MOODS: Record<string, Partial<Record<ChatfaceMood, string>>> = {
     pippin: {
         hint: pippinMoodHint,
@@ -172,7 +205,12 @@ const CHATFACE_MOODS: Record<string, Partial<Record<ChatfaceMood, string>>> = {
 };
 
 /**
- * The expression art for a character, if it has any for this mood AND is wearing its default look.
+ * The expression art for a character in an outfit, for one mood.
+ *
+ * Precedence: the outfit's own expression, then — only for the default look — the hand-drawn set, and
+ * otherwise nothing, which lets the caller fall back to the plain portrait. The middle step is what
+ * keeps Pippin's default look working; it is deliberately not used for other outfits, because those
+ * drawings are the default CLOTHES and would contradict what the student is wearing.
  *
  * `outfitId` follows the same rules as `resolveChatfaceSrc`: null/undefined/"default"/"<id>-default"
  * all mean "the default look".
@@ -184,10 +222,15 @@ export function resolveChatfaceMoodSrc(
 ): string | undefined {
     if (!mood) return undefined;
 
-    const isDefaultLook = !outfitId
-        || outfitId === DEFAULT_ITEM_SUFFIX
-        || outfitId === `${characterId}-${DEFAULT_ITEM_SUFFIX}`;
+    const resolvedId = normaliseOutfitId(characterId, outfitId);
+
+    const perOutfit = OUTFIT_EXPRESSIONS[resolvedId]?.[mood];
+    if (perOutfit) return perOutfit;
+
+    const isDefaultLook = resolvedId === `${characterId}-${DEFAULT_ITEM_SUFFIX}`;
     if (!isDefaultLook) return undefined;
 
     return CHATFACE_MOODS[characterId]?.[mood];
 }
+
+

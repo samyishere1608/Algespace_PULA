@@ -64,7 +64,7 @@ namespace webapi.Services
         public static string NoDataTitle(Lang lang) => lang switch
         {
             Lang.De => "Noch nicht genug Daten",
-            Lang.Ja => "データがまだ足りません",
+            Lang.Ja => "データがまだ足りないよ",
             _ => "Not Enough Data Yet"
         };
 
@@ -72,8 +72,8 @@ namespace webapi.Services
         {
             Lang.De => "Ich habe noch nicht genug Daten für persönliche Vorschläge. "
                      + "Mach zuerst ein paar Aufgaben — welchen Typ du möchtest!",
-            Lang.Ja => "個別の提案をするにはまだデータが足りません。"
-                     + "まずは数問解いてみましょう — タイプは何でも大丈夫です！",
+            Lang.Ja => "きみだけの提案をするには、まだデータが足りないんだ。"
+                     + "まずは数問解いてみよう — どんなタイプでもだいじょうぶだよ！",
             _ => "I don't have enough data yet to make personalized suggestions. "
                + "Complete a few exercises first — any type you like!"
         };
@@ -81,7 +81,7 @@ namespace webapi.Services
         public static string Title(bool avoided, Lang lang) => (avoided, lang) switch
         {
             (true, Lang.De) => "Trau dich an das, was du überspringst",
-            (true, Lang.Ja) => "避けていることに挑戦",
+            (true, Lang.Ja) => "さけていることにチャレンジ",
             (true, _) => "Try the Thing You Skip",
             (false, Lang.De) => "Bringe Abwechslung rein",
             (false, Lang.Ja) => "練習のバランスを取る",
@@ -97,17 +97,16 @@ namespace webapi.Services
                 (true, Lang.De) => "Eine Sache lässt du konsequent aus — und das lohnt einen Blick. "
                                  + $"Diese Ziele setzen dort an und runden dein Üben ab: bisher {exercises} Aufgaben, "
                                  + $"am seltensten mit {method} gelöst.",
-                (true, Lang.Ja) => "いつも見送っていることが一つあります。そこが第一の提案です。"
-                                 + $"そこから始めて、練習全体を整えましょう — これまで{exercises}問、"
-                                 + $"最も少ないのは{method}です。",
+                (true, Lang.Ja) => "いつも見送っていることがあるね。そこから始めてみよう。"
+                                 + $"これまで{exercises}問やってきて、一番少ないのは{method}だよ。",
                 (true, _) => "You consistently pass on one thing, and that is worth a look. These goals start there, "
                            + $"then round out how you practise — {exercises} exercises in so far, with {method} "
                            + $"the method you have used least.",
                 (false, Lang.De) => "Du lässt dich auf alles ein, was dir begegnet — diese Ziele erweitern dein Üben, "
                                   + $"statt eine Lücke zu schließen. {method} hast du bisher am seltensten genutzt, "
                                   + $"bei {exercises} Aufgaben.",
-                (false, Lang.Ja) => "出されたものにきちんと取り組めています。そこで、穴を埋めるのではなく"
-                                  + $"練習の幅を広げる目標にしました。{exercises}問の中で最も少ないのは{method}です。",
+                (false, Lang.Ja) => "出されたものに、きちんと取り組めているね。だから穴をうめるのではなく、"
+                                  + $"練習のはばを広げる目標にしたよ。{exercises}問の中で一番少ないのは{method}だね。",
                 (false, _) => "You engage with whatever is put in front of you, so these goals widen what you practise "
                             + $"rather than fix a gap. {method} is the method you have used least so far, out of "
                             + $"{exercises} exercises."
@@ -124,22 +123,22 @@ namespace webapi.Services
         {
             (AnchorElement.SolveOnOwn, Lang.De) => $"Du hast {declined} von {opportunities} Malen darauf verzichtet, "
                                                         + "selbst zu rechnen. Fünf Versuche reichen, um zu sehen, was passiert.",
-            (AnchorElement.SolveOnOwn, Lang.Ja) => $"直近{opportunities}回のうち{declined}回、自分で解くことを見送りました。"
-                                                        + "5回試せば何かが見えてきます。",
+            (AnchorElement.SolveOnOwn, Lang.Ja) => $"さいきん{opportunities}回のうち{declined}回、自分で解くのを見送ってたね。"
+                                                        + "5回試すと、何か見えてくるよ。",
             (AnchorElement.SolveOnOwn, _) => $"You've turned down working out the solution yourself {declined} of the last "
                                                   + $"{opportunities} times. Five tries is enough to find out what happens.",
 
             (AnchorElement.SelfExplanation, Lang.De) => $"Du hast {declined} von {opportunities} Malen darauf verzichtet, "
                                                              + "dein Vorgehen zu begründen. Fünf Versuche reichen, um zu sehen, was passiert.",
-            (AnchorElement.SelfExplanation, Lang.Ja) => $"直近{opportunities}回のうち{declined}回、考えを説明することを見送りました。"
-                                                             + "5回試せば何かが見えてきます。",
+            (AnchorElement.SelfExplanation, Lang.Ja) => $"さいきん{opportunities}回のうち{declined}回、考えを説明するのを見送ってたね。"
+                                                             + "5回試すと、何か見えてくるよ。",
             (AnchorElement.SelfExplanation, _) => $"You've skipped explaining your reasoning {declined} of the last "
                                                        + $"{opportunities} times. Five tries is enough to find out what happens.",
 
             (AnchorElement.MethodComparison, Lang.De) => $"Du hast {declined} von {opportunities} Malen darauf verzichtet, "
                                                               + "Verfahren zu vergleichen. Fünf Versuche reichen, um zu sehen, was passiert.",
-            (AnchorElement.MethodComparison, Lang.Ja) => $"直近{opportunities}回のうち{declined}回、解法の比較を見送りました。"
-                                                              + "5回試せば何かが見えてきます。",
+            (AnchorElement.MethodComparison, Lang.Ja) => $"さいきん{opportunities}回のうち{declined}回、解き方の比較を見送ってたね。"
+                                                              + "5回試すと、何か見えてくるよ。",
             _ => $"You've passed on comparing methods {declined} of the last {opportunities} times. "
                + "Five tries is enough to find out what happens."
         };
@@ -147,14 +146,14 @@ namespace webapi.Services
         public static string HintsReason(double average, Lang lang) => lang switch
         {
             Lang.De => $"Du nimmst etwa {average} Hinweise pro Aufgabe. Höchstens einen zu brauchen ist ein Schritt, kein Sprung.",
-            Lang.Ja => $"1問あたり約{average}回ヒントを使っています。1回以下を目指すのは無理のない一歩です。",
+            Lang.Ja => $"1問あたり、だいたい{average}回ヒントをつかってるね。1回以下を目指すのは、無理のない一歩だよ。",
             _ => $"You take about {average} hints per exercise. Keeping to one or fewer is a step, not a leap."
         };
 
         public static string ErrorsReason(double average, Lang lang) => lang switch
         {
             Lang.De => $"Etwa {average} Fehler pro Aufgabe. Bei drei Aufgaben höchstens einen zu haben, ist ein faires Ziel.",
-            Lang.Ja => $"1問あたり約{average}個のミスがあります。3問で1個以下なら無理のない目標です。",
+            Lang.Ja => $"1問あたり、だいたい{average}個のミスがあるね。3問で1個以下なら、無理のない目標だよ。",
             _ => $"About {average} errors per exercise. Staying at one or fewer across three is a fair target."
         };
 
@@ -165,10 +164,10 @@ namespace webapi.Services
             return (neverUsed, lang) switch
             {
                 (true, Lang.De) => $"Probier {method} ein paar Mal aus — ein Verfahren, das du noch nicht genutzt hast.",
-                (true, Lang.Ja) => $"{method}を何回か試してみましょう — まだ使っていない解法です。",
+                (true, Lang.Ja) => $"{method}を何回か試してみよう — まだつかったことのない解き方だよ。",
                 (true, _) => $"Try {method} a few times — a method you have not used yet.",
                 (false, Lang.De) => $"Du hast {method} bisher {used} Mal genutzt — am seltensten von den dreien.",
-                (false, Lang.Ja) => $"{method}は今まで{used}回で、3つの中で最も少ないです。",
+                (false, Lang.Ja) => $"{method}は今まで{used}回で、3つの中で一番少ないよ。",
                 (false, _) => $"You've used {method} {used} times so far — the fewest of the three."
             };
         }

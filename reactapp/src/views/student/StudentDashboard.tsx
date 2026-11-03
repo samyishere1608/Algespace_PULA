@@ -67,6 +67,7 @@ import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 import { endOnboardingDemos, getOnboardingStep } from "@utils/storageUtils.ts";
 import { startSession, endSession, currentSessionId, recordIntention } from "@utils/sessionLog.ts";
 import { logScreenView, type TrackedScreen } from "@utils/screenLog.ts";
+import { IDLE_BEFORE_HINT_MS, NEXT_STEP_SNOOZE_MS, chooseNextSteps, phraseNextSteps, type NextStepSuggestion } from "@utils/nextStep.ts";
 import { OnboardingTour } from "@components/shared/OnboardingTour.tsx";
 import { TourOffer } from "@components/shared/TourOffer.tsx";
 import { ShowSectionTourButton } from "@components/shared/ShowSectionTourButton.tsx";
@@ -474,6 +475,29 @@ export default function StudentDashboard(): ReactElement {
     // the list from on the first render — the cards appear with the goals, one fetch later.
     const [activeGoals, setActiveGoals] = useState<StudyGoal[]>([]);
 
+    // ── "What should I do next" ───────────────────────────────────────────
+    //
+    // Three beats, and the first one is a question rather than an offer. Going idle is not the same as
+    // asking for help: a student who is thinking is doing exactly what they should be. So the idle path
+    // asks first — "want a hand deciding?" — and only goes on to look if they say yes. Pressing the
+    // button in the buddy menu IS the request, so that path skips straight to looking.
+    const [nextStep, setNextStep] = useState<
+        {
+            stage: "asking" | "thinking" | "options";
+            suggestions: NextStepSuggestion[];
+            headlines: (string | null)[];
+        } | null
+    >(null);
+
+    /** Set when the student says "not now". The buddy menu keeps working throughout. */
+    const nextStepSnoozedUntil = useRef(0);
+
+    /** When the current screen became the visible one, for the "you have been here a while" signal. */
+    const screenStartedAt = useRef(Date.now());
+
+    /** Any interaction restarts the idle countdown; this holds that countdown. */
+    const idleTimer = useRef<number | null>(null);
+
     // Track equipped outfit per character, initialised from localStorage (scoped per student)
     const [equippedOutfitIds, setEquippedOutfitIds] = useState<Record<string, string>>(() => {
         const result: Record<string, string> = {};
@@ -822,6 +846,10 @@ export default function StudentDashboard(): ReactElement {
         const screen: TrackedScreen = showGoals ? "goals" : showShop ? "shop" : activeTab;
         const startedAt = Date.now();
 
+        // The same moment, kept for the "you have been sitting on this screen" signal. One clock for
+        // both, so the dwell a suggestion quotes and the dwell the research log records cannot differ.
+        screenStartedAt.current = startedAt;
+
         return () => {
             logScreenView(student.id, screen, (Date.now() - startedAt) / 1000, i18n.language);
         };
@@ -829,6 +857,143 @@ export default function StudentDashboard(): ReactElement {
         // language are read at write time and would only restart the timer.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showGoals, showShop, activeTab, student?.id]);
+
+    // ── The buddy offering a next step ────────────────────────────────────
+    //
+    // ONE VOICE AT A TIME. The dashboard already asks for a reflection and asks a follow-up on the
+    // Analytics tab, both in this same corner. The offer is therefore blocked whenever anything else is
+    // asking something, rather than queued behind it — a student who is already being asked a question
+    // does not need a second one.
+    const nextStepBlocked =
+        !student ||
+        showReflectionPrompt ||
+        showIntentionFocus ||
+        showReflectionModal ||
+        showGoals ||
+        showShop ||
+        showXpInfo ||
+        showBuddyChooser ||
+        pendingGoalRemoval !== null ||
+        tourStep !== null;
+
+    /** Chooses the options from what is on screen right now. Never asks the server what to offer. */
+    function suggestionsForNow(): NextStepSuggestion[] {
+        return chooseNextSteps({
+            goals: activeGoals,
+            progress: goalProgressMap,
+            labelFor: (goal) => describeGoal(goal, translate),
+            exercisesToday,
+            streakDays,
+            choiceXP: agency.choiceXP,
+            insightXP: agency.insightXP,
+            resolveXP: agency.resolveXP,
+            surface: showGoals ? "goals" : showShop ? "shop" : activeTab,
+            dwellSeconds: (Date.now() - screenStartedAt.current) / 1000,
+        });
+    }
+
+    /**
+     * The idle path: ask whether they want a hand, and stop there.
+     *
+     * Nothing is looked up and nothing is offered until they say yes. A student sitting quietly is not
+     * necessarily stuck, and opening with three suggestions would answer a question they never asked.
+     */
+    function offerNextStepHelp(): void {
+        if (nextStep || nextStepBlocked) return;
+        if (Date.now() < nextStepSnoozedUntil.current) return;
+
+        setNextStep({ stage: "asking", suggestions: [], headlines: [] });
+    }
+
+    /**
+     * The second and third beats: look, then offer two or three things.
+     *
+     * Shared by the "yes" answer and by the buddy menu, because after the first question the two paths
+     * are the same — the only difference is who asked.
+     *
+     * `origin` decides nothing here on purpose: an explicit request and a consented offer are both
+     * requests by this point.
+     */
+    async function beginNextStepOptions(): Promise<void> {
+        const suggestions = suggestionsForNow();
+        if (suggestions.length === 0) {
+            // Nothing true to offer. Saying nothing is better than inventing a suggestion, so the
+            // bubble closes rather than showing an empty menu.
+            setNextStep(null);
+            return;
+        }
+
+        setNextStep({ stage: "thinking", suggestions, headlines: [] });
+
+        // The pause is honest as well as nicer: the sentences really are being written elsewhere, and
+        // the floor keeps a fast answer from blinking past 「ちょっと考えるね」.
+        const linesPromise = phraseNextSteps(student?.id ?? 0, suggestions, i18n.language);
+        await new Promise((resolve) => window.setTimeout(resolve, 700));
+        const headlines = await linesPromise;
+
+        setNextStep((current) =>
+            current === null
+                ? current // dismissed while the sentences were being written
+                : { stage: "options", suggestions, headlines }
+        );
+    }
+
+    // The idle timer must not capture stale data — a student who finishes an exercise and then sits
+    // still should be offered the NEW situation, not the one from when the timer was armed.
+    const offerHelpRef = useRef(offerNextStepHelp);
+    useEffect(() => {
+        offerHelpRef.current = offerNextStepHelp;
+    });
+
+    useEffect(() => {
+        if (nextStepBlocked) return;
+
+        const reset = (): void => {
+            if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+            idleTimer.current = window.setTimeout(() => {
+                // A background tab is not a student thinking; it is a student who left.
+                if (document.visibilityState !== "visible") return;
+                offerHelpRef.current();
+            }, IDLE_BEFORE_HINT_MS);
+        };
+
+        // Everything that means "a person is here". `pointermove` is in the list deliberately: a hand
+        // on the mouse is activity even when nothing is clicked, and the offer should wait for a
+        // student who has actually stopped, not one who has merely not clicked yet.
+        const activity = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const;
+        const onVisibility = (): void => {
+            if (document.visibilityState === "visible") reset();
+        };
+
+        for (const name of activity) window.addEventListener(name, reset, { passive: true });
+        document.addEventListener("visibilitychange", onVisibility);
+        reset();
+
+        return () => {
+            for (const name of activity) window.removeEventListener(name, reset);
+            document.removeEventListener("visibilitychange", onVisibility);
+            if (idleTimer.current !== null) {
+                window.clearTimeout(idleTimer.current);
+                idleTimer.current = null;
+            }
+        };
+        // Re-armed only when the offer becomes possible or stops being shown; the handler itself is
+        // kept fresh through `askPippinRef`.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [nextStepBlocked, nextStep === null]);
+
+    /** Takes the student where the chosen option points. Acting on it is not a dismissal, so no snooze. */
+    function acceptNextStep(suggestion: NextStepSuggestion): void {
+        setNextStep(null);
+        if (suggestion.target === "goals") setShowGoals(true);
+        else setActiveTab("exercises");
+    }
+
+    /** "Not now" buys five minutes of quiet. The buddy menu keeps working throughout. */
+    function dismissNextStep(): void {
+        nextStepSnoozedUntil.current = Date.now() + NEXT_STEP_SNOOZE_MS;
+        setNextStep(null);
+    }
 
     // ── Reflection handlers ───────────────────────���───────────────────────
     function handleReflectionYes(): void {
@@ -1487,6 +1652,86 @@ export default function StudentDashboard(): ReactElement {
 
             {/* ── Buddy widget ─────────────────────────────────────────────── */}
             <div className={"dashboard__buddy"} data-tour={"buddy-widget"}>
+                {/* What to do next, when the student has gone quiet or asked for it.
+                    Below the reflection prompt in precedence: that one is about work the student has
+                    already done and cannot wait, while this one is an offer. */}
+                {nextStep && !showReflectionPrompt && !showIntentionFocus && (
+                    <div className={"buddy-reflection-bubble buddy-next"}>
+                        <div className={"buddy-reflection-bubble__head"}>
+                            <span className={"buddy-reflection-bubble__avatar"}>
+                                {buddyImgSrc ? <img src={buddyImgSrc} alt={activeBuddy.name} /> : <span>{activeBuddy.emoji}</span>}
+                            </span>
+                            <strong>{activeBuddy.name}</strong>
+                        </div>
+
+                        {nextStep.stage === "asking" && (
+                            <>
+                                <p className={"buddy-reflection-bubble__text"}>{t("buddy-next-offer")}</p>
+                                <div className={"buddy-reflection-bubble__actions"}>
+                                    <button className={"buddy-reflection-bubble__no"} onClick={dismissNextStep}>
+                                        {t("buddy-next-offer-no")}
+                                    </button>
+                                    <button
+                                        className={"buddy-reflection-bubble__yes"}
+                                        onClick={() => void beginNextStepOptions()}
+                                    >
+                                        {t("buddy-next-offer-yes")}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {nextStep.stage === "thinking" && (
+                            <p className={"buddy-reflection-bubble__text buddy-next__thinking"}>
+                                {t("buddy-next-thinking")}
+                                <span className={"buddy-next__dots"} aria-hidden="true">
+                                    <i />
+                                    <i />
+                                    <i />
+                                </span>
+                            </p>
+                        )}
+
+                        {nextStep.stage === "options" && (
+                            <>
+                                {/* Short actions, one per row, each with a plus on the right and one
+                                    plain line underneath saying why. The action is a LABEL, not a
+                                    sentence — the first version put a friendly paragraph here and it
+                                    read as advice rather than as something to press. */}
+                                <p className={"buddy-next__heading"}>
+                                    {t("buddy-next-pick", { count: nextStep.suggestions.length })}
+                                </p>
+                                <ul className={"buddy-next__options"}>
+                                    {nextStep.suggestions.map((suggestion, index) => (
+                                        <li key={suggestion.signal}>
+                                            <button
+                                                className={"buddy-next__option"}
+                                                onClick={() => acceptNextStep(suggestion)}
+                                            >
+                                                <span className={"buddy-next__option-body"}>
+                                                    <span className={"buddy-next__option-text"}>
+                                                        {nextStep.headlines[index] ??
+                                                            t(suggestion.templateKey, suggestion.templateParams)}
+                                                    </span>
+                                                    <span className={"buddy-next__option-why"}>
+                                                        {t(suggestion.whyKey, suggestion.whyParams)}
+                                                    </span>
+                                                </span>
+                                                <span className={"buddy-next__option-add"} aria-hidden="true">
+                                                    +
+                                                </span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <button className={"buddy-next__later"} onClick={dismissNextStep}>
+                                    {t("buddy-next-later")}
+                                </button>
+                            </>
+                        )}
+                    </div>
+                )}
+
                 {/* One question at a time. The follow-up to "review my progress" renders on the
                     Analytics tab (see `dashboard__analytics`), so it is not in this slot — but the
                     student must not be asked two things at once, and the reflection is still in the
@@ -1514,6 +1759,18 @@ export default function StudentDashboard(): ReactElement {
                 )}
                 {showBuddyPopup && (
                     <div className={"buddy-popup"}>
+                        {/* The voluntary version of the idle offer, and the reason it skips the
+                            question: pressing this IS the request. Always available, including during
+                            the five-minute snooze. */}
+                        <button
+                            className={"buddy-popup__btn"}
+                            onClick={() => {
+                                setShowBuddyPopup(false);
+                                void beginNextStepOptions();
+                            }}
+                        >
+                            {t("buddy-next-ask")}
+                        </button>
                         <button
                             className={"buddy-popup__btn"}
                             onClick={() => {

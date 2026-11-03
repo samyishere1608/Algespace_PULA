@@ -381,12 +381,33 @@ namespace webapi.Controllers
                 "ORDER BY Day ASC",
                 new { StudentId = studentId }).ToList();
 
-            // Exercises finished today, for the stat card's sub-line.
+            // Exercises finished today, for the stat card's sub-line AND for the buddy's "have you done
+            // anything yet" — so it has to count WORK, not a set of exercise ids.
+            //
+            // It used to count `ExerciseCompletions`, which is idempotent on (student, category, key,
+            // exerciseId): a row is written the first time an exercise is ever finished and never again.
+            // Redoing an exercise therefore added nothing to this number, and a student who re-ran one
+            // after a break saw "0 exercises today" directly after finishing it — exactly the state the
+            // buddy reads to decide whether to say "you haven't started yet". `ExerciseLog` is the
+            // activity log: one row per completion, written by `log-exercise` for every attempt.
+            //
+            // The set-based count remains as a FALLBACK, for a day whose only work came through the
+            // older games that write completions without an activity row. It is only consulted when the
+            // activity log is empty, so a normal day can never be counted twice.
             var exercisesToday = conn.ExecuteScalar<int>(
-                $"SELECT COUNT(*) FROM {StudentProgressDBSettings.ExerciseCompletionsTable} " +
+                $"SELECT COUNT(*) FROM {StudentProgressDBSettings.ExerciseLogTable} " +
                 "WHERE StudentId = @StudentId " +
                 "  AND date(CompletedAt) = date('now')",
                 new { StudentId = studentId });
+
+            if (exercisesToday == 0)
+            {
+                exercisesToday = conn.ExecuteScalar<int>(
+                    $"SELECT COUNT(*) FROM {StudentProgressDBSettings.ExerciseCompletionsTable} " +
+                    "WHERE StudentId = @StudentId " +
+                    "  AND date(CompletedAt) = date('now')",
+                    new { StudentId = studentId });
+            }
 
             return Ok(new StudentProgressResponse
             {
@@ -1420,6 +1441,327 @@ namespace webapi.Controllers
                 language: request.Language ?? "");
 
             return Ok(new { logged = true });
+        }
+
+        // ── "What should I do next" ──────────────────────────────────────────
+
+        /// <summary>
+        /// The signals the client may ask to have phrased.
+        ///
+        /// An allow-list rather than free text, because the signal ends up inside a prompt. Anything
+        /// not on this list is answered with nothing to say, so a crafted signal cannot steer the
+        /// model into writing something the app would never show.
+        /// </summary>
+        private static readonly HashSet<string> NextStepSignals = new(StringComparer.Ordinal)
+        {
+            "goal-near-complete",
+            "goal-zero-progress",
+            "streak-at-risk",
+            "no-exercises-today",
+            "weakest-wallet",
+            "long-dwell",
+            "default",
+        };
+
+        /// <summary>
+        /// At most this many phrasings per student per hour.
+        ///
+        /// The sentence is the only part of this feature that costs money, and the client decides when
+        /// to ask — so the bound has to be here. Ten an hour is far more than a student can trigger by
+        /// sitting still (the client will not fire twice inside five minutes), while a script hammering
+        /// the endpoint stops costing anything after ten calls.
+        /// </summary>
+        private const int NextStepPhrasesPerHour = 10;
+
+        private static readonly Dictionary<long, (int Count, DateTime WindowStart)> NextStepBudgets = new();
+
+        /// <summary>
+        /// Phrasing cache, keyed by signal + language + the parameters that change the sentence.
+        ///
+        /// Worth having because the sentences are deliberately generic: every student whose lowest
+        /// wallet is Insight gets the same line, and the model would otherwise be asked for it
+        /// separately for each of them. Cleared on its own when the process restarts, which is the
+        /// right lifetime for something whose only cost of being wrong is one stale sentence.
+        /// </summary>
+        private static readonly Dictionary<string, string> NextStepPhraseCache = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Turns two or three client-chosen signals into short sentences in Pippin's voice.
+        ///
+        /// WHY THE CLIENT CHOOSES. Goal progress is scored from the exercise events on the client
+        /// (`goalProgress.ts`), and so are today's count, the streak and the three wallets. Judging the
+        /// options here would need a second, C# implementation of that scoring, and the two would drift
+        /// the moment either changed. The server is needed only because the model key cannot live in a
+        /// browser.
+        ///
+        /// NOTHING HERE AWARDS ANYTHING. The response is text. A failed, slow or missing model returns
+        /// empty strings and the client shows the sentences it already had, so the offer degrades to
+        /// the templates rather than to silence. Each option is phrased independently, so one refused
+        /// line never costs the student the other two.
+        /// </summary>
+        [HttpPost("next-step")]
+        public async Task<ActionResult<NextStepPhraseResponse>> PhraseNextStep([FromBody] NextStepPhraseRequest request)
+        {
+            if (request.StudentId <= 0) return BadRequest("Invalid student.");
+
+            var response = new NextStepPhraseResponse();
+            var options = (request.Options ?? new List<NextStepOptionRequest>())
+                .Where(option => NextStepSignals.Contains(option.Signal))
+                .Take(3)
+                .ToList();
+
+            // Positional, so the client can zip the sentences back onto its own options whatever
+            // happened to any one of them.
+            response.Headlines = Enumerable.Repeat("", options.Count).ToList();
+            if (options.Count == 0) return Ok(response);
+
+            var language = (request.Language ?? "en").Trim().ToLowerInvariant();
+            if (language != "de" && language != "ja") language = "en";
+
+            // Everything below is per option, but the budget is per OFFER: one offer is one unit
+            // however many options the student was shown.
+            var budgetsUsed = false;
+            var apiKey = _configuration["OpenAI:ApiKey"];
+            var systemPrompt = BuildNextStepSystemPrompt(language);
+
+            for (var index = 0; index < options.Count; index++)
+            {
+                var option = options[index];
+
+                // The parameters only ever reach the model as a description, never as a number it has to
+                // act on, and every one of them is clamped so a crafted request cannot put a wall of
+                // text into the prompt.
+                var goalLabel = Clip(option.GoalLabel, 60);
+                var remaining = Math.Clamp(option.Remaining, 0, 999);
+                var streak = Math.Clamp(option.StreakDays, 0, 9999);
+                var dwell = Math.Clamp(option.DwellSeconds, 0, 3600);
+                var wallet = (option.Wallet ?? "").Trim().ToLowerInvariant();
+                if (wallet != "choice" && wallet != "insight" && wallet != "resolve") wallet = "";
+
+                var cacheKey = $"{option.Signal}|{language}|{goalLabel}|{remaining}|{streak}|{dwell / 30}|{wallet}";
+                if (NextStepPhraseCache.TryGetValue(cacheKey, out var cached))
+                {
+                    response.Headlines[index] = cached;
+                    continue;
+                }
+
+                // THE WEAKEST-AREA ACTION IS FIXED, so it is not sent to the model at all.
+                //
+                // There are only three of them ("pick a goal", "try one exercise", "set a goal and
+                // finish it") and the client already has the exact wording. Asked to rephrase it, the
+                // model most often returned something vaguer than the template — "choose your next
+                // step", or a Japanese line naming the area it was told not to name — which then had
+                // to be thrown away. Leaving it to the client is both clearer and free.
+                if (option.Signal == "weakest-wallet") continue;
+
+                if (string.IsNullOrWhiteSpace(apiKey)) continue;
+
+                if (!budgetsUsed)
+                {
+                    if (!TryTakeNextStepBudget(request.StudentId)) return Ok(response);
+                    budgetsUsed = true;
+                }
+
+                var userPrompt = BuildNextStepUserPrompt(option.Signal, language, goalLabel, remaining, streak, dwell, wallet);
+
+                string? line;
+                try
+                {
+                    // A suggestion the student is waiting on cannot hold the bubble open the way a
+                    // reflection can. Six seconds each, then the template: the bubble has already said
+                    // 「ちょっと考えるね」 and a longer wait would make that line a lie.
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+                    line = await CallOpenAI(apiKey, systemPrompt, userPrompt, temperature: 0.7, timeout.Token);
+                }
+                catch (Exception exception)
+                {
+                    Console.WriteLine($"[NextStep] phrasing failed: {exception.GetType().Name}: {exception.Message}");
+                    continue;
+                }
+
+                var headline = TidyNextStepLine(line, language);
+                if (headline.Length == 0)
+                {
+                    // Log what was thrown away. A filter that silently discards the model's work looks
+                    // exactly like a model that had nothing to say, and the difference is the whole
+                    // question when a language stops producing sentences.
+                    Console.WriteLine(
+                        $"[NextStep] discarded phrasing ({language}, {option.Signal}): \"{Clip(line, 200)}\"");
+                    continue;
+                }
+
+                NextStepPhraseCache[cacheKey] = headline;
+                response.Headlines[index] = headline;
+            }
+
+            return Ok(response);
+        }
+
+        /// <summary>Fixed-window budget, per student, reset an hour after their first call.</summary>
+        private static bool TryTakeNextStepBudget(long studentId)
+        {
+            lock (NextStepBudgets)
+            {
+                var now = DateTime.UtcNow;
+                if (!NextStepBudgets.TryGetValue(studentId, out var budget) || now - budget.WindowStart > TimeSpan.FromHours(1))
+                {
+                    NextStepBudgets[studentId] = (1, now);
+                    return true;
+                }
+
+                if (budget.Count >= NextStepPhrasesPerHour) return false;
+
+                NextStepBudgets[studentId] = (budget.Count + 1, budget.WindowStart);
+                return true;
+            }
+        }
+
+        private static string Clip(string? value, int max)
+        {
+            var trimmed = (value ?? "").Trim();
+            return trimmed.Length <= max ? trimmed : trimmed[..max];
+        }
+
+        /// <summary>
+        /// The style rules for the suggestion line, in the same voice the reflection uses.
+        ///
+        /// DELIBERATELY SHORTER THAN THE REFLECTION GUIDE, not a copy of it. That one is about judging an
+        /// answer — "say which way it went", "never hand their answer back" — and none of it applies to
+        /// a suggestion. What carries over is the part the native speaker actually insisted on: 常体,
+        /// no あなた, short sentences, no translationese, and never naming a score.
+        ///
+        /// `BuildReflectionPrompt` holds the long version; if the voice rules themselves change, both
+        /// places need the change.
+        /// </summary>
+        /// <summary>
+        /// Writes the short ACTION line — not a paragraph.
+        ///
+        /// THE FIRST VERSION ASKED FOR A FRIENDLY SENTENCE AND GOT ADVICE ESSAYS. Real output included
+        /// 「ちょっと先に進むとき、見落としがちなところを一緒に探してみようか。」 — grammatical, warm,
+        /// and useless to a twelve-year-old who wants to know what to click. The line sits above an
+        /// action button, so it has to name the action and stop. Everything about mood belongs in the
+        /// reason line underneath, which the app builds from its own numbers.
+        ///
+        /// A prompt is a request, not a guarantee, so `TidyNextStepLine` enforces the length as well.
+        /// </summary>
+        private static string BuildNextStepSystemPrompt(string language)
+        {
+            var voice = language switch
+            {
+                "de" => """
+                    SPRACHE: Deutsch. Du-Form. Kurz und klar.
+                    """,
+                "ja" => """
+                    JAPANESE: WRITE IT NATIVELY, DO NOT TRANSLATE FROM ENGLISH.
+                    - ピピンは中学1年生の頼れる友だち。常体（「〜ね」「〜よ」「〜てみよう」）で書く。「です・ます」を混ぜない。
+                    - 「あなた」は使わない。主語は省く。どうしても要るときだけ「きみ」。
+                    - 20字以内。長くなったら短くする。
+                    - 小学6年生までに習う漢字だけ使う。
+                    """,
+                _ => """
+                    LANGUAGE: English. Second person. Short and clear.
+                    """,
+            };
+
+            return $"""
+                You are Pippin, a study buddy in a maths app for 11 to 13 year olds.
+
+                The app shows TWO OR THREE of your lines at once, as a list of things the student could do. Each line appears directly above its own button, with a short reason printed underneath by the app. So your line is an ACTION, not advice, not encouragement, not a question about how they feel.
+
+                RULES, all of them hard:
+                - ONE short action, in the plainest words possible. Japanese: 20 characters or fewer. English: 8 words or fewer.
+                - Start with what to DO. "Do one exercise", "Finish your goal", "Pick a goal".
+                - No metaphor, no reflection, no "let us explore", no "pay attention to", no "notice". A 12-year-old must know exactly what happens if they press the button.
+                - Do not add a question mark or a "shall we". The button IS the offer.
+                - No greeting, no sign-off, no emoji, no quotation marks, no full stop at the end.
+                - Never mention points, XP, scores, badges, levels, streaks-as-a-number or anything the app counts. The reason line underneath already shows that.
+                - Never mention mistakes, errors, hints used, or anything the student did badly, and never say what they lack.
+                - Never say they have been idle, waiting, inactive or doing nothing.
+                - Use only the facts given below. Do not invent a number, a goal or an exercise.
+                {voice}
+                """;
+        }
+
+        private static string BuildNextStepUserPrompt(
+            string signal, string language, string goalLabel, int remaining, int streak, int dwell, string wallet)
+        {
+            var walletName = wallet switch
+            {
+                "choice" => "Choice (deciding for yourself)",
+                "insight" => "Insight (facing something you tend to skip)",
+                "resolve" => "Resolve (finishing what you started)",
+                _ => "",
+            };
+
+            var situation = signal switch
+            {
+                "goal-near-complete" => $"One of their goals, \"{goalLabel}\", needs {remaining} more to be reached.",
+                "goal-zero-progress" => $"They set the goal \"{goalLabel}\" and have not made progress on it yet.",
+                "streak-at-risk" => $"They have practised {streak} days in a row and have not done an exercise today.",
+                "no-exercises-today" => "They have not done an exercise today.",
+                "weakest-wallet" => $"The area they are lowest in is {walletName}. This is CONTEXT FOR TONE ONLY — never name that area in your line, and never use its name in another language. The app prints the reason under the button in its own words.",
+                "long-dwell" => $"They have had this screen open for about {dwell} seconds without starting anything.",
+                _ => "There is nothing unusual about their day; they simply have not started an exercise yet.",
+            };
+
+            var goalClause = signal is "goal-near-complete" or "goal-zero-progress"
+                ? $"The goal's own name, already translated for the student, is \"{goalLabel}\" — use it as it is and do not translate it again."
+                : "This is not about a particular goal, so do not invent one.";
+
+            return $"""
+                What is true right now: {situation}
+                {goalClause}
+
+                Write the one short action.
+                """;
+        }
+
+        /// <summary>
+        /// Makes the model's line safe to show, and short enough to be an action.
+        ///
+        /// A prompt is a request, not a guarantee. The checks below are the failures actually seen:
+        /// essays instead of actions, a question mark that makes the button redundant, the model
+        /// wrapping the line in quotes, and drifting into the numbers the app shows elsewhere. Any
+        /// failure drops the phrasing and the client uses its own line, which was written to the same
+        /// rules — so a bad generation costs a little warmth, never an empty bubble.
+        /// </summary>
+        private static string TidyNextStepLine(string? line, string language)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return "";
+
+            var text = line.Trim().Trim('"', '「', '」', '\'', '*', '。', '.', '！', '!').Trim();
+            text = text.Replace("\r", " ").Replace("\n", " ").Replace("  ", " ");
+
+            if (text.Length == 0) return "";
+
+            // AN ACTION, SO NO SECOND SENTENCE AND NO QUESTION. A line ending in "?" turns the button
+            // below it into a redundant second confirmation of the same question.
+            if (text.Contains('。') || text.Contains('？') || text.Contains('?')) return "";
+
+            // Kept tight on purpose: this is a label on a button, not a paragraph.
+            var limit = language == "ja" ? 26 : 70;
+            if (text.Length > limit) return "";
+
+            var banned = new[]
+            {
+                // Scores and the wallets' own names, which the app shows separately. "Insight" also
+                // leaked into a Japanese line as the English word, which no Japanese student reads.
+                "XP", "xp", "Experiential", "점수", "Score", "score", "Punkt", "Punkte",
+                "level", "Level", "レベル", "バッジ", "badge", "Badge",
+                "Choice", "choice", "Insight", "insight", "Resolve", "resolve",
+                "選択", "洞察", "継続",
+                // Their own performance.
+                "mistake", "Mistake", "Fehler", "error", "Error", "ヒント", "hint", "Hint",
+                // Deficit framing: a diagnosis rather than an invitation.
+                "足りない", "足りてい", "not enough", "Not enough", "don't have", "fehlt", "Fehlt",
+                // Advice-shaped filler, which is what made the first version read as confusing.
+                "見落とし", "気づき", "一緒に探", "探してみ", "意識して", "注意して", "振り返",
+                "explore", "Explore", "notice", "Notice", "pay attention", "reflect", "Reflect",
+            };
+
+            if (banned.Any(term => text.Contains(term, StringComparison.Ordinal))) return "";
+
+            return text;
         }
 
         // ── Sessions ─────────────────────────────────────────────────────────

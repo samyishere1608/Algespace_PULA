@@ -115,7 +115,11 @@ export function VariableComputation({ variable, loadNextStep, agentType, additio
                         goNext(engaged);
                     }}
                     agentType={agentType} agentExpression={AgentExpression.Smiling} additionalMessage={additionalMessage}
-                    mood={"solo"}
+                    /* No `mood`. This popover ASKS the student a question — the one place where the
+                       answer is a yes or a no — so the face is `Intervention`'s own default, the
+                       thinking pose with the question mark. It used to override that with `solo`, the
+                       confident "your turn" pose, which reads as praise for something the student has
+                       not done yet. */
                 >
                     <p>{t(FlexibilityTranslations.FIRST_SOLUTION_CHOICE)}</p>
                 </Intervention>
@@ -132,6 +136,9 @@ export function VariableComputation({ variable, loadNextStep, agentType, additio
                     }}
                     agentType={agentType}
                     agentExpression={AgentExpression.Smiling}
+                    /* The same question, asked a beat before the yes/no buttons appear. It reads as a
+                       question, so it gets the question face rather than the thumbs-up. */
+                    mood={"question"}
                 >
                     <p>{t(FlexibilityTranslations.FIRST_SOLUTION_CHOICE)}</p>
                 </StepNextIntervention>
@@ -177,7 +184,11 @@ export function VariableComputation({ variable, loadNextStep, agentType, additio
                 <React.Fragment>
                     <p>{t(FlexibilityTranslations.FIRST_SOLUTION_SOLUTION)}</p>
                     <VariableSolution variable={variable} useLayout={isSecondSolution} />
-                    <FlexibilityPopover agentType={agentType} agentExpression={AgentExpression.Neutral}>
+                    {/* `approve`, not the plain portrait. This is the moment the answer has been handed
+                        over and the student is moving on, which is exactly what the thumbs-up face says.
+                        It used to pass `AgentExpression.Neutral`, which maps to no mood at all, so the
+                        companion lost its expression here while keeping it everywhere else. */}
+                    <FlexibilityPopover agentType={agentType} agentExpression={AgentExpression.Neutral} mood={"approve"}>
                         <ContinueMessage message={FlexibilityTranslations.FIRST_SOLUTION_AUTO_CONTINUE} loadNextStep={loadNextStep} />
                     </FlexibilityPopover>
                 </React.Fragment>

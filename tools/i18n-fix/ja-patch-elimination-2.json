@@ -1,0 +1,10 @@
+{
+ "_note": "Second pass on elimination.json: strings the first pass's polite-pointer missed (ません/ました/でした), plus the ones phrased stiffly without being polite.",
+ "confirm-add-rows": "{{first}}行目と{{second}}行目をたすんだね：",
+ "confirm-sub-rows": "{{first}}行目から{{second}}行目をひくんだね：",
+ "input-field-evaluation-error": "この式はつかえないみたい。",
+ "first-solution": "いいね！{{variable}}の値が出たよ：",
+ "first-solution-value": "さいごのステップで{{variable}}の値を計算したよ：",
+ "neutral-choice": "この場合は、どっちの式を選んでもいい選択だったよ。",
+ "tutorial-mul-error": "数のかわりに文字などを入れると、下に注意が出て、行のかけ算・わり算ができないよ。"
+}

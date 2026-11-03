@@ -859,4 +859,67 @@ namespace webapi.Models.Student
             "Section TEXT NOT NULL, " +
             "OfferedAt TEXT NOT NULL";
     }
+
+    /**
+     * One option the buddy is offering, as the client asks for it to be phrased.
+     *
+     * Sent as a batch because the buddy offers TWO OR THREE things at once, not one — the student is
+     * meant to pick, so a single "do this" is the wrong shape for the feature. One request keeps it to
+     * one round trip and one unit of the rate budget, however many options come back.
+     */
+    public class NextStepOptionRequest
+    {
+        /// <summary>One of the known signals, e.g. "goal-near-complete".</summary>
+        public string Signal { get; set; } = "";
+
+        /// <summary>The goal's label, already translated on the client, for signals about a goal.</summary>
+        public string GoalLabel { get; set; } = "";
+
+        /// <summary>How many more steps that goal needs.</summary>
+        public int Remaining { get; set; }
+
+        public int StreakDays { get; set; }
+
+        /// <summary>Which wallet is lowest, for the weakest-wallet signal.</summary>
+        public string Wallet { get; set; } = "";
+
+        /// <summary>How long the student has been sitting on the current screen.</summary>
+        public int DwellSeconds { get; set; }
+    }
+
+    /// <summary>
+    /// One "what should I do next" offer.
+    ///
+    /// THE CLIENT DECIDES WHAT IS OFFERED, THE SERVER ONLY PHRASES IT. The options are chosen on the
+    /// client because that is where the facts already are: goal progress is computed there from the
+    /// exercise events (see `goalProgress.ts`), and so are today's exercise count, the streak and the
+    /// three wallets. Moving that judgement to the server would mean a second implementation of goal
+    /// scoring in C#, which is exactly the kind of duplicate that drifts. What the server is needed for
+    /// is the sentences: the model key must not live in a browser.
+    ///
+    /// The signals are therefore UNTRUSTED hints for wording, never facts to act on. Nothing here can
+    /// award anything, and an unknown signal simply gets no sentence and the client shows its own text.
+    /// </summary>
+    public class NextStepPhraseRequest
+    {
+        public long StudentId { get; set; }
+
+        /// <summary>"en" | "de" | "ja".</summary>
+        public string Language { get; set; } = "en";
+
+        /// <summary>The options, in the order they will be shown. At most three are read.</summary>
+        public List<NextStepOptionRequest> Options { get; set; } = new();
+    }
+
+    /// <summary>
+    /// The sentences, positionally matching the options that were sent.
+    ///
+    /// An empty string means "nothing was written for this one" — the model was not used, declined,
+    /// timed out, or produced something the filters refused — and the client falls back to its own
+    /// sentence for that option only. So one bad line never costs the student the whole offer.
+    /// </summary>
+    public class NextStepPhraseResponse
+    {
+        public List<string> Headlines { get; set; } = new();
+    }
 }

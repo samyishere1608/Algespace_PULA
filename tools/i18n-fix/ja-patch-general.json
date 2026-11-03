@@ -1,0 +1,19 @@
+{
+ "_note": "general.json. Only the student-facing guidance changes. project-description-* stays formal because it is the project blurb for teachers and researchers, and login-text stays polite because it sits on the study entry screen next to the consent step.",
+ "equalization-info": "2つの式が等しいって、どういうことだろう？このユニットでは、等置法の考え方とつかい方を学ぶよ。",
+ "substitution-info": "取引ゲームで物々交換を学んで、代入法の準備をしよう。代入法では、ある式の変数を、別の式で置きかえることを学ぶよ。",
+ "elimination-info": "加減法のゲームでは、式から未知の変数をうまく消す方法を学ぶよ。",
+ "flexibility-training-info": "いろいろな解き方を自信をもってつかいこなし、どの方法が一番合っているかがわかるようになるトレーニングだよ。",
+ "tutorial-end": "課題を解くのに必要な情報は、これでぜんぶだよ。チュートリアルの内容をぜんぶ覚えていなくても、わからない操作があっても大丈夫。ミスはふつうのことなんだ。何でも試せるようにゲームができているからね。",
+ "tutorial-end-plain": "問題一覧に戻るか、最初の問題を始められるよ：",
+ "tutorial-end-study": "問題一覧に戻って、この方法の最初の問題を始められるよ：",
+ "rotate-device": "画面を回してね。",
+ "rotate-device-reason": "このゲームは横向きでしか遊べないんだ。",
+ "unsupported-device": "いまつかっている端末では遊べないんだ。タブレットかノートパソコン、デスクトップをつかってね。",
+ "load-next-exercise": "よくできたね、課題クリア！つぎの課題にすすむ？それとも問題一覧に戻る？",
+ "undefined-exercise-series": "よくできたね、課題クリア！問題一覧に戻って、ほかの問題も見てみよう。",
+ "completed-exercise-series": "おめでとう！このシリーズのさいごの課題だったよ。問題一覧に戻れるよ：",
+ "exit-exercise-home": "本当に課題をやめてメインメニューに戻る？とちゅうの進み具合は保存できないよ。",
+ "exit-exercise-view": "本当に課題をやめて問題一覧に戻る？とちゅうの状態は保存できないよ。",
+ "construction": "この中身はいま作っているとちゅうだよ。"
+}

@@ -115,8 +115,8 @@ namespace webapi.Services
 
             if (tag.StartsWith("ja", StringComparison.Ordinal))
             {
-                return "そのまま進めましょう。今のステップを自分の式でやってみて、"
-                     + "考えを一緒に確認しましょう。";
+                return "そのまま進めよう。いまのステップを自分の式でやってみて、"
+                     + "考えをいっしょにたしかめよう。";
             }
 
             return "Let's keep going — work through the step you're on, and I'll help you check your thinking.";

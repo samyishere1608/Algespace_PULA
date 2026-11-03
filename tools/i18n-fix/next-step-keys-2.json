@@ -1,0 +1,18 @@
+{
+ "_note": "The consent question the buddy asks before offering anything. Only the idle path asks it; pressing the button in the buddy menu is already the request.",
+ "en": {
+  "buddy-next-offer": "Do you want a hand deciding what to do next?",
+  "buddy-next-offer-yes": "Yes, help me",
+  "buddy-next-offer-no": "I'm fine"
+ },
+ "de": {
+  "buddy-next-offer": "Soll ich dir helfen, das Nächste zu entscheiden?",
+  "buddy-next-offer-yes": "Ja, hilf mir",
+  "buddy-next-offer-no": "Passt schon"
+ },
+ "ja": {
+  "buddy-next-offer": "つぎに何をやるか、いっしょに考えようか？",
+  "buddy-next-offer-yes": "うん、たのむ",
+  "buddy-next-offer-no": "だいじょうぶ"
+ }
+}
