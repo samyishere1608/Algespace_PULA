@@ -392,7 +392,10 @@ export const TOUR_STEPS: TourStep[] = [
         anchor: ".flexibility-hint-button",
         placement: "bottom",
         title: { key: "tour-ex-help-title" },
-        body: { key: "tour-ex-help-body" },
+        // Its own body: the shared one ends by naming a goal the student can set, and a control
+        // student has no goals. The rest of that sentence is still exactly true for them, so only
+        // the clause that describes something they do not have is replaced.
+        body: { key: "tour-ex-help-body-control" },
     },
     { id: "module-start", section: "module", route: MODULE, placement: "center" },
 ];

@@ -93,7 +93,7 @@
   "equation-selection-instruction": "The variable {{otherVariable}} still needs to be calculated. <strong>Decide in which equation you want to insert the solution for the variable {{firstSolution}}.</strong> Choose so that you have as little calculation effort as possible.",
   "equation-selection-button-label": "Insert {{variable}} here",
   "second-solution-instruction": "You have decided to use the solution for {{variable}} in the following equation:",
-  "second-solution-result": "You have decided to insert the solution for {{firstVariable}} into the following equation to calculate the solution for {{otherVariable}}:",
+  "second-solution-result": "You have decided to insert the solution for {{firstSolution}} into the following equation to calculate the solution for {{otherVariable}}:",
   "system-solution": "Thus, the solution to the LSE is given by:",
   "system-solution-success": "Well done, you have solved the system!",
   "system-solution-success-continue": "$t(system-solution-success) You can now continue with the next task.",

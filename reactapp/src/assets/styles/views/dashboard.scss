@@ -1687,6 +1687,13 @@
         }
     }
 
+    &__requirement {
+        font-size: 0.7rem;
+        font-weight: 600;
+        line-height: 1.3;
+        color: var(--wallet, rgba(255, 255, 255, 0.8));
+    }
+
     &__desc-wrap {
         display: flex;
         align-items: flex-start;

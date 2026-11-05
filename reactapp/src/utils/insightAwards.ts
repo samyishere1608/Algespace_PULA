@@ -1,5 +1,5 @@
 import axios from "axios";
-import { addInsightXP } from "@utils/agencyUtils.ts";
+import { addInsightXP, addResolveXP } from "@utils/agencyUtils.ts";
 import { showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
 
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
@@ -21,41 +21,70 @@ const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
  *
  * That also means the award is worth little by design. It is for STARTING, not for continuing, and a
  * student who has genuinely changed gets nothing more from it.
+ *
+ * RESOLVE IS THE OTHER HALF. A decision on its own changes nothing, and a student who faces a gap once
+ * and then drops it the next time has not changed anything either. So the same request can also pay
+ * Resolve — much more — when this engagement is the decision immediately AFTER an Insight award: they
+ * were offered the same thing again and said yes again. One Resolve per Insight, and only for the very
+ * next decision, not a later one. See `AwardResolveForFollowThrough` for where "next" is decided.
  */
 
 /**
- * Asks the server whether this engagement earns Insight and pays what it says. Returns the amount
- * paid, or 0.
+ * Asks the server what this engagement earns and pays what it says. Returns the Insight amount, or 0.
  *
  * Callers are expected to have de-duplicated per exercise: the two solution points both map to the
- * same element, and being paid twice in one exercise for one act would be wrong. The server also
- * refuses a second award for the same attempt.
+ * same element, and being paid Insight twice in one exercise for one act would be wrong. The server
+ * also refuses a second Insight award for the same attempt — but that is not the end of the request,
+ * because the second solution point is exactly where an earlier Insight can be followed through on.
  *
  * `silent` pays and records exactly as usual but shows no toast. The control arm uses it: the award is
  * still written down — it is a fact about the attempt, and the analysis wants every fact — while the
  * celebration is withheld, because a "+3 Insight XP" floating over the exercise is a piece of the
  * treatment. A control student who sees their points go up is no longer a control student.
+ *
+ * `decision` is the anchor store's name for this decision point (`FirstSolutionChoice` and so on).
+ * Required for Resolve: it is how the server places this decision in the sequence and tells "the next
+ * time they were asked" from "two times later".
  */
 export async function awardInsightForFacingGap(
     studentId: number,
     element: string,
     attemptId: number,
-    silent = false
+    silent = false,
+    decision = ""
 ): Promise<number> {
     try {
-        const { data } = await axios.post<{ amount: number }>(`${BACKEND}/student-progress/insight-gap-award`, {
-            studentId,
-            element,
-            attemptId,
-        });
+        const { data } = await axios.post<{ amount: number; resolveAmount: number }>(
+            `${BACKEND}/student-progress/insight-gap-award`,
+            {
+                studentId,
+                element,
+                attemptId,
+                // Which decision point this is, in the anchor store's own naming. The server needs it
+                // for the follow-through below: two decisions for one element can share an attempt (the
+                // two solution points), and "the next one" is only answerable if both are named.
+                decision,
+            }
+        );
 
         // A failed or unclear answer must never pay out: awarding on a failed request would make the
         // reward random rather than a reflection of anything.
         const amount = data?.amount ?? 0;
-        if (amount <= 0) return 0;
+        const resolveAmount = data?.resolveAmount ?? 0;
 
-        addInsightXP(studentId, amount, `faced-a-gap:${element}`);
-        if (!silent) showAgencyToast("insight", amount);
+        if (amount > 0) {
+            addInsightXP(studentId, amount, `faced-a-gap:${element}`);
+            if (!silent) showAgencyToast("insight", amount);
+        }
+
+        // Paid by the same request, for a DIFFERENT act: this engagement was the next decision after an
+        // earlier Insight, so it closes that episode. Both can be non-zero at once — facing a gap a
+        // second time is exactly how a first one gets followed through on.
+        if (resolveAmount > 0) {
+            addResolveXP(studentId, resolveAmount, "insight-follow-through");
+            if (!silent) showAgencyToast("resolve", resolveAmount);
+        }
+
         return amount;
     } catch {
         return 0;

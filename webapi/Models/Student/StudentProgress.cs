@@ -258,12 +258,31 @@ namespace webapi.Models.Student
 
         /// <summary>The attempt the engagement happened in. It is excluded from every count.</summary>
         public long AttemptId { get; set; }
+
+        /// <summary>
+        /// Which decision point this is, named the way the anchor store names it — e.g.
+        /// "FirstSolutionChoice" or "SecondSolutionChoice".
+        ///
+        /// Needed because two decisions can share one attempt: the two solution points are the same
+        /// element asked twice. Resolve is only payable when the student takes the decision that comes
+        /// NEXT, so the answer has to know which one this is. Empty is accepted and simply means "the
+        /// next exercise", which is all an older client can tell us.
+        /// </summary>
+        public string Decision { get; set; } = "";
     }
 
-    /// <summary>What to pay. Zero means nothing: the element was not a gap, or this gap was already paid for.</summary>
+    /// <summary>
+    /// What to pay. Zero means nothing: the element was not a gap, or this gap was already paid for.
+    ///
+    /// The two amounts are independent. Insight is paid for facing a gap; Resolve is paid for keeping
+    /// at it at the very next opportunity, which is a later decision by definition.
+    /// </summary>
     public class InsightGapAwardResponse
     {
         public int Amount { get; set; }
+
+        /// <summary>Resolve for following through on an earlier Insight. Zero when there is nothing to follow.</summary>
+        public int ResolveAmount { get; set; }
     }
 
     // ── Tutorial sections ────────────────────────────────────────────────────

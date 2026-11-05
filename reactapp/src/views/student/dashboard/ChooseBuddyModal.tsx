@@ -4,7 +4,7 @@ import { CSSProperties, ReactElement, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import CharacterShopModal, { CHARACTER_CATALOGUE } from "./CharacterShopModal.tsx";
-import { AgencyWallet, AgencyWallets, WALLET_META, getAgencyLevel, getWalletXp } from "@utils/wardrobeUtils.ts";
+import { AgencyWallet, AgencyWallets, WALLET_META, AGENCY_LEVEL_THRESHOLDS, getAgencyLevel, getWalletXp } from "@utils/wardrobeUtils.ts";
 
 // ─── Customization types — populate when real assets are ready ────────────────
 
@@ -55,25 +55,25 @@ export const BUDDIES: Buddy[] = [
         color: "#3a86ff",
         unlockWallet: "choice",
         unlockLevel: 3,
-        description: "A playful, decisive companion. Unlocks at Choice level 3.",
-    },
-    {
-        id: "masterzen",
-        name: "Master Zen",
-        emoji: "🧘",
-        color: "#6a5acd",
-        unlockWallet: "insight",
-        unlockLevel: 3,
-        description: "Ancient wisdom meets modern math. Unlocks at Insight level 3.",
+        description: "A playful, decisive companion.",
     },
     {
         id: "lumi",
         name: "Lumi",
         emoji: "🌸",
         color: "#c2185b",
+        unlockWallet: "insight",
+        unlockLevel: 3,
+        description: "A rare companion for the truly dedicated.",
+    },
+    {
+        id: "masterzen",
+        name: "Master Zen",
+        emoji: "🧘",
+        color: "#6a5acd",
         unlockWallet: "resolve",
         unlockLevel: 3,
-        description: "A rare companion for the truly dedicated. Unlocks at Resolve level 3.",
+        description: "Ancient wisdom meets modern math.",
     },
 ];
 
@@ -154,6 +154,23 @@ export default function ChooseBuddyModal({ currentBuddyId, wallets, onSelect, on
 
                                 <span className={"buddy-chooser__name"}>{buddy.name}</span>
                                 <span className={"buddy-chooser__desc"}>{t(`buddy-desc-${buddy.id}`, buddy.description)}</span>
+                                {/*
+                                    WHAT IT ACTUALLY TAKES, FROM THE ACTUAL LADDER.
+                                    The requirement used to be prose only ("Unlocks at Insight level 3"),
+                                    and the one place a number was written down said "Reach 1 500 XP" —
+                                    ten times the real amount, and the same for the other two
+                                    companions. The number is read from the ladder the gate itself
+                                    uses, so it cannot drift again.
+                                */}
+                                {!isUnlocked && buddy.unlockLevel > 0 && (
+                                    <span className={"buddy-chooser__requirement"}>
+                                        {t("buddy-needs-xp", {
+                                            xp: AGENCY_LEVEL_THRESHOLDS[buddy.unlockLevel],
+                                            wallet: t(walletMeta.labelKey),
+                                            level: buddy.unlockLevel,
+                                        })}
+                                    </span>
+                                )}
 
                                 {isUnlocked ? (
                                     <>

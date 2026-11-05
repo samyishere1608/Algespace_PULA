@@ -354,12 +354,13 @@
   "buddy-title": "Choose Buddy",
   "buddy-subtitle": "Your buddy guides you through exercises. Earn XP to unlock new companions!",
   "buddy-desc-pippin": "Your cheerful starting companion. Always ready to help!",
-  "buddy-desc-chimi": "A playful, decisive companion. Unlocks at Choice level 3.",
-  "buddy-desc-masterzen": "Ancient wisdom meets modern math. Unlocks at Insight level 3.",
-  "buddy-desc-lumi": "A rare companion for the truly dedicated. Unlocks at Resolve level 3.",
-  "buddy-unlock-chimi": "Reach 1 000 XP",
-  "buddy-unlock-masterzen": "Reach 1 500 XP",
-  "buddy-unlock-lumi": "Reach 3 000 XP",
+  "buddy-desc-chimi": "A playful, decisive companion.",
+  "buddy-desc-masterzen": "Ancient wisdom meets modern math.",
+  "buddy-desc-lumi": "A rare companion for the truly dedicated.",
+  "buddy-needs-xp": "Level {{level}}: {{xp}} {{wallet}} XP",
+  "buddy-unlock-chimi": "Reach 150 Choice XP",
+  "buddy-unlock-masterzen": "Reach 150 Resolve XP",
+  "buddy-unlock-lumi": "Reach 150 Insight XP",
   "buddy-active": "Active",
   "buddy-unlocked": "Unlocked",
   "buddy-select": "Select",
@@ -379,6 +380,7 @@
   "goal-remove-delete": "Delete anyway",
   "goals-back": "Back",
   "goals-add": "Add this goal",
+  "goals-already-active": "You already have this goal — it is on your dashboard.",
   "goals-go-to-exercises": "Go to exercises",
   "goals-resolve-note": "Finishing a goal earns {{xp}} Resolve XP.",
   "goals-ask-ai": "Suggest goals for me",
@@ -549,7 +551,7 @@
   "agency-info-level": "Your level badge rises when all three reach the next step: 10, then 20, then 40, 90 and 200 XP in each.",
   "agency-choice-desc": "For deciding things yourself. Pick your own goal, ask for a reflection after an exercise, or say yes to a look back at the end of your session.",
   "agency-insight-desc": "For facing what you would normally skip. Try the method you usually avoid, or answer a reflection honestly and see what you notice.",
-  "agency-resolve-desc": "For finishing what you started. Complete a goal you set, or keep the plan you made at the start of the day and do a couple more exercises.",
+  "agency-resolve-desc": "For finishing what you started. Complete a goal you set, keep the plan you made at the start of the day, or say yes again to the thing you usually skip the next time it comes round.",
 
   "end-session-dash-btn": "End Today's Session",
   "end-session-title": "Session Complete!",
@@ -613,10 +615,10 @@
   "tour-tabs-body": "From here you can:\n- try an exercise, then check the Analytics board and your Growth Tree\n- see how others are doing on the Leaderboard",
 
   "tour-buddy-corner-title": "Your companion lives here",
-  "tour-buddy-corner-body": "{{name}} sits in the corner of every screen while you work. Tap your companion to choose a different one, or to open the wardrobe.",
+  "tour-buddy-corner-body": "{{name}} sits in the corner of every screen while you work. Tap your companion to ask what to do next, choose a different one, or open the wardrobe.",
 
   "tour-characters-title": "New companions unlock with your points",
-  "tour-characters-body": "Pippin is yours from the first day. The other three unlock at level 3 of one wallet each: Chimi at Choice level 3, Master Zen at Insight level 3, and Lumi at Resolve level 3. This is the real screen, shown as a demo, so nothing here gets saved.",
+  "tour-characters-body": "Pippin is yours from the first day. The other three unlock at level 3 of one wallet each: Chimi at Choice level 3, Lumi at Insight level 3, and Master Zen at Resolve level 3. This is the real screen, shown as a demo, so nothing here gets saved.",
   "tour-characters-note": "Level 3 means 150 points in that wallet. The three wallets fill up separately, so each companion is reached by earning in a different way.",
 
   "tour-outfits-title": "Outfits unlock the same way",
@@ -626,7 +628,7 @@
   "tour-goals-title": "Your goals",
   "tour-goals-body": "Set a goal, like doing 5 exercises, and I'll keep track of when you achieve it.\nTwo ways to choose one:\n- Choosing a goal I suggest\n- Setting a goal for yourself (earns you Choice XP, because deciding is a skill)",
 
-  "tour-picker-categories-title": "Six kinds of goal",
+  "tour-picker-categories-title": "Five kinds of goal",
   "tour-picker-categories-body": "Every one of these is something I already keep track of, so any goal you set can be checked. Compare two methods, explain your reasoning, solve it without hints. Whichever you choose, I can tell whether you did it.",
 
   "tour-picker-target-title": "Make it specific",
@@ -667,6 +669,7 @@
 
   "tour-ex-help-title": "When you get stuck",
   "tour-ex-help-body": "Ask for a hint whenever you want. It shows you the next step, never the answer. Asking costs you nothing, but a run with no hints is one of the goals you can set, so either way it gets counted.",
+  "tour-ex-help-body-control": "Ask for a hint whenever you want. It shows you the next step, never the answer, and asking costs you nothing.",
 
   "tour-done-title": "That is the whole loop",
   "tour-done-body": "Pick something you want to get better at, then go and do the exercises that count towards it. Your dashboard keeps track of the rest. You can replay this walkthrough anytime with the question mark button at the top of your dashboard.",

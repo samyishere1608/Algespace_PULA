@@ -17,7 +17,7 @@ import type { GoalCategory, GoalMetric, QualityDimension, StudyGoal } from "@/ty
  */
 
 /** Resolve XP awarded for following through on a goal, whatever the goal was. */
-export const GOAL_RESOLVE_XP = 5;
+export const GOAL_RESOLVE_XP = 10;
 
 /**
  * The most any single exercise can contribute to a minutes goal.
@@ -342,6 +342,25 @@ export function newGoalId(): string {
         return crypto.randomUUID();
     }
     return `goal-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * True when two goals ask for the same thing.
+ *
+ * The id is deliberately ignored: it identifies one recorded goal, not what the goal asks for, and
+ * every new goal is given a fresh one. Two goals that agree on everything else measure the same
+ * thing twice — the progress is counted twice off the same work, and the Choice reward is paid for a
+ * decision the student had already made. That is why the comparison is exact rather than loose: the
+ * same category aimed at a different target ("5 exercises" vs "10 exercises") is a real change of
+ * intention and is allowed.
+ */
+export function sameGoal(a: StudyGoal, b: StudyGoal): boolean {
+    return a.category === b.category
+        && (a.focus ?? null) === (b.focus ?? null)
+        && a.metric === b.metric
+        && a.target === b.target
+        && (a.quality ?? null) === (b.quality ?? null)
+        && (a.maxPerExercise ?? 0) === (b.maxPerExercise ?? 0);
 }
 
 /**

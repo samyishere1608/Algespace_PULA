@@ -4,7 +4,7 @@ import { ReactElement, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
 import type { GoalCategory, GoalMetric, QualityDimension, StudyGoal } from "@/types/student/goal.ts";
-import { GOAL_CATEGORIES, GOAL_RESOLVE_XP, METHOD_FOCUS_NOTES, asTranslate, describeGoal, getCategoryDef, groupInExercise, newGoalId } from "@utils/goalCatalog.ts";
+import { GOAL_CATEGORIES, GOAL_RESOLVE_XP, METHOD_FOCUS_NOTES, asTranslate, describeGoal, getCategoryDef, groupInExercise, newGoalId, sameGoal } from "@utils/goalCatalog.ts";
 import { fetchGoalSuggestions, suggestionToGoal, type GoalPlan } from "@utils/goalSuggestions.ts";
 import type { GoalOrigin } from "@utils/activeGoals.ts";
 import type { TourPickerStep } from "@utils/onboardingTour.ts";
@@ -16,6 +16,14 @@ interface Props {
     initialCategory?: GoalCategory | null;
     onAdd: (goal: StudyGoal, origin: GoalOrigin) => void;
     onClose: () => void;
+    /**
+     * The goals the student already has.
+     *
+     * Used only to refuse a goal that is already active: adding the same thing a second time counts
+     * one piece of work towards two goals and pays the Choice reward twice for a decision already
+     * made. Empty during the walkthrough, which cannot save anything.
+     */
+    existingGoals?: StudyGoal[];
     /**
      * Runs the picker as a DEMONSTRATION.
      *
@@ -61,8 +69,13 @@ function demoStepToStep(demoStep: TourPickerStep | undefined): GoalStep {
     return demoStep === "choose" || demoStep === undefined ? "choose" : "own";
 }
 
-export default function SetGoalsModal({ studentId, initialCategory = null, demo = false, demoStep, onAdd, onClose }: Props): ReactElement {
+export default function SetGoalsModal({ studentId, initialCategory = null, demo = false, demoStep, onAdd, onClose, existingGoals = [] }: Props): ReactElement {
     const { t, i18n } = useTranslation(TranslationNamespaces.Student);
+
+    /** A goal already active, and therefore not available to add again. */
+    function alreadyActive(goal: StudyGoal): boolean {
+        return existingGoals.some((existing) => sameGoal(existing, goal));
+    }
 
     // In a demonstration the screen is not the student's to choose, so it starts from the walkthrough's
     // step — and the effect below keeps it there as the walkthrough moves on.
@@ -109,7 +122,7 @@ export default function SetGoalsModal({ studentId, initialCategory = null, demo 
 
     function takeSuggestion(index: number, suggestion: GoalPlan["goals"][number]): void {
         const goal = suggestionToGoal(suggestion);
-        if (goal === null) return;
+        if (goal === null || alreadyActive(goal)) return;
 
         onAdd(goal, "assistant");
         setTaken((prev) => new Set(prev).add(index));
@@ -160,6 +173,7 @@ export default function SetGoalsModal({ studentId, initialCategory = null, demo 
                                         onAdd(goal, "student");
                                         setCategory(null);
                                     }}
+                                    isAlreadyActive={alreadyActive}
                                 />
                             )
                     )}
@@ -198,6 +212,11 @@ export default function SetGoalsModal({ studentId, initialCategory = null, demo 
                                     {plan.goals.map((suggestion, index) => {
                                         const goal = suggestionToGoal(suggestion);
                                         const isTaken = taken.has(index);
+                                        // The system can suggest something the student already has;
+                                        // offering it again would pay Choice for accepting a decision
+                                        // they made themselves.
+                                        const isDuplicate = goal !== null && alreadyActive(goal);
+                                        const isDone = isTaken || isDuplicate;
 
                                         return (
                                             <div key={index} className={"setgoals__plan-row"}>
@@ -205,17 +224,19 @@ export default function SetGoalsModal({ studentId, initialCategory = null, demo 
                                                     <span className={"setgoals__plan-row-label"}>
                                                         {goal ? describeGoal(goal, translate) : t("goals-suggestions-unavailable")}
                                                     </span>
-                                                    <span className={"setgoals__plan-row-reason"}>{suggestion.reason}</span>
+                                                    <span className={"setgoals__plan-row-reason"}>
+                                                        {isDuplicate ? t("goals-already-active") : suggestion.reason}
+                                                    </span>
                                                 </div>
                                                 <button
                                                     type={"button"}
                                                     className={"setgoals__plan-take"}
-                                                    title={t("goals-add")}
-                                                    aria-label={t("goals-add")}
-                                                    disabled={goal === null || isTaken}
+                                                    title={isDuplicate ? t("goals-already-active") : t("goals-add")}
+                                                    aria-label={isDuplicate ? t("goals-already-active") : t("goals-add")}
+                                                    disabled={goal === null || isDone}
                                                     onClick={() => takeSuggestion(index, suggestion)}
                                                 >
-                                                    {isTaken ? <FontAwesomeIcon icon={faCheck} /> : <FontAwesomeIcon icon={faPlus} />}
+                                                    {isDone ? <FontAwesomeIcon icon={faCheck} /> : <FontAwesomeIcon icon={faPlus} />}
                                                 </button>
                                             </div>
                                         );
@@ -310,6 +331,8 @@ interface BuilderProps {
     category: GoalCategory;
     onBack: () => void;
     onConfirm: (goal: StudyGoal) => void;
+    /** Reports whether the goal the builder currently describes is already active. */
+    isAlreadyActive: (goal: StudyGoal) => boolean;
 }
 
 /**
@@ -318,7 +341,7 @@ interface BuilderProps {
  * Defaults are filled in so a student who does not care about the details can press Add and get
  * something sensible, rather than being stopped by a half-answered form.
  */
-function GoalBuilder({ category, onBack, onConfirm }: BuilderProps): ReactElement {
+function GoalBuilder({ category, onBack, onConfirm, isAlreadyActive }: BuilderProps): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
     const def = useMemo(() => getCategoryDef(category), [category]);
 
@@ -352,16 +375,28 @@ function GoalBuilder({ category, onBack, onConfirm }: BuilderProps): ReactElemen
         if (options.length > 0 && !options.includes(target)) setTarget(options[0]);
     }
 
+    /**
+     * What the builder is currently describing, without the bits that make a goal NEW.
+     *
+     * The duplicate check asks "does the student already have this goal?", which has nothing to do
+     * with the instance id or the moment it was set — so this is the shape that gets compared, and
+     * `confirm` stamps the identity on top of it.
+     */
+    const drafted: StudyGoal = {
+        id: "",
+        category,
+        focus: def.focuses.length > 0 ? focus : null,
+        metric,
+        target,
+        ...(def.qualities ? { quality, maxPerExercise: limit } : {}),
+        createdAt: "",
+    };
+
+    const alreadyActive = isAlreadyActive(drafted);
+
     function confirm(): void {
-        onConfirm({
-            id: newGoalId(),
-            category,
-            focus: def.focuses.length > 0 ? focus : null,
-            metric,
-            target,
-            ...(def.qualities ? { quality, maxPerExercise: limit } : {}),
-            createdAt: new Date().toISOString(),
-        });
+        if (alreadyActive) return;
+        onConfirm({ ...drafted, id: newGoalId(), createdAt: new Date().toISOString() });
     }
 
     return (
@@ -472,9 +507,20 @@ function GoalBuilder({ category, onBack, onConfirm }: BuilderProps): ReactElemen
                 />
             </Field>
 
-            <button type={"button"} className={"setgoals__confirm"} data-tour={"goals-confirm"} onClick={confirm}>
-                <FontAwesomeIcon icon={faPlus} /> {t("goals-add")}
+            <button
+                type={"button"}
+                className={"setgoals__confirm"}
+                data-tour={"goals-confirm"}
+                onClick={confirm}
+                disabled={alreadyActive}
+            >
+                <FontAwesomeIcon icon={alreadyActive ? faCheck : faPlus} /> {t("goals-add")}
             </button>
+
+            {/* Said next to the button rather than as an error after the press: the goal is a
+                duplicate, not a mistake the student made, and the useful thing is to know why the
+                button is not doing anything. */}
+            {alreadyActive && <p className={"setgoals__duplicate-note"}>{t("goals-already-active")}</p>}
         </div>
     );
 }

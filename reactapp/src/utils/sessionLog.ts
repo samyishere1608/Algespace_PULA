@@ -17,11 +17,27 @@ const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
  */
 
 const SESSION_KEY = "algespace_session_id";
+const SESSION_OWNER_KEY = "algespace_session_student";
 
-/** The id of the sitting in this tab, or "" when the dashboard has not opened one yet. */
-export function currentSessionId(): string {
+/**
+ * The id of the sitting in this tab, or "" when the dashboard has not opened one yet.
+ *
+ * The STUDENT IT BELONGS TO is checked whenever it is known. `sessionStorage` outlives a logout that
+ * never happened (a shared classroom machine handed over at the end of a lesson) and a tab the browser
+ * restored after a crash, and in both cases it can still hold the previous child's sitting. Answering
+ * with that id would have the dashboard skip opening its own sitting, so every event of the new
+ * student's afternoon would be filed under no session at all - invisible to the analysis, and nothing
+ * the student could have noticed. A stored id that belongs to someone else is treated as absent.
+ */
+export function currentSessionId(studentId?: number): string {
     try {
-        return sessionStorage.getItem(SESSION_KEY) ?? "";
+        const id = sessionStorage.getItem(SESSION_KEY) ?? "";
+        if (!id) return "";
+
+        const owner = Number(sessionStorage.getItem(SESSION_OWNER_KEY) ?? "");
+        if (studentId !== undefined && Number.isFinite(owner) && owner > 0 && owner !== studentId) return "";
+
+        return id;
     } catch {
         return "";
     }
@@ -40,7 +56,10 @@ export async function startSession(studentId: number, language: string): Promise
             language,
         });
         const id = data?.sessionId ?? "";
-        if (id) sessionStorage.setItem(SESSION_KEY, id);
+        if (id) {
+            sessionStorage.setItem(SESSION_KEY, id);
+            sessionStorage.setItem(SESSION_OWNER_KEY, String(studentId));
+        }
         return id;
     } catch {
         // Not being able to start a session must not stop the student using the app. The server will
@@ -63,6 +82,7 @@ export async function endSession(studentId: number, reason: string): Promise<voi
     } finally {
         try {
             sessionStorage.removeItem(SESSION_KEY);
+            sessionStorage.removeItem(SESSION_OWNER_KEY);
         } catch { /* non-critical */ }
     }
 }

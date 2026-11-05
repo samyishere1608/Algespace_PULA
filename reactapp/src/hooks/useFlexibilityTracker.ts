@@ -88,15 +88,6 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
     const nudgeAvailable = useLogger && ourEntryId !== undefined;
     const offerNudge = useNudge();
 
-    /**
-     * Elements already paid for in this exercise.
-     *
-     * The two solution points both map to the same element, so a student who works both out would
-     * otherwise be paid twice in one exercise for one act. A ref, not state: it resets when the
-     * exercise unmounts, which is exactly the scope of "once per exercise".
-     */
-    const insightPaidFor = useRef<Set<string>>(new Set());
-
     const [errors, setErrors] = useState<number>(0);
     const [hints, setHints] = useState<number>(0);
 
@@ -228,28 +219,31 @@ export default function useFlexibilityTracker(logging: boolean, passedUser: Trac
     }
 
     /**
-     * Insight for facing something the profile says they avoid.
+     * Insight for facing something the profile says they avoid — and Resolve when this is the decision
+     * straight after one that earned Insight.
      *
      * Mirrors the nudge: the nudge reacts to the decline, this reacts to the engagement that follows
      * it — with or without a nudge, because a student who works it out unprompted has done the same
-     * difficult thing. See `insightAwards.ts` for why it cannot be farmed.
+     * difficult thing. See `insightAwards.ts` for why neither can be farmed.
      */
     function considerInsight(choice: string, phase: FlexibilityExerciseChoicePhase): void {
         if (!useLogger || ourEntryId === undefined) return;
 
         const engaged = engagedElement(choice, phase);
         if (engaged === null) return;
-        if (insightPaidFor.current.has(engaged.element)) return;
 
-        // Claimed before the async lookup, so a second engagement in the same exercise cannot slip
-        // through while the server is still deciding.
-        insightPaidFor.current.add(engaged.element);
-
-        // A control student is still credited — the award is recorded, because "they faced the thing
-        // they had been avoiding" is a fact about the attempt — but nothing is shown for it. The toast
-        // is part of the treatment, and points appearing over the exercise would be the treatment
-        // leaking into the arm that is meant to be measured without it.
-        void awardInsightForFacingGap(user.id, engaged.element, ourEntryId, isControl);
+        // The decision is reported on EVERY engagement, not once per exercise. Insight is refused a
+        // second time in the same exercise, but Resolve is earned by exactly that second time: the two
+        // solution points are the same offer twice, and taking it twice is the behaviour it rewards.
+        // `engagedElement` only answers for the base decision names the server counts, so the phase is
+        // already one of those names.
+        void awardInsightForFacingGap(
+            user.id,
+            engaged.element,
+            ourEntryId,
+            isControl,
+            FlexibilityExerciseChoicePhase[phase]
+        );
     }
 
     /**

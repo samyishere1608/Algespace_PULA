@@ -30,6 +30,23 @@ namespace webapi.Models.Anchors
         /// <summary>One row per Insight paid for facing a weakness. Also what starts that weakness's grace period.</summary>
         public const string InsightAwardTable = "InsightGapAward";
 
+        public const string InsightAwardScheme =
+            "Id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "StudentId INTEGER NOT NULL, " +
+            "Element TEXT NOT NULL, " +
+            "AttemptId INTEGER NOT NULL, " +
+            "AwardedAt TEXT NOT NULL, " +
+            // Which decision the Insight was paid for, e.g. "FirstSolutionChoice". Without it the row
+            // says which exercise but not which of that exercise's two solution points, and the
+            // follow-through below cannot tell the decision that came next from the one that came two
+            // later. Empty on rows written before the column existed.
+            "Decision TEXT NOT NULL DEFAULT '', " +
+            // When the student stuck with that decision at the very next opportunity. Empty = not yet
+            // followed through, so the episode is still open. This is what makes Resolve payable once
+            // per Insight rather than once per engagement.
+            "FollowedThroughAt TEXT NOT NULL DEFAULT ''";
+
+
         public const string Scheme =
             "Id INTEGER PRIMARY KEY AUTOINCREMENT, " +
             "StudentId INTEGER NOT NULL, " +
@@ -74,12 +91,15 @@ namespace webapi.Models.Anchors
         {
             conn.Execute($"CREATE TABLE IF NOT EXISTS {Table} ({Scheme})");
             conn.Execute($"CREATE TABLE IF NOT EXISTS {RecordTable} ({RecordScheme})");
-            conn.Execute(
-                $"CREATE TABLE IF NOT EXISTS {InsightAwardTable} " +
-                "(Id INTEGER PRIMARY KEY AUTOINCREMENT, StudentId INTEGER NOT NULL, Element TEXT NOT NULL, " +
-                "AttemptId INTEGER NOT NULL, AwardedAt TEXT NOT NULL)");
+            conn.Execute($"CREATE TABLE IF NOT EXISTS {InsightAwardTable} ({InsightAwardScheme})");
             conn.Execute(
                 $"CREATE INDEX IF NOT EXISTS IX_{InsightAwardTable}_Student ON {InsightAwardTable} (StudentId, Element)");
+
+            // Tables created before the follow-through existed keep their old shape, so the two
+            // columns are added on the way past. Safe to run every start: the second attempt throws
+            // "duplicate column name" and is swallowed.
+            try { conn.Execute($"ALTER TABLE {InsightAwardTable} ADD COLUMN Decision TEXT NOT NULL DEFAULT ''"); } catch { }
+            try { conn.Execute($"ALTER TABLE {InsightAwardTable} ADD COLUMN FollowedThroughAt TEXT NOT NULL DEFAULT ''"); } catch { }
 
             // One row per named tracking point per attempt. The unique index also makes the
             // upsert idempotent, so a retried tracking call cannot duplicate a decision.

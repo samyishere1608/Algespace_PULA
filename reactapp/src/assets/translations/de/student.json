@@ -354,12 +354,13 @@
   "buddy-title": "Buddy auswählen",
   "buddy-subtitle": "Dein Buddy begleitet dich durch die Aufgaben. Sammle XP, um neue Gefährten freizuschalten!",
   "buddy-desc-pippin": "Dein fröhlicher Start-Begleiter. Immer bereit zu helfen!",
-  "buddy-desc-chimi": "Ein verspielter, entschlossener Begleiter. Freischaltbar bei Entscheidungs-Level 3.",
-  "buddy-desc-masterzen": "Alte Weisheit trifft moderne Mathematik. Freischaltbar bei Einsichts-Level 3.",
-  "buddy-desc-lumi": "Ein seltener Begleiter für wahrhaft Engagierte. Freischaltbar bei Durchhalte-Level 3.",
-  "buddy-unlock-chimi": "1.000 XP erreichen",
-  "buddy-unlock-masterzen": "1.500 XP erreichen",
-  "buddy-unlock-lumi": "3.000 XP erreichen",
+  "buddy-desc-chimi": "Ein verspielter, entschlossener Begleiter.",
+  "buddy-desc-masterzen": "Alte Weisheit trifft moderne Mathematik.",
+  "buddy-desc-lumi": "Ein seltener Begleiter für wahrhaft Engagierte.",
+  "buddy-needs-xp": "Stufe {{level}}: {{xp}} {{wallet}}-XP",
+  "buddy-unlock-chimi": "150 Entscheidungs-XP erreichen",
+  "buddy-unlock-masterzen": "150 Durchhalte-XP erreichen",
+  "buddy-unlock-lumi": "150 Einsichts-XP erreichen",
   "buddy-active": "Aktiv",
   "buddy-unlocked": "Freigeschaltet",
   "buddy-select": "Auswählen",
@@ -379,6 +380,7 @@
   "goal-remove-delete": "Trotzdem löschen",
   "goals-back": "Zurück",
   "goals-add": "Dieses Ziel hinzufügen",
+  "goals-already-active": "Dieses Ziel hast du schon — es steht auf deinem Dashboard.",
   "goals-go-to-exercises": "Zu den Aufgaben",
   "goals-resolve-note": "Ein abgeschlossenes Ziel bringt {{xp}} Resolve-XP.",
   "goals-ask-ai": "Ziele vorschlagen",
@@ -549,7 +551,7 @@
   "agency-info-level": "Deine Stufe steigt, wenn alle drei den nächsten Schritt erreichen: 10, dann 20, dann 40, 90 und 200 XP in jeder.",
   "agency-choice-desc": "Für eigene Entscheidungen. Wähl dein eigenes Ziel, frag nach einer Reflexion nach der Aufgabe, oder sag Ja zu einem Rückblick am Ende deiner Sitzung.",
   "agency-insight-desc": "Für das, was du sonst überspringst. Probier das Verfahren, das du meistens vermeidest, oder beantworte eine Reflexion ehrlich.",
-  "agency-resolve-desc": "Fürs Zuende bringen. Schließ ein Ziel ab, oder halt dich an den Plan vom Tagesanfang und mach noch ein paar Aufgaben.",
+  "agency-resolve-desc": "Fürs Zuende bringen. Schließ ein Ziel ab, halt dich an den Plan vom Tagesanfang, oder sag beim nächsten Mal noch einmal Ja zu dem, was du sonst überspringst.",
 
   "end-session-dash-btn": "Sitzung beenden",
   "end-session-title": "Sitzung abgeschlossen!",
@@ -613,10 +615,10 @@
   "tour-tabs-body": "Von hier aus kannst du:\n- eine Übung machen und dann im Analytics-Board und im Wachstumsbaum nachsehen, wie es läuft\n- auf dem Leaderboard sehen, wie es den anderen geht",
 
   "tour-buddy-corner-title": "Hier wohnt dein Begleiter",
-  "tour-buddy-corner-body": "{{name}} sitzt beim Arbeiten in der Ecke des Bildschirms. Tippe auf deinen Begleiter, um einen anderen zu wählen oder die Garderobe zu öffnen.",
+  "tour-buddy-corner-body": "{{name}} sitzt beim Arbeiten in der Ecke des Bildschirms. Tippe auf deinen Begleiter, um zu fragen, was als Nächstes dran ist, einen anderen zu wählen oder die Garderobe zu öffnen.",
 
   "tour-characters-title": "Neue Begleiter schaltest du mit Punkten frei",
-  "tour-characters-body": "Pippin gehört dir vom ersten Tag an. Die anderen drei werden bei Stufe 3 einer der Wallets freigeschaltet: Chimi bei Entscheidung-Stufe 3, Master Zen bei Einsicht-Stufe 3 und Lumi bei Durchhaltevermögen-Stufe 3. Das ist der echte Bildschirm, hier nur als Demo gezeigt, es wird also nichts gespeichert.",
+  "tour-characters-body": "Pippin gehört dir vom ersten Tag an. Die anderen drei werden bei Stufe 3 einer der Wallets freigeschaltet: Chimi bei Entscheidung-Stufe 3, Lumi bei Einsicht-Stufe 3 und Master Zen bei Durchhaltevermögen-Stufe 3. Das ist der echte Bildschirm, hier nur als Demo gezeigt, es wird also nichts gespeichert.",
   "tour-characters-note": "Stufe 3 bedeutet 150 Punkte in diesem Wallet. Die drei Wallets füllen sich getrennt, jeder Begleiter wird also auf einem anderen Weg erreicht.",
 
   "tour-outfits-title": "Outfits schalten sich genauso frei",
@@ -626,7 +628,7 @@
   "tour-goals-title": "Deine Ziele",
   "tour-goals-body": "Setz dir ein Ziel, zum Beispiel 5 Aufgaben zu machen, und ich behalte im Blick, wann du es erreichst.\nZwei Wege, eins zu wählen:\n- Ein Ziel, das ich vorschlage\n- Ein eigenes Ziel (bringt dir Choice-XP, denn Entscheiden ist eine Fähigkeit)",
 
-  "tour-picker-categories-title": "Sechs Arten von Ziel",
+  "tour-picker-categories-title": "Fünf Arten von Ziel",
   "tour-picker-categories-body": "Alles hier behalte ich schon im Blick, also lässt sich jedes Ziel auch prüfen. Zwei Verfahren vergleichen, dein Vorgehen begründen, ohne Hinweise lösen. Was du auch wählst, ich kann feststellen, ob du es getan hast.",
 
   "tour-picker-target-title": "Mach es konkret",
@@ -667,6 +669,7 @@
 
   "tour-ex-help-title": "Wenn du nicht weiterkommst",
   "tour-ex-help-body": "Frag jederzeit nach einem Hinweis. Er zeigt dir den nächsten Schritt, nie die Lösung. Fragen kostet dich nichts. Aber ein Durchlauf ohne Hinweise ist eines der Ziele, die du setzen kannst, also wird es so oder so gezählt.",
+  "tour-ex-help-body-control": "Frag jederzeit nach einem Hinweis. Er zeigt dir den nächsten Schritt, nie die Lösung, und das Fragen kostet dich nichts.",
 
   "tour-done-title": "Das ist der ganze Kreislauf",
   "tour-done-body": "Setz dir etwas, worin du besser werden willst, und mach dann die Aufgaben, die darauf einzahlen. Den Rest behält dein Dashboard im Blick. Du kannst diese Tour jederzeit über den Fragezeichen-Button oben im Dashboard wiederholen.",

@@ -58,7 +58,7 @@ import { fetchStudentProgress, fetchLeaderboard, getAccuracyLast5, getAccuracySt
 import type { LeaderboardRow, StudentProgressData } from "@utils/progressUtils.ts";
 import type { GoalProgress, StudyGoal } from "@/types/student/goal.ts";
 import { addGoal, getActiveGoals, removeGoal } from "@utils/activeGoals.ts";
-import { GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef } from "@utils/goalCatalog.ts";
+import { GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef, sameGoal } from "@utils/goalCatalog.ts";
 import { claimCompletedGoals, computeProgress, earliestGoalStart, fetchGoalEvents } from "@utils/goalProgress.ts";
 import { awardChoiceForReflection, awardChoiceForSettingAGoal, revokeChoiceForDeletedGoal, revokeChoiceForReflection } from "@utils/choiceAwards.ts";
 import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, getInsightXP, creditAwardAlreadyRecorded } from "@utils/agencyUtils.ts";
@@ -211,7 +211,7 @@ export default function StudentDashboard(): ReactElement {
             // Open the sitting, so everything that happens from here is grouped into one session on the
             // server. Once per tab: the server resumes an open session rather than starting a new one,
             // but there is no reason to ask again on every remount.
-            if (!currentSessionId()) {
+            if (!currentSessionId(student.id)) {
                 void startSession(student.id, i18n.language?.slice(0, 2) ?? "en");
             }
 
@@ -645,6 +645,11 @@ export default function StudentDashboard(): ReactElement {
 
     async function handleAddGoal(goal: StudyGoal, origin: GoalOrigin): Promise<void> {
         if (!student) return;
+
+        // Last line of defence, and the one that covers every caller: the picker already refuses a
+        // goal that is on the dashboard, and the server refuses one it already holds. Awarding Choice
+        // here for something that was not added would be paying for a decision already made.
+        if (activeGoals.some((existing) => sameGoal(existing, goal))) return;
 
         setActiveGoals(await addGoal(student.id, goal, origin));
 
@@ -1156,7 +1161,11 @@ export default function StudentDashboard(): ReactElement {
                                         total: stats.nextLevelAt
                                     })}
                             >
-                                {t(`dashboard-tier-${stats.levelName.toLowerCase()}`, stats.levelName)} {stats.level}
+                                {/* The tier alone. The number after it said how far through a six-step
+                                    ladder the student is, which is what the tooltip already spells out
+                                    in words — and a title followed by a bare digit reads as one more
+                                    thing to decode. */}
+                                {t(`dashboard-tier-${stats.levelName.toLowerCase()}`, stats.levelName)}
                             </span>
                         </div>
                         <div className={"dashboard__nav-user-avatar"}>
@@ -1829,6 +1838,7 @@ export default function StudentDashboard(): ReactElement {
                     demoStep={tourPickerStep ?? undefined}
                     onAdd={isDemoPicker ? noopAddGoal : handleAddGoal}
                     onClose={() => setShowGoals(false)}
+                    existingGoals={activeGoals}
                 />
             )}
             {(showBuddyChooser || isDemoChooser) && (

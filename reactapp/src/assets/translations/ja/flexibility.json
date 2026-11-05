@@ -93,7 +93,7 @@
   "equation-selection-instruction": "変数{{otherVariable}}はまだ計算する必要があるよ。<strong>変数{{firstSolution}}の答えを、どの式に代入するか決めよう。</strong>計算が一番少なくてすむように選んでね。",
   "equation-selection-button-label": "ここに{{variable}}を代入",
   "second-solution-instruction": "つぎの式に{{variable}}の答えをつかうことにしたよ：",
-  "second-solution-result": "{{otherVariable}}の答えを出すために、{{firstVariable}}の答えをつぎの式に代入することにしたよ：",
+  "second-solution-result": "{{otherVariable}}の答えを出すために、{{firstSolution}}の答えをつぎの式に代入することにしたよ：",
   "system-solution": "だから、連立方程式の答えはこうなるよ：",
   "system-solution-success": "よくできたね。連立方程式が解けたよ！",
   "system-solution-success-continue": "$t(system-solution-success) つぎの問題にすすめるよ。",

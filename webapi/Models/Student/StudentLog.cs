@@ -104,6 +104,15 @@ namespace webapi.Models.Student
         /// <summary>The Choice paid for committing to a next step. Its idempotency key is RefId, not this.</summary>
         public const string ReflectionCommit = "reflection-commit";
         public const string FacedAGap = "faced-a-gap";
+        /// <summary>
+        /// Resolve for keeping at a decision that already earned Insight: they said yes again the very
+        /// next time it was offered.
+        ///
+        /// Deliberately a separate source from <see cref="FacedAGap"/> rather than a bigger Insight row.
+        /// The two are paid for different acts, one of them is the rarest thing in the system, and the
+        /// analysis has to be able to count them apart.
+        /// </summary>
+        public const string InsightFollowThrough = "insight-follow-through";
         public const string DailyIntention = "daily-intention";
         public const string DailyIntentionFollowThrough = "daily-intention-follow-through";
         public const string PickedSolo = "picked-solo";
@@ -127,6 +136,7 @@ namespace webapi.Models.Student
             (ReflectionFollowThrough, "Resolve for keeping a reflection promise"),
             (ReflectionCommit, "Choice for committing to a next step"),
             (FacedAGap, "Insight for facing something you had been avoiding"),
+            (InsightFollowThrough, "Resolve for keeping at a decision that earned Insight"),
             (DailyIntention, "XP for setting a plan for the day"),
             (DailyIntentionFollowThrough, "Resolve for keeping that plan"),
             (PickedSolo, "Choice for working without the companion"),

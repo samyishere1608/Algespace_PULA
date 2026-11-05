@@ -315,6 +315,27 @@
     &:hover {
         filter: brightness(1.12);
     }
+
+    // Not an error state: the goal is a real one, the student already has it. The button goes flat
+    // rather than red so the note beside it reads as information.
+    &:disabled {
+        cursor: default;
+        background: rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.62);
+
+        &:hover {
+            filter: none;
+        }
+    }
+}
+
+// Why the button above is not doing anything. Sits under it, quiet, because nothing has gone wrong.
+.setgoals__duplicate-note {
+    margin: 0.5rem 0 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.62);
+    text-align: center;
 }
 
 // ── Suggested plan ────────────────────────────────────────────────────────────
