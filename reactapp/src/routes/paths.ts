@@ -58,6 +58,12 @@ export class Paths {
     static readonly OnboardingEqualizationGameExercisePath: string = "/onboarding/equalization/exercises/:exerciseId";
     static readonly OnboardingEliminationGamePath: string = "/onboarding/elimination/";
     static readonly OnboardingEliminationGameExercisePath: string = "/onboarding/elimination/exercises/:exerciseId";
+
+    /**
+     * The prefix of the open, no-account version. It is a basename rather than a route, so every path
+     * in this class lands under it without being written twice — see `Routes.tsx`.
+     */
+    static readonly PlainPrefix: string = "/plain";
 }
 
 export function getPathToExercises(path: string): string {

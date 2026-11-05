@@ -6,6 +6,7 @@ import { TranslationNamespaces } from "@/i18n.ts";
 import type { StudyGoal } from "@/types/student/goal.ts";
 import { asTranslate, describeGoal, getCategoryDef } from "@utils/goalCatalog.ts";
 import "@styles/shared/goal-celebration.scss";
+import { SOUND_ENABLED } from "@/config/sound.ts";
 import completionSound from "@/assets/sounds/gamecompletionsound.mp3";
 
 interface Props {
@@ -28,9 +29,11 @@ export function GoalCelebrationOverlay({ completedGoals, resolveXpEarned, onCont
     // Trigger entry animation and play sound on mount
     useEffect(() => {
         const timer = setTimeout(() => setVisible(true), 50);
-        const audio = new Audio(completionSound);
-        audio.volume = 0.6;
-        audio.play().catch(() => { /* autoplay may be blocked — silently ignore */ });
+        const audio = SOUND_ENABLED ? new Audio(completionSound) : null;
+        if (audio !== null) {
+            audio.volume = 0.6;
+            audio.play().catch(() => { /* autoplay may be blocked — silently ignore */ });
+        }
         return () => clearTimeout(timer);
     }, []);
 

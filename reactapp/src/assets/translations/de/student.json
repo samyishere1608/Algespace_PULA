@@ -670,6 +670,12 @@
 
   "tour-done-title": "Das ist der ganze Kreislauf",
   "tour-done-body": "Setz dir etwas, worin du besser werden willst, und mach dann die Aufgaben, die darauf einzahlen. Den Rest behält dein Dashboard im Blick. Du kannst diese Tour jederzeit über den Fragezeichen-Button oben im Dashboard wiederholen.",
+  "tour-module-intro-title": "Hier übst du",
+  "tour-module-intro-body": "Von diesem Bildschirm aus kannst du so viele Flexibilitätsaufgaben bearbeiten, wie du möchtest. Schauen wir ihn uns zuerst an.",
+  "tour-module-list-title": "Die Aufgabenliste",
+  "tour-module-list-body": "Die Aufgaben sind der Reihe nach aufgeführt. Du kannst mit jeder anfangen und eine Aufgabe so oft wiederholen, wie du magst — von oben nach unten musst du nicht.",
+  "tour-module-start-title": "Los geht's",
+  "tour-module-start-body": "Wähle eine Aufgabe, die dich interessiert, und tippe sie an. Jede beginnt damit zu fragen, welche Methode du für passend hältst.",
 
   "tour-preview-back": "Zurück zu meinem Dashboard",
 

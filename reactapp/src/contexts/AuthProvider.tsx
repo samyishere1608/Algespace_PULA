@@ -1,6 +1,7 @@
 import { ReactNode, createContext, useContext, useState } from "react";
 import { IUser } from "@/types/studies/user.ts";
 import { IStudent } from "@/types/student/student.ts";
+import { isPlainMode } from "@utils/plainMode.ts";
 
 export type AuthContextType = {
     user: IUser | undefined;
@@ -14,6 +15,14 @@ export type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
+    /**
+     * The plain version has no accounts, so it runs as a visitor — including on a browser where a
+     * student signed in earlier. Reading the stored identity anyway would let that leftover account
+     * reach the dashboard's links and, worse, hand out an id to anything that records by id. Asking
+     * the URL instead means the answer cannot be stale.
+     */
+    const plain: boolean = isPlainMode();
+
     const jsonString = localStorage.getItem("user");
     let currentUser: IUser | undefined;
     if (jsonString !== null) {
@@ -49,11 +58,17 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("student");
     };
 
-    return (
-        <AuthContext.Provider value={{ user, login, logout, student, loginStudent, logoutStudent }}>
-            {children}
-        </AuthContext.Provider>
-    );
+    const signedIn: AuthContextType = { user, login, logout, student, loginStudent, logoutStudent };
+    const visitor: AuthContextType = {
+        user: undefined,
+        student: undefined,
+        login: () => undefined,
+        logout: () => undefined,
+        loginStudent: () => undefined,
+        logoutStudent: () => undefined
+    };
+
+    return <AuthContext.Provider value={plain ? visitor : signedIn}>{children}</AuthContext.Provider>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

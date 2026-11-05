@@ -1,5 +1,6 @@
 import { AgentType, CompletedDemo, Method } from "@/types/flexibility/enums.ts";
 import axios from "axios";
+import { isPlainMode } from "@utils/plainMode.ts";
 
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
@@ -74,6 +75,9 @@ export function endOnboardingDemos(): void {
 
 function syncExerciseToBackend(studentId: number, category: string, exerciseKey: string, exerciseId: string | number): void {
     if (isOnboardingDemoActive()) return;
+    // The plain version has no account to record against. This is the one place every completion
+    // sync passes through, so one check here covers all four modules.
+    if (isPlainMode()) return;
 
     try {
         axios.post(`${BACKEND}/student-progress/exercises/${studentId}`, {
@@ -117,8 +121,11 @@ function setExerciseCompleted(storageKey: string, propertyKey: string, exerciseI
     // A tour demo leaves no trace at all — not on the server, and not in localStorage. The local mark
     // would otherwise be pushed up as "local-only" by syncProgressFromBackend on the student's next
     // login, so the pollution would come back a day later with no exercise behind it.
+    //
+    // The plain version is silent for the same reason and one more: it has no identity, so a tick it
+    // wrote would be shown to the next student on the same shared machine as if it were their work.
     if (!isSession) {
-        if (isOnboardingDemoActive()) return;
+        if (isOnboardingDemoActive() || isPlainMode()) return;
         storageKey = scopedKey(storageKey);
     }
 

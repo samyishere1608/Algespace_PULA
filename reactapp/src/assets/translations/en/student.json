@@ -670,6 +670,12 @@
 
   "tour-done-title": "That is the whole loop",
   "tour-done-body": "Pick something you want to get better at, then go and do the exercises that count towards it. Your dashboard keeps track of the rest. You can replay this walkthrough anytime with the question mark button at the top of your dashboard.",
+  "tour-module-intro-title": "This is where you practise",
+  "tour-module-intro-body": "From this screen you can work on as many flexibility exercises as you like. Let's look around it first.",
+  "tour-module-list-title": "The exercise list",
+  "tour-module-list-body": "The exercises are laid out in order. You can start with any of them, and you can repeat one as often as you like — there is no need to work from the top.",
+  "tour-module-start-title": "Ready when you are",
+  "tour-module-start-body": "Pick an exercise that looks interesting and tap it. Every one of them starts by asking which method you think fits.",
 
   "tour-preview-back": "Back to my dashboard",
 

@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { CSSProperties, ReactElement, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { TranslationNamespaces } from "@/i18n.ts";
+import { SOUND_ENABLED } from "@/config/sound.ts";
 import unlockSound from "@/assets/sounds/Characterunlok.mp3";
 import { CharacterDef } from "./CharacterShopModal.tsx";
 
@@ -16,9 +17,11 @@ export default function CharacterUnlockModal({ character, userName, onClose }: P
     const { t } = useTranslation(TranslationNamespaces.Student);
 
     useEffect(() => {
-        const audio = new Audio(unlockSound);
-        audio.volume = 0.7;
-        audio.play().catch(() => { /* autoplay may be blocked — silently ignore */ });
+        const audio = SOUND_ENABLED ? new Audio(unlockSound) : null;
+        if (audio !== null) {
+            audio.volume = 0.7;
+            audio.play().catch(() => { /* autoplay may be blocked — silently ignore */ });
+        }
     }, []);
 
     return (

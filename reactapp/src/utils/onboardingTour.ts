@@ -25,6 +25,12 @@ import axios from "axios";
 import suitabilityImage from "@images/suitability.png";
 import efficiencyImage from "@images/efficiency.png";
 import matchingImage from "@images/matching.png";
+// The same three screens as a control student meets them: no companion in the corner. The dashboard
+// tour must keep the picture that matches what a treatment student is about to open, so the two sets
+// are paired with their own arm rather than replaced.
+import suitabilityControlImage from "@images/sutaiblity-control.png";
+import efficiencyControlImage from "@images/efficiency-control.png";
+import matchingControlImage from "@images/matching-control.png";
 
 /** Where the tour is being run from, so the several entry points can share one component. */
 export const TOUR_STORAGE_PREFIX = "algespace-dashboard-tour";
@@ -41,9 +47,9 @@ const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
  *   goals       — setting a goal, start to finish.
  *   exercises   — where a goal is earned: the list, the three kinds, and inside an exercise.
  */
-export type TourSection = "core" | "companions" | "exercises";
+export type TourSection = "core" | "companions" | "exercises" | "module";
 
-export const TOUR_SECTIONS: TourSection[] = ["core", "companions", "exercises"];
+export const TOUR_SECTIONS: TourSection[] = ["core", "companions", "exercises", "module"];
 
 /**
  * The version of the tour a student has already seen.
@@ -187,6 +193,7 @@ export interface TourStep {
 
 const DASHBOARD = Paths.StudentDashboardPath;
 const PREVIEW = Paths.TourFlexibilityPreviewPath;
+const MODULE = Paths.FlexibilityPath;
 
 /**
  * The whole walkthrough: the dashboard, then setting a goal on it, then where that goal is earned.
@@ -292,6 +299,102 @@ export const TOUR_STEPS: TourStep[] = [
     { id: "ex-choose", section: "exercises", route: PREVIEW, anchor: ".method-selection", placement: "bottom" },
     { id: "ex-help", section: "exercises", route: PREVIEW, anchor: ".flexibility-hint-button", placement: "bottom" },
     { id: "done", section: "exercises", route: PREVIEW, placement: "center" },
+
+    // ── The same walkthrough, for the control arm ────────────────────────────
+    // A control student has no dashboard, so every section above is out of reach for them: the
+    // walkthrough would have to carry them to a page they are redirected away from, and it teaches a
+    // system they are deliberately not being given. What they do have is this exercise list, which is
+    // where signing in puts them — so the walkthrough is played HERE instead, over the same screens.
+    //
+    // The steps point at the flexibility page's own copy rather than restating it: `title`/`body`
+    // borrow the dashboard's keys wherever the sentence is still exactly true (what the list is, what
+    // the three kinds are, what happens inside an exercise). Only the three steps that would otherwise
+    // describe something a control student does not have — goals, a buddy, a dashboard — get their
+    // own wording. The section ends back on the list, not on the read-only exercise, because that is
+    // where the student actually starts working.
+    { id: "module-intro", section: "module", route: MODULE, placement: "center" },
+    {
+        id: "module-info",
+        section: "module",
+        route: MODULE,
+        anchor: '[data-tour="flex-info"]',
+        placement: "bottom",
+        title: { key: "tour-flex-info-title" },
+        body: { key: "tour-flex-info-body" },
+    },
+    { id: "module-list", section: "module", route: MODULE, anchor: '[data-tour="flex-list"]', placement: "right" },
+    {
+        id: "module-types",
+        section: "module",
+        route: MODULE,
+        placement: "center",
+        title: { key: "tour-flex-types-title" },
+        body: { key: "tour-flex-types-body" },
+    },
+    {
+        id: "module-type-suitability",
+        section: "module",
+        route: MODULE,
+        placement: "center",
+        title: { key: "Suitability", ns: TranslationNamespaces.Flexibility },
+        body: { key: "tour-visual-suitability-what" },
+        image: suitabilityControlImage,
+    },
+    {
+        id: "module-type-efficiency",
+        section: "module",
+        route: MODULE,
+        placement: "center",
+        title: { key: "Efficiency", ns: TranslationNamespaces.Flexibility },
+        body: { key: "tour-visual-efficiency-what" },
+        image: efficiencyControlImage,
+    },
+    {
+        id: "module-type-matching",
+        section: "module",
+        route: MODULE,
+        placement: "center",
+        title: { key: "Matching", ns: TranslationNamespaces.Flexibility },
+        body: { key: "tour-visual-matching-what" },
+        image: matchingControlImage,
+    },
+    {
+        id: "module-ex-task",
+        section: "module",
+        route: PREVIEW,
+        anchor: '[data-tour="ex-task"]',
+        placement: "bottom",
+        title: { key: "tour-ex-task-title" },
+        body: { key: "tour-ex-task-body" },
+    },
+    {
+        id: "module-ex-system",
+        section: "module",
+        route: PREVIEW,
+        anchor: ".linear-system",
+        placement: "bottom",
+        title: { key: "tour-ex-system-title" },
+        body: { key: "tour-ex-system-body" },
+    },
+    {
+        id: "module-ex-choose",
+        section: "module",
+        route: PREVIEW,
+        anchor: ".method-selection",
+        placement: "bottom",
+        title: { key: "tour-ex-choose-title" },
+        body: { key: "tour-ex-choose-body" },
+    },
+    {
+        id: "module-ex-help",
+        section: "module",
+        route: PREVIEW,
+        anchor: ".flexibility-hint-button",
+        placement: "bottom",
+        title: { key: "tour-ex-help-title" },
+        body: { key: "tour-ex-help-body" },
+    },
+    { id: "module-start", section: "module", route: MODULE, placement: "center" },
 ];
 
 /** True once this student has completed the core walkthrough (kept for the migration below). */

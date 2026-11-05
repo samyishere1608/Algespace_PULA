@@ -14,6 +14,9 @@ import Loader from "@components/shared/Loader.tsx";
 import { TourHost } from "@components/shared/TourHost.tsx";
 import { ExerciseRouter } from "@views/flexibility/FlexibilityExercise.tsx";
 import { PreviewContext } from "@/contexts/previewContext.ts";
+import { useAuth } from "@/contexts/AuthProvider.tsx";
+import { isControlStudent } from "@utils/studyCondition.ts";
+import { AgentCondition } from "@/types/flexibility/enums.ts";
 import "@styles/views/flexibility.scss";
 import "@styles/views/tour-preview.scss";
 
@@ -38,6 +41,7 @@ import "@styles/views/tour-preview.scss";
 export default function FlexibilityPreview(): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.Student);
     const navigate = useNavigate();
+    const { student } = useAuth();
 
     const [{ data, loading }] = useAxios(`/flexibility-training/getFlexibilityExercises`);
     const exercises = (data ?? []) as FlexibilityExerciseResponse[];
@@ -73,6 +77,10 @@ export default function FlexibilityPreview(): ReactElement {
                                     concreteExerciseId={chosen.exerciseId}
                                     flexibilityId={chosen.id}
                                     navigateBackTo={Paths.StudentDashboardPath}
+                                    // A control student's walkthrough comes through here, and their
+                                    // real exercises have no companion — showing them one in the tour
+                                    // would introduce a character they will never meet again.
+                                    condition={isControlStudent(student) ? AgentCondition.None : undefined}
                                     // Never reached, because the walkthrough blocks every click. A no-op
                                     // anyway, so even a stray one cannot log a completion.
                                     buildHandleEnd={() => () => { /* nothing is recorded here */ }}

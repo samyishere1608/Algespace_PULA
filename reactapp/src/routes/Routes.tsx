@@ -46,6 +46,8 @@ import { EqualizationDemoExercise } from "@views/studies/flexibility/Equalizatio
 import { SubstitutionDemoExercise } from "@views/studies/flexibility/SubstitutionDemoExercise.tsx";
 import { EliminationDemoExercise } from "@views/studies/flexibility/EliminationDemoExercise.tsx";
 import { isControlStudent } from "@utils/studyCondition.ts";
+import { isPlainMode } from "@utils/plainMode.ts";
+import PlainLayout from "@views/plain/PlainLayout.tsx";
 
 /**
  * The dashboard, for the treatment arm only.
@@ -96,74 +98,86 @@ export default function Routes(): ReactElement {
         }
     ];
 
+    /**
+     * The four modules, listed once.
+     *
+     * Both the ordinary app and the plain version mount these, so they are written here rather than
+     * twice: a module that gains a screen gains it in both entrances, and neither can drift into
+     * being a slightly different module. The plain version is not a copy of the app — it is the same
+     * screens reached through a different front door.
+     */
+    const moduleRoutes = [
+        {
+            path: Paths.EqualizationPath,
+            element: (
+                <UnsupportedDevicesBoundary>
+                    <EqualizationView />
+                </UnsupportedDevicesBoundary>
+            )
+        },
+        {
+            path: Paths.EqualizationGameExercisePath,
+            element: <EqualizationExercise />
+        },
+        {
+            path: Paths.EqualizationGameTutorialPath,
+            element: <EqualizationGameTutorial />
+        },
+        {
+            path: Paths.SubstitutionPath,
+            element: (
+                <UnsupportedDevicesBoundary>
+                    <SubstitutionView />
+                </UnsupportedDevicesBoundary>
+            )
+        },
+        {
+            path: Paths.BarteringGameExercisePath,
+            element: <BarteringExercise />
+        },
+        {
+            path: Paths.BarteringGameTutorialPath,
+            element: <BarteringGameTutorial />
+        },
+        {
+            path: Paths.SubstitutionGameExercisePath,
+            element: <SubstitutionExercise />
+        },
+        {
+            path: Paths.SubstitutionGameTutorialPath,
+            element: <SubstitutionGameTutorial />
+        },
+        {
+            path: Paths.EliminationPath,
+            element: (
+                <UnsupportedDevicesBoundary>
+                    <EliminationView />
+                </UnsupportedDevicesBoundary>
+            )
+        },
+        {
+            path: Paths.EliminationGameExercisePath,
+            element: <EliminationExercise />
+        },
+        {
+            path: Paths.EliminationGameTutorialPath,
+            element: <EliminationGameTutorial />
+        },
+        {
+            path: Paths.FlexibilityPath,
+            element: <FlexibilityView />
+        },
+        {
+            path: Paths.FlexibilityExercisePath,
+            element: <FlexibilityExercise isStudyExample={false} />
+        }
+    ];
+
     const publicRoutes = [
         {
             element: <RouteErrorBoundaryLayout />,
             children: [
-                {
-                    path: Paths.EqualizationPath,
-                    element: (
-                        <UnsupportedDevicesBoundary>
-                            <EqualizationView />
-                        </UnsupportedDevicesBoundary>
-                    )
-                },
-                {
-                    path: Paths.EqualizationGameExercisePath,
-                    element: <EqualizationExercise />
-                },
-                {
-                    path: Paths.EqualizationGameTutorialPath,
-                    element: <EqualizationGameTutorial />
-                },
-                {
-                    path: Paths.SubstitutionPath,
-                    element: (
-                        <UnsupportedDevicesBoundary>
-                            <SubstitutionView />
-                        </UnsupportedDevicesBoundary>
-                    )
-                },
-                {
-                    path: Paths.BarteringGameExercisePath,
-                    element: <BarteringExercise />
-                },
-                {
-                    path: Paths.BarteringGameTutorialPath,
-                    element: <BarteringGameTutorial />
-                },
-                {
-                    path: Paths.SubstitutionGameExercisePath,
-                    element: <SubstitutionExercise />
-                },
-                {
-                    path: Paths.SubstitutionGameTutorialPath,
-                    element: <SubstitutionGameTutorial />
-                },
-                {
-                    path: Paths.EliminationPath,
-                    element: (
-                        <UnsupportedDevicesBoundary>
-                            <EliminationView />
-                        </UnsupportedDevicesBoundary>
-                    )
-                },
-                {
-                    path: Paths.EliminationGameExercisePath,
-                    element: <EliminationExercise />
-                },
-                {
-                    path: Paths.EliminationGameTutorialPath,
-                    element: <EliminationGameTutorial />
-                },
-                {
-                    path: Paths.FlexibilityPath,
-                    element: <FlexibilityView />
-                },
-                {
-                    path: Paths.FlexibilityExercisePath,
-                    element: <FlexibilityExercise isStudyExample={false} />
-                },
+                ...moduleRoutes,
                 {
                     path: Paths.AboutPath,
                     element: <About />
@@ -214,6 +228,40 @@ export default function Routes(): ReactElement {
                 {
                     path: "*",
                     element: <RouteNotFound />
+                }
+            ]
+        }
+    ];
+
+    /**
+     * The plain version: the ordinary home page with its full module map, the four modules behind it,
+     * and nothing else.
+     *
+     * No sign-in, no dashboard, no study, no tour. The paths are the ordinary ones because this tree
+     * is mounted with `/plain` as its basename, which is also what makes the modules' own links work
+     * unchanged: `/equalization` typed by a component becomes `/plain/equalization` in the address bar.
+     */
+    const plainRoutes = [
+        {
+            element: <RouteErrorBoundaryLayout />,
+            children: [
+                {
+                    element: <PlainLayout />,
+                    children: [
+                        {
+                            path: Paths.HomePath,
+                            element: <Home />
+                        },
+                        {
+                            path: Paths.AboutPath,
+                            element: <About />
+                        },
+                        ...moduleRoutes,
+                        {
+                            path: "*",
+                            element: <RouteNotFound />
+                        }
+                    ]
                 }
             ]
         }
@@ -316,11 +364,20 @@ export default function Routes(): ReactElement {
         }
     ];
 
+    // Decided once, from the URL. `/plain` is a separate browser router with its own basename rather
+    // than a branch inside the ordinary one, because that is what prefixes every existing path and
+    // every existing link without a single module knowing it is being reached from somewhere else.
+    const plain: boolean = isPlainMode();
+
     const router = useMemo(
-        () => createBrowserRouter([...homeRoute, ...publicRoutes, ...authenticatedRoutes, ...(user === undefined ? authenticatedForbiddenRoutes : [])]),
+        () =>
+            plain
+                ? createBrowserRouter(plainRoutes, { basename: Paths.PlainPrefix })
+                : createBrowserRouter([...homeRoute, ...publicRoutes, ...authenticatedRoutes, ...(user === undefined ? authenticatedForbiddenRoutes : [])]),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [user]
+        [user, plain]
     );
+
     //const router = createBrowserRouter([...homeRoute, ...publicRoutes]); // Authenticated routes are only required for conducting studies
 
     return <RouterProvider router={router} />;

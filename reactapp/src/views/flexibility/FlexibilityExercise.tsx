@@ -9,6 +9,8 @@ import { GoalCelebrationOverlay } from "@components/shared/GoalCelebrationOverla
 import Loader from "@components/shared/Loader.tsx";
 import { Paths } from "@routes/paths.ts";
 import "@styles/views/flexibility.scss";
+import { usePreviewMode } from "@/contexts/previewContext.ts";
+import { appUrl } from "@utils/plainMode.ts";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
 import { AgentCondition, FlexibilityExerciseType } from "@/types/flexibility/enums.ts";
@@ -78,7 +80,15 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
      * file hardcoded `MotivationalAgent` in six places: it was the only arm the pilot used.
      */
     const isControl = isControlStudent(student);
-    const condition: AgentCondition = isControl ? AgentCondition.None : AgentCondition.MotivationalAgent;
+    const preview: boolean = usePreviewMode();
+    /**
+     * The plain version runs the control arm as well, for the same reason the control arm exists: a
+     * visitor who never agreed to take part should not meet a character whose whole job is to react to
+     * their performance. `AgentCondition.None` drops the portrait, the popover chrome and the extra
+     * agent messages, leaving the exercise to speak for itself.
+     */
+    const noCompanion: boolean = isControl || preview;
+    const condition: AgentCondition = noCompanion ? AgentCondition.None : AgentCondition.MotivationalAgent;
 
     // The Solo/Pippin choice screen was removed along with the free-text chat. Every student now
     // goes straight into the exercise. Agency is exercised through the in-exercise decision anchors
@@ -134,7 +144,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
             // Nothing else can be done without a student: the goal check reads their own history,
             // and the completion log has nowhere to go.
             if (!student) {
-                window.location.href = navigateTo;
+                window.location.href = appUrl(navigateTo);
                 return;
             }
 
@@ -149,7 +159,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                 void (async () => {
                     await logExerciseCompletion(student.id, exerciseTypeName, errors, hints, decisions, attemptId);
                     addAccuracyEntry(student.id, errors, hints);
-                    window.location.href = navigateTo;
+                    window.location.href = appUrl(navigateTo);
                 })();
                 return;
             }
@@ -171,7 +181,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
             void (async () => {
                 const goals = await getActiveGoals(student.id);
                 if (goals.length === 0) {
-                    window.location.href = navigateTo;
+                    window.location.href = appUrl(navigateTo);
                     return;
                 }
 
@@ -185,7 +195,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                         student.id, goals, events, (goal) => describeGoal(goal, asTranslate(t)));
 
                     if (completed.length === 0) {
-                        window.location.href = navigateTo;
+                        window.location.href = appUrl(navigateTo);
                         return;
                     }
 
@@ -200,7 +210,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                     showAgencyToast("resolve", completed.length * GOAL_RESOLVE_XP);
                 } catch {
                     // A failed check must never trap the student in the exercise.
-                    window.location.href = navigateTo;
+                    window.location.href = appUrl(navigateTo);
                 }
             })();
         };
@@ -235,7 +245,7 @@ export default function FlexibilityExercise({ isStudyExample }: { isStudyExample
                     onContinue={() => {
                         // The goals were already removed from storage when they were claimed, so the
                         // dashboard reads the updated list without any work here.
-                        window.location.href = celebrationData.navigateTo;
+                        window.location.href = appUrl(celebrationData.navigateTo);
                     }}
                 />
             )}

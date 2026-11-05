@@ -1,5 +1,5 @@
 import { TranslationNamespaces } from "@/i18n.ts";
-import React, { ReactElement } from "react";
+import React, { ReactElement, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GeneralTranslations } from "@/types/shared/generalTranslations.ts";
 import { getCompletedPKExercises, setCollapsibleState } from "@utils/storageUtils.ts";
@@ -16,12 +16,43 @@ import { Collapsible } from "@components/views/CollapsibleExerciseList.tsx";
 import { FlexibilityStudyExerciseType } from "@/types/studies/enums.ts";
 import { TourHost } from "@components/shared/TourHost.tsx";
 import { exerciseNavTarget } from "@utils/flexibilityExercises.ts";
+import { useAuth } from "@/contexts/AuthProvider.tsx";
+import { isControlStudent } from "@utils/studyCondition.ts";
+import { hasOfferedSection, isTourActive, startSectionTour, syncOfferedSections } from "@utils/onboardingTour.ts";
 
 export default function FlexibilityView(): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.General);
+    const { student } = useAuth();
 
     const flexibility: string = "flexibility-training";
     const storageKey: string = "pk-open";
+
+    /**
+     * The control arm's walkthrough, played here because this page is all they have.
+     *
+     * A control student signs in straight to this list — no dashboard, so none of the dashboard's
+     * sections can ever reach them, and until now that meant no introduction at all. The section is
+     * started once and recorded as offered like every other, so a second visit is just the list.
+     *
+     * The state exists only to re-render `TourHost`, which reads the "running" flag at render time.
+     */
+    const [, setTourStarted] = useState(false);
+
+    useEffect(() => {
+        if (student === undefined || !isControlStudent(student)) return;
+        // A tour already under way must not be restarted: this page is one of the routes the
+        // walkthrough navigates through, so it re-mounts mid-tour and would reset the step.
+        if (isTourActive()) return;
+        if (hasOfferedSection(student.id, "module")) return;
+
+        startSectionTour(student.id, "module");
+        setTourStarted(true);
+
+        // Reconciled in the background, the same way the dashboard does it: the offer is decided
+        // from the local cache so the list is never held up, and a student on a new device finds
+        // out from the server on their next visit.
+        void syncOfferedSections(student.id);
+    }, [student]);
 
     const exerciseList: ReactElement = <ExerciseList completedExercises={getCompletedPKExercises("flexibility-training")} />;
     const contents: ReactElement = (

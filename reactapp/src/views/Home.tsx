@@ -1,7 +1,7 @@
 import { TranslationNamespaces } from "@/i18n.ts";
 import { faRightFromBracket, faUserCircle } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { ReactElement } from "react";
+import React, { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
@@ -12,6 +12,7 @@ import { Paths } from "@routes/paths.ts";
 import { getOnboardingStep } from "@utils/storageUtils.ts";
 import { SKIP_CONCEPT_TUTORIAL } from "@/config/study.ts";
 import { isControlStudent } from "@utils/studyCondition.ts";
+import { isPlainMode } from "@utils/plainMode.ts";
 import Logo from "@images/home/logo640.png";
 import "@styles/views/homepage.scss";
 
@@ -28,15 +29,24 @@ export default function Home(): ReactElement {
     // is the whole of the system they have. The login already puts them there; this is for the case
     // where they come back to the home page and need a way in again.
     const isControl = isControlStudent(student);
+    /**
+     * The plain version uses this very page, with the map it had before the pilot narrowed it to one
+     * destination: the four modules, all reachable without an account. Nothing else about the page
+     * changes — same logo, same description, same tiles — and nothing here alters the ordinary page,
+     * which keeps its single tile and its sign-in.
+     */
+    const isPlain: boolean = isPlainMode();
 
     return (
         <div className={"homepage"}>
             <div className={"homepage__header"}>
                 <NavLink to={Paths.AboutPath} translationKey={"about"} />
-                
-                {<NavLink to={Paths.StudiesLoginPath} translationKey={"studies"} />}
-                 <LanguageSwitch />
-                {student ? (
+
+                {/* No sign-in and no study to join on the plain address, so both would lead nowhere.
+                    Someone who wants to sign in goes to the ordinary address instead. */}
+                {!isPlain && <NavLink to={Paths.StudiesLoginPath} translationKey={"studies"} />}
+                <LanguageSwitch />
+                {!isPlain && (student ? (
                     <div className={"homepage__student-badge"}>
                         <FontAwesomeIcon icon={faUserCircle} className={"homepage__student-badge-icon"} />
                         <span className={"homepage__student-badge-name"}>{student.username}</span>
@@ -65,8 +75,7 @@ export default function Home(): ReactElement {
                     <Link className={"link"} to={Paths.StudentLoginPath}>
                         {t("home-login")}
                     </Link>
-                )}
-               
+                ))}
             </div>
             <div className={"homepage__contents"}>
                 <div className={"homepage__contents-left"}>
@@ -77,28 +86,49 @@ export default function Home(): ReactElement {
                     </div>
                 </div>
                 <div className={"homepage__contents-right"}>
-                    {/*
-                        One destination only. The three method games are not part of the pilot, and a
-                        treatment student reaches flexibility training from the dashboard, while a
-                        control student has nothing but the exercise list — so a single tile is the
-                        whole map: sign in, or the one place you can go.
-                    */}
-                    {!student ? (
-                        <div className={"homepage__navigation-item homepage__navigation-item--plain"} onClick={() => navigate(Paths.StudentLoginPath)}>
-                            <p> {t("home-login")}</p>
-                        </div>
-                    ) : isControl ? (
-                        <div className={"homepage__navigation-item flexibility-item"} onClick={() => navigate(Paths.FlexibilityPath)}>
-                            <p> {t(GeneralTranslations.FLEXIBILITY_TRAINING, { ns: TranslationNamespaces.General })}</p>
-                        </div>
-                    ) : hasDashboard ? (
-                        <div className={"homepage__navigation-item homepage__navigation-item--plain"} onClick={() => navigate(Paths.StudentDashboardPath)}>
-                            <p> {t("home-dashboard")}</p>
-                        </div>
+                    {isPlain ? (
+                        // The map this page had before the pilot narrowed it to a single destination:
+                        // every module, no account needed. Same tiles, same classes, same order.
+                        <React.Fragment>
+                            <div className={"homepage__navigation-item equalization-item"} onClick={() => navigate(Paths.EqualizationPath)}>
+                                <p> {t(GeneralTranslations.EQUALIZATION, { ns: TranslationNamespaces.General })}</p>
+                            </div>
+                            <div className={"homepage__navigation-item substitution-item"} onClick={() => navigate(Paths.SubstitutionPath)}>
+                                <p> {t(GeneralTranslations.SUBSTITUTION, { ns: TranslationNamespaces.General })}</p>
+                            </div>
+                            <div className={"homepage__navigation-item elimination-item"} onClick={() => navigate(Paths.EliminationPath)}>
+                                <p> {t(GeneralTranslations.ELIMINATION, { ns: TranslationNamespaces.General })}</p>
+                            </div>
+                            <div className={"homepage__navigation-item flexibility-item"} onClick={() => navigate(Paths.FlexibilityPath)}>
+                                <p> {t(GeneralTranslations.FLEXIBILITY_TRAINING, { ns: TranslationNamespaces.General })}</p>
+                            </div>
+                        </React.Fragment>
                     ) : (
-                        <div className={"homepage__navigation-item homepage__navigation-item--plain"} onClick={() => navigate(Paths.OnboardingResumePath)}>
-                            <p> {t("home-continue-tutorial")}</p>
-                        </div>
+                        <>
+                            {/*
+                                One destination only. The three method games are not part of the pilot, and a
+                                treatment student reaches flexibility training from the dashboard, while a
+                                control student has nothing but the exercise list — so a single tile is the
+                                whole map: sign in, or the one place you can go.
+                            */}
+                            {!student ? (
+                                <div className={"homepage__navigation-item homepage__navigation-item--plain"} onClick={() => navigate(Paths.StudentLoginPath)}>
+                                    <p> {t("home-login")}</p>
+                                </div>
+                            ) : isControl ? (
+                                <div className={"homepage__navigation-item flexibility-item"} onClick={() => navigate(Paths.FlexibilityPath)}>
+                                    <p> {t(GeneralTranslations.FLEXIBILITY_TRAINING, { ns: TranslationNamespaces.General })}</p>
+                                </div>
+                            ) : hasDashboard ? (
+                                <div className={"homepage__navigation-item homepage__navigation-item--plain"} onClick={() => navigate(Paths.StudentDashboardPath)}>
+                                    <p> {t("home-dashboard")}</p>
+                                </div>
+                            ) : (
+                                <div className={"homepage__navigation-item homepage__navigation-item--plain"} onClick={() => navigate(Paths.OnboardingResumePath)}>
+                                    <p> {t("home-continue-tutorial")}</p>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

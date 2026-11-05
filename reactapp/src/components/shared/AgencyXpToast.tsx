@@ -3,13 +3,16 @@ import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBullseye, faLightbulb, faShieldHalved } from "@fortawesome/free-solid-svg-icons";
 import { TranslationNamespaces } from "@/i18n.ts";
+import { SOUND_ENABLED } from "@/config/sound.ts";
 import xpSoundSrc from "@/assets/sounds/XPEarned.mp3";
 import "@styles/shared/agency-toast.scss";
 
-// Preload the sound
-const xpAudio = new Audio(xpSoundSrc);
-xpAudio.preload = "auto";
-xpAudio.volume = 0.5;
+// Preload the sound. Nothing is created while sound is off, so the mp3 is never fetched.
+const xpAudio = SOUND_ENABLED ? new Audio(xpSoundSrc) : null;
+if (xpAudio !== null) {
+    xpAudio.preload = "auto";
+    xpAudio.volume = 0.5;
+}
 
 interface ToastItem {
     id: number;
@@ -25,8 +28,10 @@ export function showAgencyToast(type: "choice" | "insight" | "resolve", amount: 
     const item: ToastItem = { id: ++toastId, type, amount };
     listeners.forEach((fn) => fn(item));
     // Play sound immediately
-    xpAudio.currentTime = 0;
-    xpAudio.play().catch(() => {});
+    if (xpAudio !== null) {
+        xpAudio.currentTime = 0;
+        xpAudio.play().catch(() => {});
+    }
 }
 
 // The same three colours and the same three marks the dashboard's agency pills use, so a toast reads

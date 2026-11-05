@@ -120,12 +120,14 @@ export default function StudentLoginView(): ReactElement {
             // Restore cross-device progress from the backend before reading onboarding
             await syncProgressFromBackend(student.id);
 
-            // CONTROL ARM: NO DASHBOARD, NO TOUR, STRAIGHT TO THE PLAIN MODULE.
+            // CONTROL ARM: NO DASHBOARD AND NO DASHBOARD TOUR — STRAIGHT TO THE PLAIN MODULE.
             //
             // Checked before the onboarding step is read, because none of it applies: a control student
-            // has no dashboard for the step to lead into, and the tour teaches a system they are not
-            // being given. The exercise list they land on is the one anybody can open, and it is where
-            // every later visit goes too — the dashboard route redirects them back here.
+            // has no dashboard for the step to lead into, and the dashboard's walkthrough teaches a
+            // system they are not being given. The exercise list they land on is the one anybody can
+            // open, and it is where every later visit goes too — the dashboard route redirects them
+            // back here. That list runs its own walkthrough on arrival (see FlexibilityView), so
+            // "no dashboard tour" does not mean "no introduction".
             if (isControlStudent(student)) {
                 navigate(Paths.FlexibilityPath);
                 return;

@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTrophy } from "@fortawesome/free-solid-svg-icons";
 import { TranslationNamespaces } from "@/i18n.ts";
 import "@styles/shared/milestone-celebration.scss";
+import { SOUND_ENABLED } from "@/config/sound.ts";
 import levelUpSound from "@/assets/sounds/LevelUp.mp3";
 
 interface Props {
@@ -18,9 +19,11 @@ export function MilestoneCelebrationOverlay({ milestone, onDismiss }: Props): Re
     useEffect(() => {
         // Named `timer`, not `t`: the old name shadowed the translation function for the whole effect.
         const timer = setTimeout(() => setVisible(true), 30);
-        const audio = new Audio(levelUpSound);
-        audio.volume = 0.7;
-        audio.play().catch(() => { /* autoplay blocked — ignore */ });
+        const audio = SOUND_ENABLED ? new Audio(levelUpSound) : null;
+        if (audio !== null) {
+            audio.volume = 0.7;
+            audio.play().catch(() => { /* autoplay blocked — ignore */ });
+        }
         return () => clearTimeout(timer);
     }, []);
 

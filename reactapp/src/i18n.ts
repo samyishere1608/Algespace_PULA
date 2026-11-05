@@ -2,6 +2,7 @@ import i18n from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import Backend from "i18next-http-backend";
 import { initReactI18next } from "react-i18next";
+import { isPlainMode } from "@utils/plainMode.ts";
 import about from "@translations/de/about.json";
 import elimination from "@translations/de/elimination.json";
 import equalization from "@translations/de/equalization.json";
@@ -56,6 +57,22 @@ export enum TranslationNamespaces {
     Study = "study",
     Flexibility = "flexibility",
     Student = "student"
+}
+
+/**
+ * The plain version is Japanese by definition, so it claims the language before i18next looks one up.
+ *
+ * Written here rather than with a `changeLanguage` call somewhere in the app: the detector reads this
+ * key as its very first step, so the initial render is already Japanese instead of showing one frame
+ * of whatever language this browser last used. i18next caches back to the same key, so the choice
+ * survives a reload and a student never has to find a switch.
+ */
+if (isPlainMode()) {
+    try {
+        localStorage.setItem("i18nextLng", Language.JA);
+    } catch {
+        // A browser that refuses storage keeps the fallback language; the page still works.
+    }
 }
 
 i18n.use(Backend)

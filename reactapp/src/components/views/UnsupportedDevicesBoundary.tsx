@@ -2,6 +2,7 @@ import { TranslationNamespaces } from "@/i18n.ts";
 import { ReactElement, ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GeneralTranslations } from "@/types/shared/generalTranslations.ts";
+import { DEVICE_GATE_ENABLED } from "@/config/device.ts";
 import Logo from "@images/home/logo320.png";
 import "@styles/views/unsupported-devices.scss";
 
@@ -20,7 +21,9 @@ export default function UnsupportedDevicesBoundary({ children }: { children: Rea
         return () => window.removeEventListener("resize", checkScreenSize);
     }, []);
 
-    if (isSupported) {
+    // The gate is off for the pilot — see `config/device.ts` for why, and for the one line that turns
+    // it back on. The hooks above still run in the same order either way.
+    if (!DEVICE_GATE_ENABLED || isSupported) {
         return children;
     } else {
         return (
