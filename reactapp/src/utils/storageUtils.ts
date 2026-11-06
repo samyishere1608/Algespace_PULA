@@ -1,6 +1,7 @@
 import { AgentType, CompletedDemo, Method } from "@/types/flexibility/enums.ts";
 import axios from "axios";
 import { isPlainMode } from "@utils/plainMode.ts";
+import { pushState } from "@utils/studentState.ts";
 
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
@@ -114,6 +115,9 @@ export function getOnboardingStep(studentId: number): OnboardingStep | null {
 
 export function setOnboardingStep(studentId: number, step: OnboardingStep): void {
     localStorage.setItem(`onboarding-step-${studentId}`, step);
+    // Mirrored as well as synced through the tutorial route: that route carries the step for the
+    // learning flow, this carries it for a browser that has never seen this student.
+    pushState(studentId, `onboarding-step-${studentId}`, step);
     syncTutorialToBackend(studentId, step);
 }
 
@@ -317,8 +321,7 @@ export async function syncProgressFromBackend(studentId: number): Promise<void> 
         if (backendStep) {
             // Backend has the source of truth — use it
             localStorage.setItem(`onboarding-step-${studentId}`, backendStep);
-        } else if (localStep) {
-            // Backend empty but local has data — migrate local → backend
+        } else if (localStep) {            // Backend empty but local has data — migrate local → backend
             axios.post(`${BACKEND}/student-progress/tutorial/${studentId}`, {
                 studentId,
                 onboardingStep: localStep,

@@ -9,7 +9,9 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Paths } from "@routes/paths.ts";
 import { TranslationNamespaces } from "@/i18n.ts";
+import i18n from "@/i18n.ts";
 import { getOnboardingStep, setOnboardingStep, startOnboardingDemos, syncProgressFromBackend } from "@utils/storageUtils.ts";
+import { hydrateStudentState, refreshLanguage } from "@utils/studentState.ts";
 import { isControlStudent } from "@utils/studyCondition.ts";
 import Logo from "@images/home/logo640.png";
 import "@styles/views/login.scss";
@@ -119,6 +121,21 @@ export default function StudentLoginView(): ReactElement {
 
             // Restore cross-device progress from the backend before reading onboarding
             await syncProgressFromBackend(student.id);
+
+            // ── Everything this student's browser is supposed to know about them ──────
+            //
+            // Awaited, and before the onboarding step is read, because the step, the companion, the
+            // unlocked characters and the tour sections all now come from the server. In a lab where
+            // seats rotate this is the difference between a student finding their progress and finding
+            // a fresh install. It covers both arms: the control branch below leaves before the
+            // dashboard ever mounts, so hydrating anywhere else would have skipped them.
+            await hydrateStudentState(student.id);
+
+            // The language they last used, applied before they see the next screen.
+            const rememberedLanguage = refreshLanguage(student.id);
+            if (rememberedLanguage && rememberedLanguage !== (i18n.language ?? "").slice(0, 2)) {
+                await i18n.changeLanguage(rememberedLanguage);
+            }
 
             // CONTROL ARM: NO DASHBOARD AND NO DASHBOARD TOUR — STRAIGHT TO THE PLAIN MODULE.
             //

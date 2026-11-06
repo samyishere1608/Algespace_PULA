@@ -1,0 +1,54 @@
+{
+  "_comment": "The pilot roster. Blue is the adapt (treatment) arm, red is the control arm. Password is shared by every account. test accounts are the researcher's own, one per arm, and are named so they are never mistaken for a student.",
+  "password": "test123",
+  "groups": [
+    {
+      "name": "blue",
+      "condition": "treatment",
+      "usernames": [
+        "bluecat", "bluedog", "bluefox", "bluebear", "bluebird",
+        "bluefish", "bluefrog", "bluepanda", "bluebunny", "bluepuppy",
+        "bluekitten", "blueowl", "blueduck", "bluebee", "bluebutterfly",
+        "blueapple", "bluebanana", "blueorange", "bluegrape", "bluepeach",
+        "blueberry", "bluecherry", "bluemango", "bluepizza", "bluecake",
+        "bluecookie", "bluecandy", "bluedonut", "blueburger", "bluepancake",
+        "bluemoon", "bluestar", "bluesun", "bluecloud", "bluerainbow",
+        "blueflower", "bluerose", "bluetree", "blueleaf", "bluegarden",
+        "bluebeach", "blueocean", "blueriver", "bluelake", "blueboat",
+        "blueplane", "bluerocket", "blueball", "bluekite", "bluebook",
+        "bluerobot", "bluecastle", "bluecrown", "bluehero", "bluepuzzle",
+        "blueballoon", "bluepencil", "blueparrot", "bluepenguin", "blueturtle",
+        "bluehorse", "bluelion", "bluetiger", "bluekoala", "bluewhale"
+      ]
+    },
+    {
+      "name": "red",
+      "condition": "control",
+      "usernames": [
+        "redcat", "reddog", "redfox", "redbear", "redbird",
+        "redfish", "redfrog", "redpanda", "redbunny", "redpuppy",
+        "redkitten", "redowl", "redduck", "redbee", "redbutterfly",
+        "redapple", "redbanana", "redorange", "redgrape", "redpeach",
+        "redberry", "redcherry", "redmango", "redpizza", "redcake",
+        "redcookie", "redcandy", "reddonut", "redburger", "redpancake",
+        "redmoon", "redstar", "redsun", "redcloud", "redrainbow",
+        "redflower", "redrose", "redtree", "redleaf", "redgarden",
+        "redbeach", "redocean", "redriver", "redlake", "redboat",
+        "redplane", "redrocket", "redball", "redkite", "redbook",
+        "redrobot", "redcastle", "redcrown", "redhero", "redpuzzle",
+        "redballoon", "redpencil", "redparrot", "redpenguin", "redturtle",
+        "redhorse", "redlion", "redtiger", "redkoala", "redwhale"
+      ]
+    },
+    {
+      "name": "blue-test",
+      "condition": "treatment",
+      "usernames": ["bluetest01", "bluetest02", "bluetest03", "bluetest04", "bluetest05"]
+    },
+    {
+      "name": "red-test",
+      "condition": "control",
+      "usernames": ["redtest01", "redtest02", "redtest03", "redtest04", "redtest05"]
+    }
+  ]
+}

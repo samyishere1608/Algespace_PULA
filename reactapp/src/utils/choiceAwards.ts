@@ -1,6 +1,7 @@
 import axios from "axios";
 import { addChoiceXP, revokeChoiceXP } from "@utils/agencyUtils.ts";
 import { showAgencyToast } from "@components/shared/AgencyXpToast.tsx";
+import { pushState } from "@utils/studentState.ts";
 
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
@@ -64,6 +65,9 @@ export function awardChoiceForSettingAGoal(studentId: number | string, goalId: s
         // Refusing would punish the student for a browser setting, and the server's own row is keyed
         // on the goal id, so the duplicate is not in the ledger either way.
     }
+    // The claim travels with the student too: paid on this machine and re-claimed on another would be
+    // the same goal paying twice, which is exactly what this marker exists to prevent.
+    pushState(studentId, key, "1");
 
     addChoiceXP(studentId, CHOICE_XP_FOR_SETTING_A_GOAL, "goal-set", goalId);
     showAgencyToast("choice", CHOICE_XP_FOR_SETTING_A_GOAL);
@@ -95,6 +99,9 @@ export function revokeChoiceForDeletedGoal(studentId: number | string, goalId: s
         // ledger, so asking unnecessarily is harmless and skipping it would leave the points behind.
         wasAwarded = true;
     }
+    // Clearing the claim has to reach the other machine too, or a student who deletes a goal here and
+    // sits down at another seat tomorrow is paid for it again there.
+    if (wasAwarded) pushState(studentId, key, null);
     if (!wasAwarded) return;
 
     // Local first, so the number on screen moves at once; the server does the same subtraction and the
@@ -141,6 +148,7 @@ export function awardChoiceForReflection(studentId: number | string, queueItemId
         // Storage unavailable: the same reflection could pay twice here. The server's row is keyed on
         // the item id, so the ledger stays right and the next sync corrects the display.
     }
+    pushState(studentId, key, "1");
 
     addChoiceXP(studentId, CHOICE_XP_FOR_REFLECTING, "reflection-opted-in", String(queueItemId));
     showAgencyToast("choice", CHOICE_XP_FOR_REFLECTING);
@@ -169,6 +177,7 @@ export function revokeChoiceForReflection(studentId: number | string, queueItemI
     } catch {
         wasAwarded = true;
     }
+    if (wasAwarded) pushState(studentId, key, null);
     if (!wasAwarded) return;
 
     revokeChoiceXP(studentId, CHOICE_XP_FOR_REFLECTING);

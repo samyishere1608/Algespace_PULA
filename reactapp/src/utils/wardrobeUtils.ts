@@ -1,5 +1,10 @@
 // Persist equipped outfit and owned outfits per character in localStorage.
 // Keys are scoped per student so that different logins never share wardrobe data.
+//
+// These are also mirrored to the server (see `studentState.ts`): a study runs in a lab where seats
+// rotate, and a student whose unlocks vanish on a different machine has lost the reward loop itself.
+
+import { pushState } from "@utils/studentState.ts";
 
 const equippedKey = (studentId: number | string, charId: string) =>
     `algespace_equipped_${studentId}_${charId}`;
@@ -14,6 +19,7 @@ export function getEquippedOutfitId(studentId: number | string, characterId: str
 
 export function persistEquippedOutfitId(studentId: number | string, characterId: string, itemId: string): void {
     localStorage.setItem(equippedKey(studentId, characterId), itemId);
+    pushState(studentId, equippedKey(studentId, characterId), itemId);
 }
 
 export function getOwnedOutfitIds(studentId: number | string, characterId: string): string[] {
@@ -29,6 +35,7 @@ export function persistOwnedOutfitId(studentId: number | string, characterId: st
     if (!owned.includes(itemId)) {
         owned.push(itemId);
         localStorage.setItem(ownedKey(studentId, characterId), JSON.stringify(owned));
+        pushState(studentId, ownedKey(studentId, characterId), JSON.stringify(owned));
     }
 }
 
@@ -38,6 +45,7 @@ export function getActiveBuddyId(studentId: number | string): string {
 
 export function persistActiveBuddyId(studentId: number | string, buddyId: string): void {
     localStorage.setItem(activeBuddyKey(studentId), buddyId);
+    pushState(studentId, activeBuddyKey(studentId), buddyId);
 }
 
 // ── Agency wallet helpers (unlocks are milestone-based, never spend) ─────────
@@ -92,5 +100,6 @@ export function markUnlockAnnounced(studentId: number | string, characterId: str
     if (!announced.includes(characterId)) {
         announced.push(characterId);
         localStorage.setItem(announcedUnlockKey(studentId), JSON.stringify(announced));
+        pushState(studentId, announcedUnlockKey(studentId), JSON.stringify(announced));
     }
 }

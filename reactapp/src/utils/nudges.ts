@@ -24,6 +24,7 @@
  */
 
 import { ANCHOR_ELEMENT } from "@/types/student/goal.ts";
+import { pushState } from "@utils/studentState.ts";
 
 /** How the student answered. Recorded verbatim — see `NudgeRecord` on the server. */
 export type NudgeResponse = "Accepted" | "Declined";
@@ -136,12 +137,16 @@ export function getNudgeMemory(studentId: number | string, element: string): Nud
 export function setNudgeMemory(studentId: number | string, element: string, memory: NudgeMemory): void {
     const all = read(studentId);
     all[element] = memory;
+    const encoded = JSON.stringify(all);
     try {
-        localStorage.setItem(key(studentId), JSON.stringify(all));
+        localStorage.setItem(key(studentId), encoded);
     } catch {
         // Storage can be full or unavailable. The in-memory guard in the provider still stops the
         // nudge repeating within this visit; only the across-visits memory is lost.
     }
+    // Mirrored, so a student on a different machine is not told the same thing about the same record
+    // twice — the repeat is what turns an observation into nagging.
+    pushState(studentId, key(studentId), encoded);
 }
 
 /**

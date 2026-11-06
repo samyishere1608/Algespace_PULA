@@ -115,6 +115,20 @@ namespace webapi.Controllers
                 $"CREATE UNIQUE INDEX IF NOT EXISTS IX_{StudentProgressDBSettings.TourStateTable}_StudentSection " +
                 $"ON {StudentProgressDBSettings.TourStateTable} (StudentId, Section)");
 
+            // Everything the app used to keep only in the browser.
+            //
+            // A study runs over several days in a computer lab, so a student is not guaranteed the same
+            // seat — and the things kept in `localStorage` were the ones that make the app feel like it
+            // remembers them: which companion they chose, which outfits they unlocked, how accurate they
+            // have been, which tour parts they have already seen. Losing those on a different machine is
+            // not a cosmetic glitch, it is the intervention appearing to forget the student.
+            //
+            // Keyed by name rather than one column per feature so a future key needs no migration. See
+            // `ClientStateKeys` for what may be stored: the table is not a general-purpose scratchpad.
+            conn.Execute(
+                $"CREATE TABLE IF NOT EXISTS {StudentProgressDBSettings.ClientStateTable} " +
+                $"({StudentProgressDBSettings.ClientStateScheme})");
+
             // The agency log's idempotency key and its element, in a column rather than glued into the
             // source string. See AwardCommitmentChoice: the row id used to be appended to the source,
             // which is what made one of these categories 25 categories.
@@ -2221,6 +2235,110 @@ namespace webapi.Controllers
                 });
 
             return Ok();
+        }
+
+        // ── Browser state that has to follow the student ──────────────────────
+        //
+        // The app kept a number of small things in `localStorage`: the chosen companion, unlocked
+        // outfits, the rolling accuracy figure, which tour parts were seen. A study runs over several
+        // days in a computer lab, so the same student does not always get the same seat, and every one
+        // of those things vanishing when they sit down somewhere else reads as the system having
+        // forgotten them — and for the companion and the unlocks, that is the intervention disappearing.
+        //
+        // These two routes are a plain key/value store with a whitelist. A whitelist rather than a free
+        // form table because this is not a place to put study data: XP, exercises, reflections and
+        // answers all have their own columns and their own endpoints, and a second way to write them
+        // would be a second version of the truth.
+
+        /// <summary>The only key families this store accepts. Anything else is refused, not stored.</summary>
+        private static readonly (string Prefix, bool AllowEmpty)[] ClientStateKeys =
+        [
+            ("accuracy_last5_", false),
+            ("algespace_owned_", false),
+            ("algespace_equipped_", false),
+            ("algespace_active_buddy_", false),
+            ("algespace_unlocked_announced_", false),
+            ("algespace_nudges_", false),
+            ("algespace_choice_goal_awarded_", false),
+            ("algespace_choice_reflection_awarded_", false),
+            ("daily_intention_", false),
+            ("onboarding-step-", false),
+            ("ui-language-", false),
+        ];
+
+        /// <summary>True when the key is one this store is allowed to hold.</summary>
+        private static bool IsClientStateKey(string key)
+            => key.Length is > 0 and <= 120
+               && ClientStateKeys.Any(family => key.StartsWith(family.Prefix, StringComparison.Ordinal))
+               // The families above are all lower-case prefixes, so the rest of the key must be
+               // innocuous too: no path separators, no markup, nothing that makes a key a payload.
+               && key.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '_' or '-' or ':');
+
+        /// <summary>Everything this student has, so a fresh browser can seed itself before it decides anything.</summary>
+        [HttpGet("client-state/{studentId:long}")]
+        public ActionResult<ClientStateResponse> GetClientState(long studentId)
+        {
+            if (studentId <= 0) return BadRequest("Invalid student ID.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            var rows = conn.Query<(string Key, string Value)>(
+                $"SELECT Key, Value FROM {StudentProgressDBSettings.ClientStateTable} WHERE StudentId = @StudentId",
+                new { StudentId = studentId });
+
+            var items = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var row in rows) items[row.Key] = row.Value;
+
+            return Ok(new ClientStateResponse { Items = items });
+        }
+
+        /// <summary>
+        /// Writes the keys the client sends.
+        ///
+        /// Idempotent per key: the browser re-sends everything it knows when it hydrates, and a value
+        /// that has not changed must not look like an edit. Refused keys are counted and reported rather
+        /// than failing the whole call, because one stale key must not cost a student their companion.
+        /// </summary>
+        [HttpPost("client-state")]
+        public ActionResult<object> SetClientState([FromBody] ClientStateRequest request)
+        {
+            if (request.StudentId <= 0) return BadRequest("Invalid student ID.");
+
+            // A cap on the batch: the whole point is that this holds a handful of small values.
+            if (request.Items.Count > 200) return BadRequest("Too many keys in one request.");
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+            EnsureTables(conn);
+
+            var stored = 0;
+            var refused = 0;
+            var stamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss");
+
+            foreach (var item in request.Items)
+            {
+                var key = (item.Key ?? "").Trim();
+                var value = item.Value ?? "";
+
+                // 4 KB is far more than any of these values needs; anything larger is not one of them.
+                if (!IsClientStateKey(key) || value.Length > 4000)
+                {
+                    refused++;
+                    continue;
+                }
+
+                conn.Execute(
+                    $"INSERT INTO {StudentProgressDBSettings.ClientStateTable} (StudentId, Key, Value, UpdatedAt) " +
+                    "VALUES (@StudentId, @Key, @Value, @UpdatedAt) " +
+                    "ON CONFLICT(StudentId, Key) DO UPDATE SET Value = @Value, UpdatedAt = @UpdatedAt",
+                    new { StudentId = request.StudentId, Key = key, Value = value, UpdatedAt = stamp });
+
+                stored++;
+            }
+
+            return Ok(new { stored, refused });
         }
 
         // ── GET /student-progress/exercises/{studentId} ──────────────────────

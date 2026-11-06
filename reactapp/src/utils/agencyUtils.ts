@@ -3,6 +3,7 @@
 // Persisted in localStorage for instant UI updates, synced to backend for durability.
 
 import axios from "axios";
+import { pushState } from "@utils/studentState.ts";
 
 const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
 
@@ -205,6 +206,9 @@ export function setDailyIntention(
         exercisesAtSet,
     };
     localStorage.setItem(dailyKey(studentId), JSON.stringify(intention));
+    // Mirrored, so "you already answered this today" is the student's fact rather than the machine's —
+    // otherwise the check-in is asked again on every seat in the lab.
+    pushState(studentId, dailyKey(studentId), JSON.stringify(intention));
 }
 
 export function markIntentionFollowedThrough(studentId: number | string): void {
@@ -212,6 +216,7 @@ export function markIntentionFollowedThrough(studentId: number | string): void {
     if (intention) {
         intention.followedThrough = true;
         localStorage.setItem(dailyKey(studentId), JSON.stringify(intention));
+        pushState(studentId, dailyKey(studentId), JSON.stringify(intention));
     }
 }
 

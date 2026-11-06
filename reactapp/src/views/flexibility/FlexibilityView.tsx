@@ -19,6 +19,7 @@ import { exerciseNavTarget } from "@utils/flexibilityExercises.ts";
 import { useAuth } from "@/contexts/AuthProvider.tsx";
 import { isControlStudent } from "@utils/studyCondition.ts";
 import { hasOfferedSection, isTourActive, startSectionTour, syncOfferedSections } from "@utils/onboardingTour.ts";
+import { hydrateStudentState } from "@utils/studentState.ts";
 
 export default function FlexibilityView(): ReactElement {
     const { t } = useTranslation(TranslationNamespaces.General);
@@ -43,15 +44,20 @@ export default function FlexibilityView(): ReactElement {
         // A tour already under way must not be restarted: this page is one of the routes the
         // walkthrough navigates through, so it re-mounts mid-tour and would reset the step.
         if (isTourActive()) return;
-        if (hasOfferedSection(student.id, "module")) return;
 
-        startSectionTour(student.id, "module");
-        setTourStarted(true);
+        // ASK THE SERVER BEFORE DECIDING. A control student lands here directly, and may land here on
+        // a machine they have never used, where the local cache is empty even though the server
+        // recorded the walkthrough weeks ago. Deciding from the cache first is what re-offered it.
+        void (async () => {
+            await hydrateStudentState(student.id);
+            await syncOfferedSections(student.id);
 
-        // Reconciled in the background, the same way the dashboard does it: the offer is decided
-        // from the local cache so the list is never held up, and a student on a new device finds
-        // out from the server on their next visit.
-        void syncOfferedSections(student.id);
+            if (isTourActive()) return;
+            if (hasOfferedSection(student.id, "module")) return;
+
+            startSectionTour(student.id, "module");
+            setTourStarted(true);
+        })();
     }, [student]);
 
     const exerciseList: ReactElement = <ExerciseList completedExercises={getCompletedPKExercises("flexibility-training")} />;

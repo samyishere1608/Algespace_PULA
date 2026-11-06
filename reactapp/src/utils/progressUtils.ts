@@ -1,4 +1,5 @@
 import axios from "axios";
+import { pushState } from "@utils/studentState.ts";
 
 /**
  * Progress and reflection plumbing that outlived the old goal system.
@@ -159,6 +160,9 @@ export function addAccuracyEntry(studentId: number | string, errorCount: number,
     // Keep rolling window of last 5
     if (exercises > 5) { errors = errorCount; hints = hintCount; exercises = 1; }
     localStorage.setItem(key, `${errors},${hints},${exercises}`);
+    // Mirrored as well, so the accuracy figure on the dashboard is the student's own on any machine
+    // rather than 0% because this browser has never seen them.
+    pushState(studentId, key, `${errors},${hints},${exercises}`);
 }
 
 // ── Backend logging ───────────────────────────────────────────────────────────

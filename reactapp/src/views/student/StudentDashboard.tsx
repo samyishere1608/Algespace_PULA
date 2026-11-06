@@ -66,6 +66,7 @@ import { getBadgeLevel, TIER_NAMES } from "@utils/agencyLevels.ts";
 import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 import { endOnboardingDemos, getOnboardingStep } from "@utils/storageUtils.ts";
 import { startSession, endSession, currentSessionId, recordIntention } from "@utils/sessionLog.ts";
+import { hydrateStudentState, refreshLanguage, rememberLanguage } from "@utils/studentState.ts";
 import { logScreenView, type TrackedScreen } from "@utils/screenLog.ts";
 import { IDLE_BEFORE_HINT_MS, NEXT_STEP_SNOOZE_MS, chooseNextSteps, phraseNextSteps, type NextStepSuggestion } from "@utils/nextStep.ts";
 import { OnboardingTour } from "@components/shared/OnboardingTour.tsx";
@@ -215,10 +216,18 @@ export default function StudentDashboard(): ReactElement {
                 void startSession(student.id, i18n.language?.slice(0, 2) ?? "en");
             }
 
-            // Reconcile which sections have been offered with the server. Deliberately not awaited:
-            // the offer is decided from the local cache so the first paint is never held up by it, and
-            // a student who changed device finds out on the next visit at the latest.
-            void syncOfferedSections(student.id);
+            // ── Pull this student's browser state back from the server ──────────────
+            //
+            // `localStorage` is a CACHE of this, not the record. In a lab where seats rotate the cache
+            // is often empty while the server knows perfectly well that this student has a companion,
+            // unlocked outfits and a walkthrough behind them. Started here so it overlaps the fetches
+            // below, and awaited before anything decides what to show.
+            const stateReady = hydrateStudentState(student.id);
+
+            // Which tour parts have been offered, reconciled with the server. Awaited before the tour
+            // decision for the same reason: deciding from an empty cache is what re-offered the
+            // walkthrough to a student who had already sat through it on another machine.
+            const tourReady = stateReady.then(() => syncOfferedSections(student.id));
 
             // Sync agency XP from backend (also updates localStorage)
             syncAgencyFromBackend(student.id).then((progress) => {
@@ -274,28 +283,56 @@ export default function StudentDashboard(): ReactElement {
             //
             // `startTour` is deliberately NOT called on this branch: it resets the step to one, which
             // would throw away the student's progress through the walkthrough.
-            if (isTourActive()) return;
+            //
+            // Everything here waits for `tourReady` and `stateReady`: both decisions are about the
+            // STUDENT, and both used to be made from a cache that a different machine has never filled.
+            void (async () => {
+                await tourReady;
+                await stateReady;
 
-            if (shouldAutoStartTour(student.id, getOnboardingStep(student.id))) {
-                // `startSectionTour` records that a tour is running, so the pages the walkthrough
-                // navigates to know to resume it, and marks the core section offered. The state here
-                // only decides whether THIS page mounts the overlay.
-                startSectionTour(student.id, "core");
-                setShowTour(true);
-                return;
-            }
+                // The language this student last used, so a Japanese class is not asked to pick
+                // Japanese again at every seat. Applied before any dialog opens so the first thing
+                // they see is in their own language.
+                const rememberedLanguage = refreshLanguage(student.id);
+                if (rememberedLanguage && rememberedLanguage !== (i18n.language ?? "").slice(0, 2)) {
+                    void i18n.changeLanguage(rememberedLanguage);
+                }
 
-            // Show daily intention popup if not already set today
-            const existing = getDailyIntention(student.id);
-            if (!existing) {
-                setShowDailyIntention(true);
-            }
+                if (isTourActive()) return;
+
+                if (shouldAutoStartTour(student.id, getOnboardingStep(student.id))) {
+                    // `startSectionTour` records that a tour is running, so the pages the walkthrough
+                    // navigates to know to resume it, and marks the core section offered. The state
+                    // here only decides whether THIS page mounts the overlay.
+                    startSectionTour(student.id, "core");
+                    setShowTour(true);
+                    return;
+                }
+
+                // Show daily intention popup if not already set today
+                const existing = getDailyIntention(student.id);
+                if (!existing) {
+                    setShowDailyIntention(true);
+                }
+            })();
         });
         // Intentionally keyed on the student alone: this runs once per login, and refreshGoals is
         // redefined every render, so listing it would refetch the whole goal progress on any state
         // change anywhere on the dashboard.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [student]);
+
+    /**
+     * Remembers the language this student is reading in, so the next machine they sit at opens in it.
+     *
+     * A Japanese pilot in a computer lab would otherwise pick Japanese at every seat, every lesson.
+     * Keyed per student, so the next child at the same seat does not inherit it.
+     */
+    useEffect(() => {
+        if (!student) return;
+        const language = (i18n.language ?? "").slice(0, 2);
+        if (language) rememberLanguage(student.id, language);
+    }, [student, i18n.language]);
 
     // ── Legacy level info (derived from total agency XP for now) ─────────────
     const totalAgency = agency.totalXP;

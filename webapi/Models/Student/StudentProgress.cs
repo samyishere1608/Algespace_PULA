@@ -300,6 +300,26 @@ namespace webapi.Models.Student
         public string Section { get; set; } = "";
     }
 
+    /// <summary>One key the browser used to hold on its own.</summary>
+    public class ClientStateItem
+    {
+        public string Key { get; set; } = "";
+        public string Value { get; set; } = "";
+    }
+
+    /// <summary>Writes one or more of them. Batched, because a login writes several at once.</summary>
+    public class ClientStateRequest
+    {
+        public long StudentId { get; set; }
+        public List<ClientStateItem> Items { get; set; } = [];
+    }
+
+    /// <summary>Everything this student has, as a dictionary for the client to seed itself from.</summary>
+    public class ClientStateResponse
+    {
+        public Dictionary<string, string> Items { get; set; } = [];
+    }
+
     // ── Tutorial / Onboarding Progress ───────────────────────────────────────
 
     /// <summary>Response for GET /student-progress/tutorial/{studentId}.</summary>
@@ -877,6 +897,21 @@ namespace webapi.Models.Student
             "StudentId INTEGER NOT NULL, " +
             "Section TEXT NOT NULL, " +
             "OfferedAt TEXT NOT NULL";
+
+        /// <summary>
+        /// Everything the app used to keep only in the browser, one row per key.
+        ///
+        /// The primary key is (StudentId, Key) rather than a surrogate id, because the only operation
+        /// is "this student's value for this key" — an id would add a second way to identify the same
+        /// row and no way to use it.
+        /// </summary>
+        public const string ClientStateTable = "StudentClientState";
+        public const string ClientStateScheme =
+            "StudentId INTEGER NOT NULL, " +
+            "Key TEXT NOT NULL, " +
+            "Value TEXT NOT NULL, " +
+            "UpdatedAt TEXT NOT NULL, " +
+            "PRIMARY KEY (StudentId, Key)";
     }
 
     /**
