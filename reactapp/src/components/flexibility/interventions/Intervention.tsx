@@ -77,7 +77,7 @@ export function Intervention({ children, handleYes, handleNo, agentType, agentEx
 
     // While the offer is up it is the only thing on screen, footnote included — leaving the original
     // text underneath would be the two-card problem again, just inside one box.
-    const message = offer !== null ? tStudent("nudge-footnote") : additionalMessage;
+    const message = offer !== null ? undefined : additionalMessage;
 
     return (
         <FlexibilityPopover
@@ -91,9 +91,6 @@ export function Intervention({ children, handleYes, handleNo, agentType, agentEx
                         <p className={"nudge__label"}>{tStudent(offer.labelKey)}</p>
                         <p className={"nudge__ask"}>{tStudent(NUDGE_ASK_KEY)}</p>
                         <p className={"nudge__benefit"}>{tStudent(offer.benefitKey)}</p>
-                        <p className={"nudge__evidence"}>
-                            {tStudent("nudge-evidence", { opportunities: offer.opportunities, engaged: offer.engaged })}
-                        </p>
                     </div>
                 ) : children}
                 {message !== undefined && <p>{message}</p>}

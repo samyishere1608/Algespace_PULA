@@ -457,16 +457,14 @@
   "goals-celebration-continue": "Weiter",
 
   "nudge-ask": "Möchtest du es einmal versuchen?",
-  "nudge-evidence": "Ich habe dir das {{opportunities}}-mal angeboten, und du hast {{engaged}}-mal zugesagt.",
   "nudge-element-self-explanation": "Dein Vorgehen in eigenen Worten erklären",
   "nudge-element-method-comparison": "Zwei Verfahren vergleichen, bevor du dich entscheidest",
   "nudge-element-solve-on-own": "Die Lösung selbst erarbeiten",
   "nudge-benefit-self-explanation": "Dein Denken in Worte zu fassen ist das, was ein Verfahren verankert. Wer sein Vorgehen erklärt, behält es deutlich länger, als wer es nur vorgemacht bekommt.",
   "nudge-benefit-method-comparison": "Verfahren zu vergleichen zeigt dir, welches wirklich zum System passt, statt immer zum gleichen zu greifen.",
-  "nudge-benefit-solve-on-own": "Es zuerst selbst zu versuchen, auch wenn es schiefgeht, baut die Fähigkeit auf. Beim Zusehen passiert das nicht.",
+  "nudge-benefit-solve-on-own": "Es zuerst selbst zu versuchen, auch wenn es schiefgeht, baut die Fähigkeit auf. Die Lösung ist da, wenn du sie brauchst.",
   "nudge-accept": "Okay, ich versuche es",
   "nudge-decline": "Nein danke",
-  "nudge-footnote": "Ich spreche das nur wieder an, wenn das Muster weiter zunimmt.",
 
   "dashboard-improve-area": "Fokusbereich",
   "dashboard-improve-area-hint": "Mehr {{type}}-Aufgaben helfen dir, in diesem Bereich zu wachsen.",

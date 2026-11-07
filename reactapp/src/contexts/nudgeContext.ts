@@ -30,7 +30,7 @@ export type AskNudge = (offer: NudgeOffer) => Promise<boolean>;
 
 export interface NudgeContextValue {
     ask: AskNudge;
-    pending: { offer: NudgeOffer; opportunities: number; engaged: number } | null;
+    pending: { offer: NudgeOffer; opportunities: number } | null;
     answer: (response: NudgeResponse) => void;
 }
 
@@ -56,8 +56,6 @@ export function useNudge(): AskNudge {
 export interface PendingNudge {
     labelKey: string;
     benefitKey: string;
-    opportunities: number;
-    engaged: number;
     agentType?: AgentType;
     answer: (response: NudgeResponse) => void;
 }
@@ -81,8 +79,6 @@ export function usePendingNudge(): PendingNudge | null {
     return {
         labelKey: pending.offer.labelKey,
         benefitKey: pending.offer.benefitKey,
-        opportunities: pending.opportunities,
-        engaged: pending.engaged,
         agentType: pending.offer.agentType,
         answer,
     };

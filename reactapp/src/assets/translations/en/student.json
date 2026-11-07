@@ -457,16 +457,14 @@
   "goals-celebration-continue": "Continue",
 
   "nudge-ask": "Would you like to give it a try?",
-  "nudge-evidence": "I've offered this {{opportunities}} times, and you've taken it up {{engaged}} of them.",
   "nudge-element-self-explanation": "Explaining your reasoning in your own words",
   "nudge-element-method-comparison": "Comparing two methods before you pick one",
   "nudge-element-solve-on-own": "Working the solution out yourself",
   "nudge-benefit-self-explanation": "Putting your thinking into words is what makes a method stick. Students who explain their reasoning remember it far longer than students who just watch it done.",
   "nudge-benefit-method-comparison": "Comparing methods is how you learn which one actually fits the system, instead of always reaching for the same one.",
-  "nudge-benefit-solve-on-own": "Trying it yourself first, even when you get it wrong, is what builds the skill. Watching the answer does not.",
+  "nudge-benefit-solve-on-own": "Trying it yourself first, even when you get it wrong, is what builds the skill. The answer is here whenever you want it.",
   "nudge-accept": "OK, I'll try",
   "nudge-decline": "No thanks",
-  "nudge-footnote": "I'll only bring this up again if the pattern keeps growing.",
 
   "dashboard-improve-area": "Focus Area",
   "dashboard-improve-area-hint": "Try more {{type}} exercises to grow in this area.",

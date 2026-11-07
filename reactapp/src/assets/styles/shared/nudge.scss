@@ -40,15 +40,13 @@
 }
 
 // Why the behaviour is worth doing. The argument, not a second version of the ask.
+//
+// This is the only text in the offer besides the question, now that the record count and the
+// "I'll only bring this up again" footnote are gone, so it carries the whole message and is set at
+// reading size rather than as small print.
 .nudge__benefit {
-    font-size: 0.88rem;
-    line-height: 1.5;
-    color: rgba(2, 48, 71, 0.88);
-}
-
-// Their own record, not an assertion about them.
-.nudge__evidence {
-    font-size: 0.82rem;
-    line-height: 1.45;
-    color: rgba(2, 48, 71, 0.7);
+    font-size: 1.05rem;
+    line-height: 1.55;
+    font-weight: 500;
+    color: #023047;
 }

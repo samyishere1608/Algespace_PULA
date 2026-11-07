@@ -450,16 +450,14 @@
   "goals-celebration-continue": "続ける",
 
   "nudge-ask": "一度試してみない？",
-  "nudge-evidence": "これを{{opportunities}}回すすめて、きみが引き受けたのは{{engaged}}回だよ。",
   "nudge-element-self-explanation": "自分の考えを言葉で説明すること",
   "nudge-element-method-comparison": "選ぶ前に2つの解法を比べること",
   "nudge-element-solve-on-own": "自分で答えを導くこと",
   "nudge-benefit-self-explanation": "考えを言葉にすると、解き方が身につく近道だよ。説明した人は、見ただけの人よりずっと長く覚えているんだ。",
   "nudge-benefit-method-comparison": "解き方をくらべると、この式に本当に合うのはどれかが見えてくるよ。いつも同じ解き方にたよらずにすむんだ。",
-  "nudge-benefit-solve-on-own": "まちがえても、まず自分でやってみることが力になるよ。答えを見るだけでは身につかないんだ。",
+  "nudge-benefit-solve-on-own": "まちがえても、まず自分でやってみることが力になるよ。こまったら、答えはいつでも見られるからね。",
   "nudge-accept": "やってみる",
   "nudge-decline": "今はいい",
-  "nudge-footnote": "このパターンがもっと増えたときにだけ、また声をかけるよ。",
 
   "dashboard-improve-area": "フォーカスエリア",
   "dashboard-improve-area-hint": "{{type}}問題にもっと取り組んで、この分野をのばそう。",

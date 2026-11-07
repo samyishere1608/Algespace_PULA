@@ -82,7 +82,7 @@ export function NudgeProvider({ children }: { children: ReactNode }): ReactEleme
 
             return new Promise<boolean>((resolve) => {
                 resolveRef.current = resolve;
-                setPending({ offer, opportunities: gap.opportunities, engaged: gap.engaged });
+                setPending({ offer, opportunities: gap.opportunities });
             });
         });
     }, [student]);
