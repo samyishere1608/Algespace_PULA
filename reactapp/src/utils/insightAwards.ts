@@ -37,10 +37,17 @@ const BACKEND = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7273";
  * also refuses a second Insight award for the same attempt — but that is not the end of the request,
  * because the second solution point is exactly where an earlier Insight can be followed through on.
  *
- * `silent` pays and records exactly as usual but shows no toast. The control arm uses it: the award is
- * still written down — it is a fact about the attempt, and the analysis wants every fact — while the
- * celebration is withheld, because a "+3 Insight XP" floating over the exercise is a piece of the
- * treatment. A control student who sees their points go up is no longer a control student.
+ * `silent` pays and records exactly as usual but shows no toast.
+ *
+ * THE CONTROL ARM NOW EARNS NOTHING AT ALL, so `silent` is no longer what keeps them clean: the
+ * server answers zero for a control account (see `AwardInsightForGap`). That is the stronger rule and
+ * the one that matters — the client is a cached bundle on a lab machine, and the arm is a fact about
+ * the ACCOUNT. What is still recorded is the behaviour itself, in the anchor store, which is the data
+ * the analysis actually reads.
+ *
+ * The flag is kept because withholding the celebration is a separate decision from withholding the
+ * award: a control student who saw "+3 Insight XP" float over the exercise would no longer be a
+ * control student even if the number never reached their wallet.
  *
  * `decision` is the anchor store's name for this decision point (`FirstSolutionChoice` and so on).
  * Required for Resolve: it is how the server places this decision in the sequence and tells "the next
