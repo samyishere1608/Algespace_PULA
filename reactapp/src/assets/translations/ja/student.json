@@ -267,6 +267,7 @@
   "reflection-finished": "いいふり返りだね。それが本当の成長だよ！",
   "reflection-prompt-text": "{{label}}をやり終えたね。いっしょにふり返ってみない？",
   "reflection-prompt-no": "今はやめとく",
+  "reflection-prompt-decline": "いいえ",
   "reflection-prompt-yes": "うん、振り返ろう",
   "analytics-xp-total": "合計XP",
   "analytics-method-title": "使用した解法",
@@ -579,6 +580,10 @@
   "tour-offer-companions-body": "バディの場所を2分で。いっしょに学ぶ相手の変え方と、ためたXPで何が解放されるか。そのまま続けてもだいじょうぶ。ツアーはあとでここから見られるよ。",
   "tour-offer-exercises-title": "演習を少し見てみる？",
   "tour-offer-exercises-body": "演習を2分で。3つの種類と、それぞれ何を求めるか、それから実際の演習の中身。今やらなくてもだいじょうぶ。ツアーはあとでここから見られるよ。",
+  "tour-offer-core-title": "ちょっと見てみる？",
+  "tour-offer-core-body": "AlgeSPACEのしくみを2分で。3つのポイントと、目標と、バディが何をしてくれるか。今やらなくてもだいじょうぶ。ツアーはあとでここから見られるよ。",
+  "tour-offer-module-title": "演習をちょっと見てみる？",
+  "tour-offer-module-body": "演習の一覧を2分で。3つの種類と、それぞれ何を求めるか、それから実際の演習の中身。今やらなくてもだいじょうぶ。ツアーはあとでここから見られるよ。",
 
   "tour-buddy-greeting": "AlgeSPACEへようこそ！",
   "tour-buddy-title": "こんにちは、{{name}}だよ！きみの学習バディ",

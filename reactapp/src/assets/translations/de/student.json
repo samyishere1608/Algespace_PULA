@@ -273,6 +273,7 @@
   "reflection-finished": "Schöne Reflexion. Das ist echtes Wachstum!",
   "reflection-prompt-text": "Du hast gerade {{label}} abgeschlossen. Möchtest du mit mir darüber reflektieren?",
   "reflection-prompt-no": "Jetzt nicht",
+  "reflection-prompt-decline": "Nein",
   "reflection-prompt-yes": "Ja, lass uns reflektieren",
   "analytics-xp-total": "Gesamt-XP",
   "analytics-method-title": "Verwendete Methoden",
@@ -586,6 +587,10 @@
   "tour-offer-companions-body": "Zwei Minuten zum Buddy-Bereich: wie du wechselst, mit wem du lernst, und was die XP freischalten. Du kannst auch einfach weitermachen. Die Tour bleibt hier danach verfügbar.",
   "tour-offer-exercises-title": "Kurz die Übungen ansehen?",
   "tour-offer-exercises-body": "Zwei Minuten zu den Übungen: die drei Arten, was jede von dir verlangt, und einmal in einer echten Übung, damit du weißt, was dich erwartet. Du kannst auch einfach weitermachen. Die Tour bleibt hier danach verfügbar.",
+  "tour-offer-core-title": "Kurz umschauen?",
+  "tour-offer-core-body": "Zwei Minuten dazu, wie AlgeSPACE funktioniert: die drei Arten von Punkten, deine Ziele und wofür dein Buddy da ist. Du kannst auch einfach weitermachen. Die Tour bleibt hier danach verfügbar.",
+  "tour-offer-module-title": "Kurz die Übungen ansehen?",
+  "tour-offer-module-body": "Zwei Minuten zur Übungsliste: die drei Arten von Übung, was jede von dir verlangt, und einmal in einer echten Übung. Du kannst auch einfach weitermachen. Die Tour bleibt hier danach verfügbar.",
 
   "tour-buddy-greeting": "Willkommen bei AlgeSPACE!",
   "tour-buddy-title": "Hi, ich bin {{name}}, dein Lernbuddy!",

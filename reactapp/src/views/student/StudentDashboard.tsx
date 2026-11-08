@@ -1795,7 +1795,7 @@ export default function StudentDashboard(): ReactElement {
                         </p>
                         <div className={"buddy-reflection-bubble__actions"}>
                             <button className={"buddy-reflection-bubble__no"} onClick={handleReflectionNo}>
-                                {t("reflection-prompt-no")}
+                                {t("reflection-prompt-decline")}
                             </button>
                             <button className={"buddy-reflection-bubble__yes"} onClick={handleReflectionYes}>
                                 {t("reflection-prompt-yes")}
