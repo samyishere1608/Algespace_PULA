@@ -205,3 +205,36 @@ export function refreshLanguage(studentId: number): string {
         return "";
     }
 }
+
+/**
+ * The language this browser's user picked WITH THEIR OWN HANDS, or "" if they never have.
+ *
+ * WHY THIS EXISTS, and what it fixes. The remembered language is useful — a student should not have
+ * to pick Japanese again on every machine — but it must never beat a choice the student has just
+ * made. It used to: the login applied the server's value unconditionally, so a student who selected
+ * Japanese on the home page and then signed in was put back into English by their own history, and
+ * the dashboard then wrote "en" straight back to the server. The choice was destroyed on every
+ * login, forever, and only for the arm that has a dashboard.
+ *
+ * `i18nextLng` cannot answer this question on its own: i18next's language detector caches whatever
+ * it resolved, including the fallback, so a first visit leaves "en" there having never asked anyone.
+ * So an explicit choice is marked when it is made, and only that marker counts as a decision.
+ */
+const EXPLICIT_LANGUAGE_KEY = "algespace-language-chosen-by-student";
+
+/** Records that the student chose a language themselves, so no later step may override it. */
+export function markLanguageChoice(studentId: number | null, language: string): void {
+    const short = (language ?? "").slice(0, 2).toLowerCase();
+    if (!short) return;
+    try { localStorage.setItem(EXPLICIT_LANGUAGE_KEY, short); } catch { /* non-critical */ }
+    if (studentId !== null && studentId > 0) rememberLanguage(studentId, short);
+}
+
+/** The language this browser's user chose themselves, or "" when they never have. */
+export function explicitLanguageChoice(): string {
+    try {
+        return localStorage.getItem(EXPLICIT_LANGUAGE_KEY) ?? "";
+    } catch {
+        return "";
+    }
+}

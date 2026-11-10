@@ -35,7 +35,7 @@
  "Comparing methods sharpens your judgement for the most efficient approach.": "方法をくらべると、一番むだのない解き方を見わける力がつくよ。",
  "Knowing several methods makes you more flexible and adaptable.": "いくつもの方法を知っていると、もっと自由に対応できるよ。",
  "Comparing methods shows you which approach is most suitable for certain tasks.": "方法をくらべると、ある課題にはどの解き方が一番合うかがわかるよ。",
- "Solving two equations for the same variable is exactly the preparation the equalization method needs.": "2つの式を同じ文字について解くのは、まさに等値法の準備そのものだよ。",
+ "Solving two equations for the same variable is exactly the preparation the equalization method needs.": "2つの式を同じ文字について解くのは、まさに等置法の準備そのものだよ。",
  "Matching coefficients with opposite signs are the signal for the addition method.": "係数が同じで符号がちがうときは、加減法をつかう合図だよ。",
  "A term that is already on its own is an invitation to substitute.": "もう1つだけになっている項は、代入してみようっていう合図だよ。",
  "When both equations need rearranging, pick the method with the fewest intermediate steps.": "どちらの式も変形がいるなら、途中の計算が一番少ない方法を選ぼう。",
@@ -118,6 +118,6 @@
  "Finally they substituted y into the rearranged first equation.": "最後に、変形した1番目の式に y を代入したよ。",
  "In this task, you will learn an additional strategy that can also help you with other tasks.": "この課題では、ほかの課題にも役立つやり方を、もう1つ学べるよ。",
  "In this task, you will learn how to use the substitution method even more efficiently. This will also prepare you well for more difficult tasks.": "この課題では、代入法をもっと上手につかう方法を学ぶよ。むずかしい課題への備えにもなるんだ。",
- "Did you know that you can also use the equation method if both equations in the system are solved for the same multiple of a variable? Would you like to try out such a task?": "連立方程式の両方の式が、同じ文字の同じ倍数について解けているときも、等値法がつかえるって知ってた？ そういう問題を試してみない？",
+ "Did you know that you can also use the equation method if both equations in the system are solved for the same multiple of a variable? Would you like to try out such a task?": "連立方程式の両方の式が、同じ文字の同じ倍数について解けているときも、等置法がつかえるって知ってた？ そういう問題を試してみない？",
  "Did you know that you can also substitute the term belonging to a multiple of a variable into the other equation if the same multiple of the variable occurs in this equation? Would you like to try out an example of this substitution method?": "式に同じ文字の同じ倍数が入っているとき、その倍数の項をもう片方の式に代入できるって知ってた？ 代入法の例を試してみない？"
 }

@@ -66,7 +66,7 @@ import { getBadgeLevel, TIER_NAMES } from "@utils/agencyLevels.ts";
 import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 import { endOnboardingDemos, getOnboardingStep } from "@utils/storageUtils.ts";
 import { startSession, endSession, currentSessionId, recordIntention } from "@utils/sessionLog.ts";
-import { hydrateStudentState, refreshLanguage, rememberLanguage } from "@utils/studentState.ts";
+import { hydrateStudentState, explicitLanguageChoice, refreshLanguage } from "@utils/studentState.ts";
 import { logScreenView, type TrackedScreen } from "@utils/screenLog.ts";
 import { IDLE_BEFORE_HINT_MS, NEXT_STEP_SNOOZE_MS, chooseNextSteps, phraseNextSteps, type NextStepSuggestion } from "@utils/nextStep.ts";
 import { OnboardingTour } from "@components/shared/OnboardingTour.tsx";
@@ -290,12 +290,18 @@ export default function StudentDashboard(): ReactElement {
                 await tourReady;
                 await stateReady;
 
-                // The language this student last used, so a Japanese class is not asked to pick
-                // Japanese again at every seat. Applied before any dialog opens so the first thing
-                // they see is in their own language.
-                const rememberedLanguage = refreshLanguage(student.id);
-                if (rememberedLanguage && rememberedLanguage !== (i18n.language ?? "").slice(0, 2)) {
-                    void i18n.changeLanguage(rememberedLanguage);
+                // The language, with the SAME precedence as the login: a choice this browser's user
+                // made themselves wins, and the remembered value only fills the gap when they have
+                // never chosen. Both places used to apply the remembered value unconditionally, so a
+                // student who picked Japanese on the home page was returned to English here as well.
+                const chosen = explicitLanguageChoice();
+                if (chosen) {
+                    if (chosen !== (i18n.language ?? "").slice(0, 2)) void i18n.changeLanguage(chosen);
+                } else {
+                    const rememberedLanguage = refreshLanguage(student.id);
+                    if (rememberedLanguage && rememberedLanguage !== (i18n.language ?? "").slice(0, 2)) {
+                        void i18n.changeLanguage(rememberedLanguage);
+                    }
                 }
 
                 if (isTourActive()) return;
@@ -323,16 +329,14 @@ export default function StudentDashboard(): ReactElement {
     }, [student]);
 
     /**
-     * Remembers the language this student is reading in, so the next machine they sit at opens in it.
+     * The language is NOT remembered from here.
      *
-     * A Japanese pilot in a computer lab would otherwise pick Japanese at every seat, every lesson.
-     * Keyed per student, so the next child at the same seat does not inherit it.
+     * It used to be: this effect saved whatever language happened to be active whenever the dashboard
+     * mounted. That is how a default became permanent. A student who had never chosen anything arrived
+     * in English, opened the dashboard, and "en" was written to their record — after which every login
+     * overrode the Japanese they went on to pick. The choice is now recorded where it is actually made,
+     * in `LanguageSwitch`, and read at login. See `explicitLanguageChoice`.
      */
-    useEffect(() => {
-        if (!student) return;
-        const language = (i18n.language ?? "").slice(0, 2);
-        if (language) rememberLanguage(student.id, language);
-    }, [student, i18n.language]);
 
     // ── Legacy level info (derived from total agency XP for now) ─────────────
     const totalAgency = agency.totalXP;

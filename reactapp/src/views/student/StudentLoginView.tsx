@@ -11,7 +11,7 @@ import { Paths } from "@routes/paths.ts";
 import { TranslationNamespaces } from "@/i18n.ts";
 import i18n from "@/i18n.ts";
 import { getOnboardingStep, setOnboardingStep, startOnboardingDemos, syncProgressFromBackend } from "@utils/storageUtils.ts";
-import { hydrateStudentState, refreshLanguage } from "@utils/studentState.ts";
+import { hydrateStudentState, explicitLanguageChoice, rememberLanguage, refreshLanguage } from "@utils/studentState.ts";
 import { isControlStudent } from "@utils/studyCondition.ts";
 import Logo from "@images/home/logo640.png";
 import "@styles/views/login.scss";
@@ -131,9 +131,25 @@ export default function StudentLoginView(): ReactElement {
             // dashboard ever mounts, so hydrating anywhere else would have skipped them.
             await hydrateStudentState(student.id);
 
-            // The language they last used, applied before they see the next screen.
+            // ── The language: THEIR CHOICE FIRST, our memory second ──────────────────
+            //
+            // The order is the whole point and it used to be the other way round. This call applied
+            // the remembered language unconditionally, so a student who selected Japanese on the home
+            // page and then signed in was put straight back into English by their own history — and
+            // the dashboard then saved "en" over the top, making it permanent. Reported from the first
+            // session: "even when they selected JP version ... it switches to EN", only for the arm
+            // that has a dashboard, because that is the only arm that ever wrote the value.
+            //
+            // So: if this browser's user has chosen a language themselves, that choice wins and is
+            // recorded for their other machines. Only when they have never chosen one does the
+            // remembered value get applied — which is the case it was built for.
+            const chosen = explicitLanguageChoice();
             const rememberedLanguage = refreshLanguage(student.id);
-            if (rememberedLanguage && rememberedLanguage !== (i18n.language ?? "").slice(0, 2)) {
+
+            if (chosen) {
+                if (rememberedLanguage !== chosen) rememberLanguage(student.id, chosen);
+                if (chosen !== (i18n.language ?? "").slice(0, 2)) await i18n.changeLanguage(chosen);
+            } else if (rememberedLanguage && rememberedLanguage !== (i18n.language ?? "").slice(0, 2)) {
                 await i18n.changeLanguage(rememberedLanguage);
             }
 

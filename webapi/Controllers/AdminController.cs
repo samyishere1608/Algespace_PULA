@@ -4,6 +4,7 @@ using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using webapi.Models.Database;
 using webapi.Models.Student;
+using webapi.Services;
 
 namespace webapi.Controllers
 {
@@ -360,7 +361,7 @@ namespace webapi.Controllers
             conn.Open();
             StudentCondition.EnsureColumn(conn);
 
-            var matched = ResolveAccounts(conn, request);
+            var matched = ResolveAccounts(conn, request.Usernames, request.UsernamePrefix);
             if (matched is null)
                 return BadRequest("Give usernames, or a usernamePrefix of at least 2 characters. Nothing was changed.");
 
@@ -388,17 +389,107 @@ namespace webapi.Controllers
         }
 
         /// <summary>
-        /// The accounts a condition request names, or null when it names none.
+        /// Takes test accounts off the leaderboard by zeroing their XP.
+        ///
+        /// WHY A ROUTE. The leaderboard ranks every account with points, and an account created for
+        /// testing sits among the children with points it earned while someone was trying the app out.
+        /// A student who sees "userdemo" at rank 4 has no way to know it is not a classmate, and a
+        /// leaderboard that includes non-students is not a leaderboard. There was no way to correct one
+        /// account: `/admin/reset` empties everybody, which would destroy the real participants' work.
+        ///
+        /// IT CAN ONLY ZERO, NEVER SET. The purpose is to remove an account from a ranking, so the route
+        /// offers no way to write points — a correction tool that could also add them would be a way to
+        /// fake achievement in the data the study rests on. There is no `amount` and no `value`.
+        ///
+        /// WHAT IT DOES NOT TOUCH. The agency ledger, exercise history, reflections and events stay
+        /// exactly as they are: they are the record of what happened, and deleting them to make a number
+        /// smaller would be falsifying the log rather than correcting a display. The zeroing is written
+        /// into the event log instead, so the disagreement between the columns and the ledger is
+        /// explained rather than mysterious. Analysis should still exclude these accounts by name.
+        ///
+        /// DRY BY DEFAULT, and it reports which accounts it matched, because "zero the points on
+        /// jp-test-check-03" typed as a prefix would take the whole family with it.
+        /// </summary>
+        [HttpPost("students/xp")]
+        public ActionResult ZeroStudentXp([FromBody] AdminZeroXpRequest request)
+        {
+            if (ResetKey is null) return NotFound();
+            if (!Authorized()) return Unauthorized();
+
+            using var conn = DBSettings.GetSQLiteConnectionForStudentsDB();
+            conn.Open();
+
+            var matched = ResolveAccounts(conn, request.Usernames, request.UsernamePrefix);
+            if (matched is null)
+                return BadRequest("Give usernames, or a usernamePrefix of at least 2 characters. Nothing was changed.");
+
+            if (matched.Count == 0)
+                return BadRequest("No account matched. Nothing was changed.");
+
+            var ids = matched.Select(entry => entry.Id).ToList();
+
+            // What they hold now, so the response reports what the call actually removed rather than
+            // only what it left behind.
+            var before = conn.Query<StudentProgressRecord>(
+                    $"SELECT StudentId, ChoiceXP, InsightXP, ResolveXP " +
+                    $"FROM {StudentProgressDBSettings.ProgressTable} WHERE StudentId IN @Ids",
+                    new { Ids = ids })
+                .ToDictionary(row => row.StudentId,
+                    row => row.ChoiceXP + row.InsightXP + row.ResolveXP);
+
+            var accounts = matched.Select(entry => new
+            {
+                id = entry.Id,
+                username = entry.Username,
+                xpBefore = before.TryGetValue(entry.Id, out var xp) ? xp : 0,
+            }).ToList();
+
+            if (request.DryRun)
+                return Ok(new { dryRun = true, accounts, zeroed = 0 });
+
+            var zeroed = conn.Execute(
+                $"UPDATE {StudentProgressDBSettings.ProgressTable} SET " +
+                "ChoiceXP = 0, InsightXP = 0, ResolveXP = 0, LifetimeAgencyXP = 0, TotalXP = 0 " +
+                "WHERE StudentId IN @Ids",
+                new { Ids = ids });
+
+            // Written down, because the columns and the ledger now disagree on purpose and a reader a
+            // year from now has to be able to find out why. One row per account so it is greppable by id.
+            foreach (var account in accounts)
+            {
+                StudentEventLog.Write(conn, account.id, LogEventType.XpAwarded,
+                    value: "admin-zero",
+                    amount: -account.xpBefore,
+                    data: new { reason = "test account removed from leaderboard", xpBefore = account.xpBefore });
+            }
+
+            // The leaderboard is read from these columns, so a copy of the file that skips the write-ahead
+            // log would still rank the account the study is trying to hide.
+            conn.Query("PRAGMA wal_checkpoint(TRUNCATE)");
+
+            logger.LogWarning(
+                "[Admin] Zeroed XP on {Zeroed} account(s): {Accounts}",
+                zeroed, string.Join(", ", accounts.Select(a => $"{a.username}({a.xpBefore})")));
+
+            return Ok(new { dryRun = false, accounts, zeroed });
+        }
+
+        /// <summary>
+        /// The accounts a request names, or null when it names none.
         ///
         /// By prefix for the same reason the delete uses one — the accounts belong to a family
         /// (`jpstudent01` … `jpstudent60`) — and by explicit name so a handful can be corrected without
         /// matching a pattern. `%` and `_` are escaped, because LIKE would otherwise read them as wildcards
         /// and a prefix containing one would match far more than it says.
+        ///
+        /// Takes the two fields rather than a request object, because three routes now name accounts the
+        /// same way (arm assignment, the leaderboard correction) and the resolution rule has to be the
+        /// same one in all of them.
         /// </summary>
         private static List<(long Id, string Username)>? ResolveAccounts(
-            Microsoft.Data.Sqlite.SqliteConnection conn, AdminConditionRequest request)
+            Microsoft.Data.Sqlite.SqliteConnection conn, string[]? usernames, string? usernamePrefix)
         {
-            var names = (request.Usernames ?? [])
+            var names = (usernames ?? [])
                 .Select(name => (name ?? "").Trim())
                 .Where(name => name.Length > 0)
                 .ToList();
@@ -411,7 +502,7 @@ namespace webapi.Controllers
                     .ToList();
             }
 
-            var prefix = (request.UsernamePrefix ?? "").Trim();
+            var prefix = (usernamePrefix ?? "").Trim();
             if (prefix.Length < 2) return null;
 
             var pattern = prefix
@@ -489,6 +580,25 @@ namespace webapi.Controllers
         /// <summary>
         /// True unless the caller says otherwise, so a call that forgets this flag reports which accounts
         /// it would move rather than moving a whole class between arms.
+        /// </summary>
+        public bool DryRun { get; set; } = true;
+    }
+
+    /// <summary>
+    /// The body of a leaderboard correction. The accounts are named either by <see cref="Usernames"/> or
+    /// by <see cref="UsernamePrefix"/>, and there is deliberately no amount: the route can only zero.
+    /// </summary>
+    public class AdminZeroXpRequest
+    {
+        /// <summary>Accounts named outright. Wins over the prefix when both are given.</summary>
+        public string[]? Usernames { get; set; }
+
+        /// <summary>Usernames starting with this are zeroed. At least 2 characters.</summary>
+        public string UsernamePrefix { get; set; } = "";
+
+        /// <summary>
+        /// True unless the caller says otherwise, so a call that forgets this flag reports which accounts
+        /// it would zero rather than zeroing them.
         /// </summary>
         public bool DryRun { get; set; } = true;
     }
