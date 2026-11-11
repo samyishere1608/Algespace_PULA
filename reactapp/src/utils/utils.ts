@@ -210,12 +210,22 @@ export function getExerciseNumber(id: number, exerciseList?: number[]): number |
     return num;
 }
 
+/**
+ * Whether this exercise appears in a completed list.
+ *
+ * COMPARED AS TEXT, deliberately. A completion is written two ways: the page that finishes an
+ * exercise records a NUMBER, and the server hands the same ids back as STRINGS (`exerciseId` is a
+ * TEXT column). Restoring across machines therefore produced ["3","7"], and `"3" === 3` is false —
+ * so every exercise done on a previous machine showed as unattempted while the work was safely in
+ * the database. Reported from the second session: "my attempted exercises became unattempted".
+ * Comparing text makes the two forms the same fact, and it also repairs browsers that already hold
+ * a mixed array, without waiting for them to log in again.
+ */
 export function isExerciseCompleted(id: number | string, completedExercises?: (number | string)[]): boolean {
     if (completedExercises === undefined) {
         return false;
     }
-    const index: number = completedExercises.findIndex((entry) => entry === id);
-    return index !== -1;
+    return completedExercises.some((entry) => String(entry) === String(id));
 }
 
 export function parenthesisToFlexibilityTerm(initialTerm: ParenthesisTerm): FlexibilityTerm {

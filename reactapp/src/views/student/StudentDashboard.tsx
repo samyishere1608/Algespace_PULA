@@ -61,7 +61,7 @@ import { addGoal, getActiveGoals, removeGoal } from "@utils/activeGoals.ts";
 import { GOAL_RESOLVE_XP, asTranslate, describeGoal, getCategoryDef, sameGoal } from "@utils/goalCatalog.ts";
 import { claimCompletedGoals, computeProgress, earliestGoalStart, fetchGoalEvents } from "@utils/goalProgress.ts";
 import { awardChoiceForReflection, awardChoiceForSettingAGoal, revokeChoiceForDeletedGoal, revokeChoiceForReflection } from "@utils/choiceAwards.ts";
-import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, getInsightXP, creditAwardAlreadyRecorded } from "@utils/agencyUtils.ts";
+import { getAgencyProgress, getDailyIntention, setDailyIntention, checkIntentionFollowThrough, syncAgencyFromBackend, addResolveXP, getInsightXP, creditAwardAlreadyRecorded, flushXpQueue } from "@utils/agencyUtils.ts";
 import { getBadgeLevel, TIER_NAMES } from "@utils/agencyLevels.ts";
 import { GOAL_CATEGORIES } from "@utils/goalCatalog.ts";
 import { endOnboardingDemos, getOnboardingStep } from "@utils/storageUtils.ts";
@@ -229,10 +229,17 @@ export default function StudentDashboard(): ReactElement {
             // walkthrough to a student who had already sat through it on another machine.
             const tourReady = stateReady.then(() => syncOfferedSections(student.id));
 
-            // Sync agency XP from backend (also updates localStorage)
-            syncAgencyFromBackend(student.id).then((progress) => {
-                setAgency(progress);
-            });
+            // Sync agency XP from backend (also updates localStorage).
+            //
+            // The retry comes FIRST: an award the server refused earlier is sent again and allowed to
+            // land, and only then is the wallet read back. The other order read the old total and the
+            // award on screen disappeared — which is what "my XP went down" was.
+            flushXpQueue(student.id)
+                .catch(() => { /* nothing to retry, or the server is still away */ })
+                .then(() => syncAgencyFromBackend(student.id))
+                .then((progress) => {
+                    setAgency(progress);
+                });
 
             // Also fetch legacy progress for charts/stats
             fetchStudentProgress(student.id)

@@ -333,8 +333,15 @@ export async function syncProgressFromBackend(studentId: number): Promise<void> 
         const exercisesRes = await axios.get(`${BACKEND}/student-progress/exercises/${studentId}`);
         const completions = (exercisesRes.data ?? []) as BackendExerciseCompletion[];
 
-        // Read current localStorage exercise state: { [key]: { [category]: [ids] } }
-        const localState: Record<string, Record<string, (string | number)[]>> = {};
+        // Read current localStorage exercise state: { [key]: { [category]: [ids], [uiFlag]: boolean } }
+        //
+        // NOT every property here is a list. The same object also stores whether a section of the list
+        // is collapsed (`ck-open` and friends), written by `setCollapsibleState`. Treating those as
+        // lists threw a TypeError halfway through this function — inside its own try/catch, so it was
+        // silent — and took the whole restore with it: a student who had ever opened or closed one of
+        // these sections got none of their completions back. Both loops below therefore step over
+        // anything that is not an array, and the flags are copied through untouched when writing.
+        const localState: Record<string, Record<string, unknown>> = {};
         const exerciseKeys = ["elimination", "equalization", "bartering", "substitution", "flexibility-training"];
         exerciseKeys.forEach((key) => {
             const raw = localStorage.getItem(scopedKey(key));
@@ -343,22 +350,36 @@ export async function syncProgressFromBackend(studentId: number): Promise<void> 
             }
         });
 
+        const completedIds = (state: Record<string, unknown> | undefined, category: string): (string | number)[] => {
+            const value = state?.[category];
+            return Array.isArray(value) ? (value as (string | number)[]) : [];
+        };
+
         // Track what the backend already has (to detect local-only entries to migrate)
         const backendSet = new Set(completions.map((c) => `${c.exerciseKey}|${c.category}|${c.exerciseId}`));
 
-        // Merge backend entries into local state
+        // Merge backend entries into local state.
+        //
+        // The id is stored as a NUMBER when it is one. The server keeps `exerciseId` in a TEXT column,
+        // so it arrives as "3" while every page that records a completion writes 3 — and the two used
+        // to sit in this cache side by side. The comparison in `isExerciseCompleted` is now tolerant
+        // of that as well, but the cache is written in the form the pages produce so the two do not
+        // diverge in the first place.
         completions.forEach((c) => {
+            const id = /^\d+$/.test(c.exerciseId) ? Number(c.exerciseId) : c.exerciseId;
             if (!localState[c.exerciseKey]) localState[c.exerciseKey] = {};
-            if (!localState[c.exerciseKey][c.category]) localState[c.exerciseKey][c.category] = [];
-            if (!localState[c.exerciseKey][c.category].includes(c.exerciseId)) {
-                localState[c.exerciseKey][c.category].push(c.exerciseId);
+            const ids = completedIds(localState[c.exerciseKey], c.category);
+            localState[c.exerciseKey][c.category] = ids;
+            if (!ids.some((existing) => String(existing) === String(id))) {
+                ids.push(id);
             }
         });
 
         // Push local-only entries to the backend (one-time migration)
         Object.entries(localState).forEach(([key, cats]) => {
-            Object.entries(cats).forEach(([category, ids]) => {
-                ids.forEach((id) => {
+            Object.entries(cats).forEach(([category, value]) => {
+                if (!Array.isArray(value)) return;
+                (value as (string | number)[]).forEach((id) => {
                     const composite = `${key}|${category}|${id}`;
                     if (!backendSet.has(composite)) {
                         syncExerciseToBackend(studentId, category, key, String(id));
@@ -367,9 +388,30 @@ export async function syncProgressFromBackend(studentId: number): Promise<void> 
             });
         });
 
-        // Write merged state back to localStorage
+        // Write merged state back to localStorage, normalised.
+        //
+        // Everything in the cache is rewritten in one form: numeric ids as numbers, and no id twice.
+        // That repairs a cache that already holds both 3 and "3" for the same exercise, which is what
+        // the cross-machine restore used to leave behind, instead of only preventing new ones. The
+        // collapse flags that share this object are copied through as they were.
         Object.entries(localState).forEach(([key, cats]) => {
-            localStorage.setItem(scopedKey(key), JSON.stringify(cats));
+            const normalised: Record<string, unknown> = {};
+            Object.entries(cats).forEach(([category, value]) => {
+                if (!Array.isArray(value)) {
+                    normalised[category] = value;
+                    return;
+                }
+                const seen = new Set<string>();
+                normalised[category] = (value as (string | number)[])
+                    .map((id) => (/^\d+$/.test(String(id)) ? Number(id) : id))
+                    .filter((id) => {
+                        const text = String(id);
+                        if (seen.has(text)) return false;
+                        seen.add(text);
+                        return true;
+                    });
+            });
+            localStorage.setItem(scopedKey(key), JSON.stringify(normalised));
         });
     } catch {
         // Backend unreachable — keep whatever localStorage already has

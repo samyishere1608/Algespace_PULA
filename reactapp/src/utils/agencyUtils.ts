@@ -47,7 +47,13 @@ export function addChoiceXP(
  */
 export function revokeChoiceXP(studentId: number | string, amount: number): number {
     const next = Math.max(0, getChoiceXP(studentId) - amount);
+    bumpWalletVersion(studentId, "choice");
     localStorage.setItem(choiceKey(studentId), String(next));
+    // The server takes the amount back out of the lifetime figure as well, so the browser's copy has
+    // to follow it down. Leaving it alone made the local lifetime slowly exceed the server's, and the
+    // next `syncAgencyFromBackend` then corrected it downward — a drop with nothing behind it.
+    const lifetime = parseInt(localStorage.getItem(lifetimeKey(studentId)) ?? "0", 10) || 0;
+    localStorage.setItem(lifetimeKey(studentId), String(Math.max(0, lifetime - amount)));
     return next;
 }
 
@@ -109,6 +115,7 @@ export function creditAwardAlreadyRecorded(
     const key = XP_KEYS[xpType];
     const next = (parseInt(localStorage.getItem(key(studentId)) ?? "0", 10) || 0) + amount;
 
+    bumpWalletVersion(studentId, xpType);
     localStorage.setItem(key(studentId), String(next));
     addLifetimeAgency(studentId, amount);
     // Mirrors the write paths it stands in for: choice is not tracked per day, insight and resolve are.
@@ -293,10 +300,124 @@ export function getAgencyProgress(studentId: number | string): AgencyProgress {
     };
 }
 
-// ── Backend sync (fire-and-forget) ───────────────────────────────────────────
+// ── Backend sync (fire-and-forget, with a retry for awards the server refused) ─
+
+/**
+ * How many local credits each wallet has taken since this page loaded.
+ *
+ * The server answers an award with the wallet's new total, and that number is worth keeping because it
+ * is the record. But a response can arrive after the student has earned something else, and adopting
+ * an older total then would take the newer award off the screen. Bumping this counter on every local
+ * credit lets a response tell "nothing else happened, adopt the server's figure" from "a newer award is
+ * already on screen, leave it".
+ */
+const walletVersions = new Map<string, number>();
+
+function versionKey(studentId: number | string, xpType: string): string {
+    return `${studentId}:${xpType}`;
+}
+
+function walletVersion(studentId: number | string, xpType: string): number {
+    return walletVersions.get(versionKey(studentId, xpType)) ?? 0;
+}
+
+function bumpWalletVersion(studentId: number | string, xpType: string): number {
+    const next = walletVersion(studentId, xpType) + 1;
+    walletVersions.set(versionKey(studentId, xpType), next);
+    return next;
+}
+
+// ── Awards the server did not take ───────────────────────────────────────────
+
+/**
+ * Awards the server refused outright, kept until they land.
+ *
+ * WHY THIS EXISTS. The wallet is credited here first and posted afterwards, so that the number moves
+ * the moment the student earns it. When that post failed it was swallowed — and the dashboard then
+ * overwrites the wallet from the server on the next load, which quietly deleted the award from the
+ * student's view. Reported from the second session: "my XP went down". Nothing was ever lost from the
+ * ledger of awards the server accepted; what was lost was the ones it never saw.
+ *
+ * Only awards the server ANSWERED are kept. A request that never got a response (no network, tab
+ * closed mid-flight) might still have been applied, and posting it again would pay twice, so those are
+ * left alone rather than risk double-counting a student's XP. An HTTP error, by contrast, is the
+ * server saying it did not take the award — 429s on a busy school network are the realistic case.
+ */
+interface QueuedAward {
+    xpType: string;
+    amount: number;
+    source: string;
+    refId: string;
+    attempts: number;
+}
+
+const queueKey = (studentId: number | string) => `algespace_xp_queue_${studentId}`;
+
+const MAX_AWARD_ATTEMPTS = 4;
+
+function readQueue(studentId: number | string): QueuedAward[] {
+    try {
+        const raw = localStorage.getItem(queueKey(studentId));
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? (parsed as QueuedAward[]) : [];
+    } catch {
+        return [];
+    }
+}
+
+function writeQueue(studentId: number | string, queue: QueuedAward[]): void {
+    try {
+        if (queue.length === 0) localStorage.removeItem(queueKey(studentId));
+        else localStorage.setItem(queueKey(studentId), JSON.stringify(queue));
+    } catch { /* the award is already on screen; a full disk is not worth an error */ }
+}
+
+function enqueueAward(studentId: number | string, award: Omit<QueuedAward, "attempts">): void {
+    const queue = readQueue(studentId);
+    const existing = queue.find((entry) =>
+        entry.xpType === award.xpType && entry.amount === award.amount &&
+        entry.source === award.source && entry.refId === award.refId);
+    if (existing) return;
+    queue.push({ ...award, attempts: 0 });
+    writeQueue(studentId, queue);
+}
+
+/**
+ * Sends the awards the server refused earlier. Call it where the student is already waiting on the
+ * server — the dashboard load — so a retry costs no extra waiting that they can feel.
+ */
+export async function flushXpQueue(studentId: number): Promise<void> {
+    const queue = readQueue(studentId);
+    if (queue.length === 0) return;
+
+    const remaining: QueuedAward[] = [];
+    for (const award of queue) {
+        try {
+            await axios.post(`${BACKEND}/student-progress/log-agency-xp`, {
+                studentId,
+                xpType: award.xpType,
+                amount: award.amount,
+                source: award.source,
+                refId: award.refId,
+            });
+        } catch (error) {
+            const answered = typeof error === "object" && error !== null && "response" in error;
+            if (answered && award.attempts + 1 < MAX_AWARD_ATTEMPTS) {
+                remaining.push({ ...award, attempts: award.attempts + 1 });
+            }
+            // Otherwise it is dropped: either the server has now taken it, or it has refused this
+            // award often enough that it is not going to, and holding it forever helps nobody.
+        }
+    }
+    writeQueue(studentId, remaining);
+}
 
 function syncToBackend(studentId: number | string, xpType: string, amount: number, source: string, refId: string = ""): void {
     if (typeof studentId !== "number" || studentId <= 0) return;
+
+    const version = bumpWalletVersion(studentId, xpType);
+
     try {
         axios.post(`${BACKEND}/student-progress/log-agency-xp`, {
             studentId,
@@ -307,8 +428,19 @@ function syncToBackend(studentId: number | string, xpType: string, amount: numbe
             // never carry an id; this is where a goal id travels so the award can be found and
             // reversed when the goal is deleted.
             refId,
-        }).catch(() => {
-            // Non-critical — localStorage is source of truth for UI
+        }).then((response) => {
+            // The server answered with the wallet's new total. Adopt it, so the browser and the record
+            // cannot drift apart between one dashboard load and the next — but only while nothing
+            // newer has been credited here, or an older response would wipe a fresher award.
+            const total = typeof response?.data === "number" ? response.data : undefined;
+            if (total === undefined || walletVersion(studentId, xpType) !== version) return;
+            const key = XP_KEYS[xpType];
+            if (key) localStorage.setItem(key(studentId), String(total));
+        }).catch((error) => {
+            // The server answered with an error, so it did not take this award; keep it and try again
+            // on the next dashboard load rather than letting the next sync delete it from the wallet.
+            const answered = typeof error === "object" && error !== null && "response" in error;
+            if (answered) enqueueAward(studentId, { xpType, amount, source, refId });
         });
     } catch {
         // Silently fail — UI already updated via localStorage
